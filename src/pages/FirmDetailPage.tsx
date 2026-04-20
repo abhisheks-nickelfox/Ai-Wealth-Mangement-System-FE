@@ -16,6 +16,8 @@ import { firmsApi, tasksApi, usersApi, type Firm, type Task, type User } from '.
 import AvatarStack from '../components/ui/AvatarStack';
 import Avatar from '../components/ui/Avatar';
 import { PriorityBadge, TaskStatusBadge } from '../components/tasks/TaskBadges';
+import AddProjectModal from '../components/firms/AddProjectModal';
+import ProjectDetailPanel, { type ProjectDetail } from '../components/firms/ProjectDetailPanel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -199,9 +201,10 @@ interface ProjectGroupRowProps {
   tasks: Task[];
   firm: Firm | null;
   usersMap: Map<string, User>;
+  onProjectClick?: (projectId: string | null, label: string) => void;
 }
 
-function ProjectGroupRow({ projectId, tasks, firm, usersMap }: ProjectGroupRowProps) {
+function ProjectGroupRow({ projectId, tasks, firm, usersMap, onProjectClick }: ProjectGroupRowProps) {
   const [expanded, setExpanded] = useState(true);
   const label = projectId ?? 'No Project';
 
@@ -232,7 +235,7 @@ function ProjectGroupRow({ projectId, tasks, firm, usersMap }: ProjectGroupRowPr
         aria-expanded={expanded}
       >
         <div className="flex items-center gap-2 px-4 py-2.5 min-w-0">
-          <span className="shrink-0 text-[#717680] transition-transform duration-150">
+          <span className="shrink-0 text-[#717680] transition-transform duration-150" onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}>
             {expanded ? (
               <ChevronDown width={14} height={14} aria-hidden="true" />
             ) : (
@@ -248,7 +251,10 @@ function ProjectGroupRow({ projectId, tasks, firm, usersMap }: ProjectGroupRowPr
             className="text-[#7F56D9] shrink-0"
             aria-hidden="true"
           />
-          <span className="text-[13px] font-semibold text-[#181D27] truncate">
+          <span
+            className="text-[13px] font-semibold text-[#181D27] truncate hover:text-[#7F56D9] hover:underline cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); onProjectClick?.(projectId, label); }}
+          >
             {label}
           </span>
           {firm && (
@@ -290,9 +296,10 @@ interface StatusSectionProps {
   firm: Firm | null;
   usersMap: Map<string, User>;
   groupedByProject: boolean;
+  onProjectClick?: (projectId: string | null, label: string) => void;
 }
 
-function StatusSection({ group, tasks, firm, usersMap, groupedByProject }: StatusSectionProps) {
+function StatusSection({ group, tasks, firm, usersMap, groupedByProject, onProjectClick }: StatusSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   // Group tasks by project_id
@@ -351,6 +358,7 @@ function StatusSection({ group, tasks, firm, usersMap, groupedByProject }: Statu
                 tasks={projectTasks}
                 firm={firm}
                 usersMap={usersMap}
+                onProjectClick={onProjectClick}
               />
             ))
           ) : (
@@ -649,11 +657,14 @@ interface ProjectsTabProps {
   firm: Firm | null;
   tasks: Task[];
   users: User[];
+  onProjectClick?: (projectId: string | null, label: string) => void;
 }
 
-function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
+function ProjectsTab({ firm, tasks, users, onProjectClick }: ProjectsTabProps) {
   const [search, setSearch] = useState('');
   const [groupedByProject, setGroupedByProject] = useState(true);
+  const [showAddProject, setShowAddProject] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<ProjectDetail | null>(null);
 
   // ── Filter state (committed = active filters; pending = inside panel) ──────
   const [filterOpen, setFilterOpen] = useState(false);
@@ -826,6 +837,7 @@ function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         <div className="flex items-center gap-2 ml-auto">
           {/* Add Project */}
           <button
+            onClick={() => setShowAddProject(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#D0D5DD] bg-white text-[13px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
             aria-label="Add project"
           >
@@ -895,6 +907,20 @@ function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
               firm={firm}
               usersMap={usersMap}
               groupedByProject={groupedByProject}
+              onProjectClick={(projectId, label) => {
+                const firmAbbr = firm?.name
+                  ? firm.name.split(' ').map((w) => w[0]).join('').toUpperCase()
+                  : 'AWP';
+                setSelectedProject({
+                  id: projectId ?? label,
+                  name: label,
+                  description: '',
+                  status: 'In progress',
+                  memberIds: [...usersMap.keys()].slice(0, 3),
+                  firmName: firm?.name ?? '',
+                  firmAbbr,
+                });
+              }}
             />
           );
         })}
@@ -913,6 +939,22 @@ function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         onToggleAssignee={togglePendingAssignee}
         onApply={handleApply}
         onCancel={handleCancel}
+      />
+
+      {/* Add Project modal */}
+      <AddProjectModal
+        open={showAddProject}
+        onClose={() => setShowAddProject(false)}
+        firmName={firm?.name}
+        users={users}
+      />
+
+      {/* Project Detail panel */}
+      <ProjectDetailPanel
+        open={!!selectedProject}
+        onClose={() => setSelectedProject(null)}
+        project={selectedProject}
+        users={users}
       />
     </div>
   );
