@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SearchLg } from '@untitled-ui/icons-react';
 
 import NavSection from './sidebar/NavSection';
 import NavItem from './sidebar/NavItem';
 import ExpandableNavItem from './sidebar/ExpandableNavItem';
-import { firmsApi } from '../lib/api';
+import { useFirms } from '../hooks/useFirms';
 
 import vectorLogo    from '../assets/logo/Logomark.svg';
 import iconInbox     from '../assets/navbar-icon/Icon.png';
@@ -62,26 +62,13 @@ export default function Sidebar() {
   const location   = useLocation();
   const activeNav  = getActiveNav(location.pathname);
 
-  const [firmItems, setFirmItems] = useState<{ id: string; label: string }[]>([]);
-  const [firmsLoading, setFirmsLoading] = useState(true);
   const [activeTask, setActiveTask] = useState('');
+
+  const { data: firms = [], isLoading: firmsLoading } = useFirms();
+  const firmItems = firms.map((f) => ({ id: f.id, label: f.name }));
 
   // Derive active firm from URL
   const activeFirm = getActiveFirmId(location.pathname);
-
-  // Fetch firms from API on mount
-  useEffect(() => {
-    firmsApi.list()
-      .then((firms) => {
-        setFirmItems(firms.map((f) => ({ id: f.id, label: f.name })));
-      })
-      .catch(() => {
-        // Silently fall back to empty list — firms section will show nothing
-      })
-      .finally(() => {
-        setFirmsLoading(false);
-      });
-  }, []);
 
   return (
     <aside className="w-64 shrink-0 bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0 overflow-y-auto">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
@@ -12,7 +12,10 @@ import {
   User01,
 } from '@untitled-ui/icons-react';
 
-import { firmsApi, tasksApi, usersApi, type Firm, type Task, type User } from '../lib/api';
+import type { Firm, Task, User } from '../lib/api';
+import { useFirmDetail } from '../hooks/useFirms';
+import { useTasksByFirm } from '../hooks/useTasks';
+import { useUsers } from '../hooks/useUsers';
 import AvatarStack from '../components/ui/AvatarStack';
 import Avatar from '../components/ui/Avatar';
 import { PriorityBadge, TaskStatusBadge } from '../components/tasks/TaskBadges';
@@ -976,41 +979,13 @@ export default function FirmDetailPage() {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<TabId>('projects');
-  const [firm, setFirm] = useState<Firm | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!id) return;
+  const { data: firm = null, isLoading: firmLoading, error: firmError } = useFirmDetail(id!);
+  const { data: tasks = [],  isLoading: tasksLoading }                  = useTasksByFirm(id!);
+  const { data: users = [] }                                             = useUsers();
 
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [firmData, tasksData, usersData] = await Promise.all([
-          firmsApi.get(id!),
-          tasksApi.list({ firm_id: id! }),
-          usersApi.list(),
-        ]);
-        if (!cancelled) {
-          setFirm(firmData);
-          setTasks(tasksData);
-          setUsers(usersData);
-        }
-      } catch (err: unknown) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load firm data');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load();
-    return () => { cancelled = true; };
-  }, [id]);
+  const loading = firmLoading || tasksLoading;
+  const error   = firmError ? (firmError as Error).message : null;
 
   // ── Loading state ──────────────────────────────────────────────────────────
 

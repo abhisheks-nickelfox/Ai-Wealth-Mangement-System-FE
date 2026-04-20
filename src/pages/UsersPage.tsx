@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Trash01,
   Edit01,
@@ -14,36 +14,26 @@ import StatusBadge from '../components/users/StatusBadge';
 import SkillBadge from '../components/users/SkillBadge';
 import Avatar from '../components/ui/Avatar';
 import EditUserDrawer from '../components/users/EditUserDrawer';
-import { usersApi } from '../lib/api';
 import type { User } from '../lib/api';
+import { useUsers, useDeleteUser, useResendInvite } from '../hooks/useUsers';
 
 const PAGE_SIZE = 6;
 
-interface UsersPageProps {
-  showToast?: boolean;
-}
-
-export default function UsersPage({ showToast: initialToast = false }: UsersPageProps) {
+export default function UsersPage() {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [users,        setUsers]       = useState<User[]>([]);
-  const [loading,      setLoading]     = useState(true);
-  const [fetchError,   setFetchError]  = useState('');
+  const { data: users = [], isLoading: loading, error: fetchErrorObj } = useUsers();
+  const fetchError = fetchErrorObj ? (fetchErrorObj as Error).message : '';
+  const deleteUser    = useDeleteUser();
+  const resendInvite  = useResendInvite();
+
   const [selected,     setSelected]    = useState<Set<string>>(new Set());
   const [currentPage,  setCurrentPage] = useState(1);
-  const [showToast,    setShowToast]   = useState(initialToast);
-  const [deletingId,   setDeletingId]  = useState<string | null>(null);
-  const [resendingId,  setResendingId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(
+    (location.state as { toastMessage?: string } | null)?.toastMessage ?? null
+  );
   const [editUser,     setEditUser]    = useState<User | null>(null);
-
-  // ── Fetch users ──────────────────────────────────────────────────────────────
-  useEffect(() => {
-    setLoading(true);
-    usersApi.list()
-      .then((data) => { setUsers(data); setFetchError(''); })
-      .catch((err: Error) => setFetchError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
 
   // ── Pagination ────────────────────────────────────────────────────────────────
   const totalPages  = Math.max(1, Math.ceil(users.length / PAGE_SIZE));
@@ -74,36 +64,28 @@ export default function UsersPage({ showToast: initialToast = false }: UsersPage
   }
 
   // ── Edit saved ───────────────────────────────────────────────────────────────
-  function handleUserSaved(updated: User) {
-    setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-    setShowToast(true);
+  function handleUserSaved(_updated: User) {
+    setToastMessage('Profile updated successfully');
   }
 
   // ── Resend invite ─────────────────────────────────────────────────────────────
   async function handleResendInvite(id: string) {
-    setResendingId(id);
     try {
-      await usersApi.resendInvite(id);
-      setShowToast(true);
+      await resendInvite.mutateAsync(id);
+      setToastMessage('Invite resent successfully');
     } catch (err) {
       alert((err as Error).message);
-    } finally {
-      setResendingId(null);
     }
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────────
   async function handleDelete(id: string) {
     if (!window.confirm('Delete this user? This cannot be undone.')) return;
-    setDeletingId(id);
     try {
-      await usersApi.delete(id);
-      setUsers((prev) => prev.filter((u) => u.id !== id));
+      await deleteUser.mutateAsync(id);
       setSelected((prev) => { const n = new Set(prev); n.delete(id); return n; });
     } catch (err) {
       alert((err as Error).message);
-    } finally {
-      setDeletingId(null);
     }
   }
 
@@ -287,7 +269,7 @@ export default function UsersPage({ showToast: initialToast = false }: UsersPage
                             {/* Slot 1: Resend invite — visible only for invited users */}
                             <button
                               onClick={() => handleResendInvite(user.id)}
-                              disabled={resendingId === user.id}
+                              disabled={resendInvite.isPending}
                               className={`p-1.5 rounded-lg transition-colors ${
                                 user.status === 'invited'
                                   ? 'hover:bg-gray-100 text-[#717680] hover:text-[#6941C6] disabled:opacity-40'
@@ -311,7 +293,7 @@ export default function UsersPage({ showToast: initialToast = false }: UsersPage
                             {/* Slot 3: Delete */}
                             <button
                               onClick={() => handleDelete(user.id)}
-                              disabled={deletingId === user.id}
+                              disabled={deleteUser.isPending}
                               className="p-1.5 rounded-lg hover:bg-gray-100 text-[#717680] hover:text-red-600 disabled:opacity-40 transition-colors"
                               title="Delete user"
                             >
@@ -372,11 +354,11 @@ export default function UsersPage({ showToast: initialToast = false }: UsersPage
       </div>
 
       {/* Success toast */}
-      {showToast && (
+      {toastMessage && (
         <Toast
-          message={resendingId ? 'Invite resent' : 'Profile updated successfully'}
+          message={toastMessage}
           subtitle="The team member has been notified by email."
-          onClose={() => setShowToast(false)}
+          onClose={() => setToastMessage(null)}
         />
       )}
 

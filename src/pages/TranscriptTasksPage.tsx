@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Calendar, Clock, CheckCircle, ArrowLeft } from '@untitled-ui/icons-react';
-import { tasksApi, usersApi } from '../lib/api';
-import type { Task, Transcript, User } from '../lib/api';
+import type { Task, Transcript } from '../lib/api';
+import { useTasks } from '../hooks/useTasks';
+import { useUsers } from '../hooks/useUsers';
 import { formatDate, formatDurationSec } from '../lib/transcriptUtils';
 import TaskCard from '../components/tasks/TaskCard';
 import TaskDetailPanel from '../components/tasks/TaskDetailPanel';
@@ -36,30 +37,23 @@ export default function TranscriptTasksPage() {
   const location = useLocation();
   const state = (location.state ?? {}) as Partial<PageState>;
 
-  const [tasks, setTasks] = useState<Task[]>(state.tasks ?? []);
-  const [loading, setLoading] = useState(!state.tasks);
-  const [users, setUsers] = useState<User[]>([]);
+  const sessionId = state.sessionId ?? new URLSearchParams(location.search).get('session_id') ?? '';
+
+  const { data: fetchedTasks = [], isLoading: tasksLoading } = useTasks(
+    sessionId ? { session_id: sessionId } : undefined
+  );
+  const { data: users = [] } = useUsers();
+
+  // Prefer tasks passed via navigation state (immediate display), fall back to fetched
+  const tasks = state.tasks ?? fetchedTasks;
+  const loading = !state.tasks && tasksLoading;
+
   const [activeTab, setActiveTab] = useState<TaskTab>('all');
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
 
   const transcript = state.transcript;
   const firmName = tasks[0]?.firms?.name ?? '';
-
-  useEffect(() => {
-    const sessionId = state.sessionId ?? new URLSearchParams(location.search).get('session_id');
-    if (!state.tasks && sessionId) {
-      setLoading(true);
-      tasksApi.list({ session_id: sessionId })
-        .then(setTasks)
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    }
-  }, []);
-
-  useEffect(() => {
-    usersApi.list().then(setUsers).catch(() => {});
-  }, []);
 
   const tabCounts = useMemo(() => {
     const counts: Record<TaskTab, number> = { all: 0, pending: 0, approved: 0, 'needs-review': 0, ignored: 0, archived: 0 };
@@ -80,10 +74,10 @@ export default function TranscriptTasksPage() {
 
   function handleTaskClick(task: Task) { setActiveTask(task); setPanelOpen(true); }
   function closePanel() { setPanelOpen(false); setActiveTask(null); }
-  function handleSaved(updated: Task) { setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t)); closePanel(); }
-  function handleIgnored(taskId: string) { setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: 'discarded' as const } : t)); closePanel(); }
-  function handleApproved(updated: Task) { setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t)); closePanel(); }
-  function handleArchived(updated: Task) { setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t)); closePanel(); }
+  function handleSaved(_updated: Task) { closePanel(); }
+  function handleIgnored(_taskId: string) { closePanel(); }
+  function handleApproved(_updated: Task) { closePanel(); }
+  function handleArchived(_updated: Task) { closePanel(); }
 
   const TABS: { key: TaskTab; label: string }[] = [
     { key: 'all', label: 'All' },

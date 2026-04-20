@@ -8,8 +8,8 @@ import {
   UploadCloud01,
 } from '@untitled-ui/icons-react';
 import Avatar from '../ui/Avatar';
-import { tasksApi } from '../../lib/api';
 import type { Task, User } from '../../lib/api';
+import { useUpdateTask, useDiscardTask, useArchiveTask, useAssignApproveTask } from '../../hooks/useTasks';
 import { PriorityBadge, TaskStatusBadge } from './TaskBadges';
 import { formatDateInput } from '../../lib/transcriptUtils';
 import ApprovalConfirmModal from './ApprovalConfirmModal';
@@ -34,11 +34,13 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
   const [deadline, setDeadline] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [ignoring, setIgnoring] = useState(false);
-  const [archiving, setArchiving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
+
+  const updateTask      = useUpdateTask();
+  const discardTask     = useDiscardTask();
+  const archiveTask     = useArchiveTask();
+  const assignApprove   = useAssignApproveTask();
 
   useEffect(() => {
     if (task && open) {
@@ -56,52 +58,42 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
 
   async function handleSave() {
     if (!task) return;
-    setSaving(true);
     setError('');
     try {
-      const updated = await tasksApi.update(task.id, { title, description, priority, deadline: deadline || null });
+      const updated = await updateTask.mutateAsync({ id: task.id, payload: { title, description, priority, deadline: deadline || null } });
       onSaved(updated);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Save failed.');
-    } finally {
-      setSaving(false);
     }
   }
 
   async function handleIgnore() {
     if (!task) return;
-    setIgnoring(true);
     setError('');
     try {
-      await tasksApi.discard(task.id);
+      await discardTask.mutateAsync(task.id);
       onIgnored(task.id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to ignore task.');
-    } finally {
-      setIgnoring(false);
     }
   }
 
   async function handleArchive() {
     if (!task) return;
-    setArchiving(true);
     setError('');
     try {
-      const updated = await tasksApi.archive(task.id, !task.archived);
+      const updated = await archiveTask.mutateAsync({ id: task.id, archived: !task.archived });
       onArchived(updated);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to archive task.');
-    } finally {
-      setArchiving(false);
     }
   }
 
   async function handleConfirmApprove() {
     if (!task || !assigneeId) return;
-    const updated = await tasksApi.assignApprove(task.id, {
-      assignee_id: assigneeId,
-      priority,
-      deadline: deadline || undefined,
+    const updated = await assignApprove.mutateAsync({
+      id: task.id,
+      payload: { assignee_id: assigneeId, priority, deadline: deadline || undefined },
     });
     setShowConfirm(false);
     onApproved(updated);
@@ -297,21 +289,21 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
         <div className="flex items-center gap-2 px-6 py-4 border-t border-[#E9EAEB] shrink-0">
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={updateTask.isPending}
             className="px-3.5 py-2.5 text-sm font-semibold text-[#414651] border border-[#D5D7DA] rounded-lg bg-white hover:bg-gray-50 disabled:opacity-60 transition-colors"
           >
-            {saving ? 'Saving…' : 'Save'}
+            {updateTask.isPending ? 'Saving…' : 'Save'}
           </button>
           <button
             onClick={handleIgnore}
-            disabled={ignoring || !!task?.archived}
+            disabled={discardTask.isPending || !!task?.archived}
             className="px-3.5 py-2.5 text-sm font-semibold text-white bg-[#DC2626] hover:bg-[#B91C1C] disabled:opacity-60 rounded-lg transition-colors"
           >
-            {ignoring ? 'Ignoring…' : 'Ignore'}
+            {discardTask.isPending ? 'Ignoring…' : 'Ignore'}
           </button>
           <button
             onClick={handleArchive}
-            disabled={archiving}
+            disabled={archiveTask.isPending}
             title={task?.archived ? 'Unarchive task' : 'Archive task'}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-60 ${
               task?.archived
@@ -320,7 +312,7 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
             }`}
           >
             <Archive width={14} height={14} />
-            {archiving ? '…' : task?.archived ? 'Unarchive' : 'Archive'}
+            {archiveTask.isPending ? '…' : task?.archived ? 'Unarchive' : 'Archive'}
           </button>
           <button
             onClick={() => {

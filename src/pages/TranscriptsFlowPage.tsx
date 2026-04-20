@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   SearchLg,
@@ -9,12 +9,10 @@ import {
   Archive,
   UploadCloud01,
 } from '@untitled-ui/icons-react';
-import {
-  transcriptsApi,
-  firmsApi,
-  promptsApi,
-} from '../lib/api';
-import type { Transcript, Firm, Prompt, Task } from '../lib/api';
+import type { Transcript, Firm, Task } from '../lib/api';
+import { useTranscripts, useArchiveTranscript, useSyncTranscripts } from '../hooks/useTranscripts';
+import { useFirms } from '../hooks/useFirms';
+import { usePrompts } from '../hooks/usePrompts';
 import { formatDate, formatDurationSec, timeAgo } from '../lib/transcriptUtils';
 import TranscriptStatusBadge from '../components/transcripts/TranscriptStatusBadge';
 import FilterPanel from '../components/transcripts/FilterPanel';
@@ -90,12 +88,13 @@ function TranscriptRow({ transcript, firms, onClick, onArchive, archiving }: Tra
 export default function TranscriptsFlowPage() {
   const navigate = useNavigate();
 
-  const [transcripts, setTranscripts] = useState<Transcript[]>([]);
-  const [firms, setFirms] = useState<Firm[]>([]);
-  const [prompts, setPrompts] = useState<Prompt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [syncing, setSyncing] = useState(false);
+  const { data: transcripts = [], isLoading: loading, error: errorObj } = useTranscripts();
+  const { data: firms = [] } = useFirms();
+  const { data: prompts = [] } = usePrompts();
+  const archiveTranscript = useArchiveTranscript();
+  const syncTranscripts   = useSyncTranscripts();
+
+  const error = errorObj ? (errorObj as Error).message : '';
 
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [dateFrom, setDateFrom] = useState('');
@@ -108,40 +107,12 @@ export default function TranscriptsFlowPage() {
   const [processingOpen, setProcessingOpen] = useState(false);
   const [activeTranscript, setActiveTranscript] = useState<Transcript | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [archivingId, setArchivingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError('');
-      try {
-        const [tData, fData, pData] = await Promise.all([
-          transcriptsApi.list('all'),
-          firmsApi.list(),
-          promptsApi.list(),
-        ]);
-        setTranscripts(tData);
-        setFirms(fData);
-        setPrompts(pData);
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Failed to load transcripts.');
-      } finally {
-        setLoading(false);
-      }
-    }
-    void load();
-  }, []);
 
   async function handleSync() {
-    setSyncing(true);
     try {
-      await transcriptsApi.sync();
-      const fresh = await transcriptsApi.list('all');
-      setTranscripts(fresh);
+      await syncTranscripts.mutateAsync();
     } catch {
       // silently ignore sync errors on the list page
-    } finally {
-      setSyncing(false);
     }
   }
 
@@ -164,20 +135,16 @@ export default function TranscriptsFlowPage() {
     }
   }
 
-  function handleCreated(t: Transcript) {
-    setTranscripts((prev) => [t, ...prev]);
+  function handleCreated(_t: Transcript) {
     setAddOpen(false);
+    // query invalidation via useCreateTranscript handles the refetch
   }
 
   async function handleArchiveTranscript(transcript: Transcript) {
-    setArchivingId(transcript.id);
     try {
-      const updated = await transcriptsApi.toggleArchive(transcript.id);
-      setTranscripts((prev) => prev.map((t) => t.id === updated.id ? updated : t));
+      await archiveTranscript.mutateAsync(transcript.id);
     } catch {
       // silently ignore
-    } finally {
-      setArchivingId(null);
     }
   }
 
@@ -263,11 +230,11 @@ export default function TranscriptsFlowPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleSync}
-            disabled={syncing}
+            disabled={syncTranscripts.isPending}
             className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold text-[#414651] bg-white border border-[#D5D7DA] rounded-lg shadow-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
           >
-            <RefreshCw01 width={16} height={16} className={`text-[#535862] ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing…' : 'Sync Now'}
+            <RefreshCw01 width={16} height={16} className={`text-[#535862] ${syncTranscripts.isPending ? 'animate-spin' : ''}`} />
+            {syncTranscripts.isPending ? 'Syncing…' : 'Sync Now'}
           </button>
           <button
             onClick={() => setAddOpen(true)}
@@ -387,7 +354,7 @@ export default function TranscriptsFlowPage() {
               firms={firms}
               onClick={() => handleTranscriptClick(t)}
               onArchive={() => handleArchiveTranscript(t)}
-              archiving={archivingId === t.id}
+              archiving={archiveTranscript.isPending && archiveTranscript.variables === t.id}
             />
           ))}
         </div>

@@ -4,9 +4,11 @@ import SlideOver from '../ui/SlideOver';
 import MultiSelect from '../ui/MultiSelect';
 import Avatar from '../ui/Avatar';
 import InlineAddPanel from '../ui/InlineAddPanel';
-import { usersApi, skillsApi, memberRolesApi } from '../../lib/api';
-import type { User, Skill, MemberRole } from '../../lib/api';
+import type { User } from '../../lib/api';
 import { ROLE_OPTIONS, STATUS_OPTIONS, inputCls } from '../../lib/constants';
+import { useUser, useUpdateUser } from '../../hooks/useUsers';
+import { useSkills, useCreateSkill } from '../../hooks/useSkills';
+import { useMemberRoles, useCreateMemberRole } from '../../hooks/useMemberRoles';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,106 +28,77 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
   const [status,          setStatus]          = useState<string[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [selectedSkillIds,setSelectedSkillIds]= useState<string[]>([]);
-
-  // Live user data — refreshed from API each time the drawer opens
-  const [liveUser, setLiveUser] = useState<User | null>(null);
-
-  // Catalogs
-  const [memberRoles,        setMemberRoles]        = useState<MemberRole[]>([]);
-  const [memberRolesLoading, setMemberRolesLoading] = useState(true);
-  const [skills,             setSkills]             = useState<Skill[]>([]);
-  const [skillsLoading,      setSkillsLoading]      = useState(true);
+  const [error,           setError]           = useState('');
 
   // Inline add panels
   const [showRoleForm,  setShowRoleForm]  = useState(false);
   const [roleAddError,  setRoleAddError]  = useState('');
-  const [roleAdding,    setRoleAdding]    = useState(false);
   const [showSkillForm, setShowSkillForm] = useState(false);
   const [skillAddError, setSkillAddError] = useState('');
-  const [skillAdding,   setSkillAdding]   = useState(false);
 
-  // Submit state
-  const [saving, setSaving] = useState(false);
-  const [error,  setError]  = useState('');
+  // TanStack Query hooks
+  const { data: liveUser } = useUser(user?.id ?? '');
+  const { data: memberRoles = [], isLoading: memberRolesLoading } = useMemberRoles();
+  const { data: skills = [],      isLoading: skillsLoading }      = useSkills();
+  const updateUser       = useUpdateUser();
+  const createMemberRole = useCreateMemberRole();
+  const createSkill      = useCreateSkill();
 
   const isMember = roles.includes('member');
 
-  // Fetch fresh user data each time the drawer opens to avoid stale status/fields
+  // Sync form state when drawer opens or liveUser changes
   useEffect(() => {
-    if (!open || !user) return;
-    usersApi.get(user.id).then((fresh) => {
-      setLiveUser(fresh);
-      setName(fresh.name);
-      setRoles([fresh.role === 'super_admin' ? 'admin' : fresh.role]);
-      setStatus([fresh.status]);
-      setSelectedSkillIds(fresh.skills.map((s) => s.id));
-      setError('');
-      setShowRoleForm(false);
-      setShowSkillForm(false);
-    }).catch(() => {
-      // Fallback to prop data if fetch fails
-      setLiveUser(user);
-      setName(user.name);
-      setRoles([user.role === 'super_admin' ? 'admin' : user.role]);
-      setStatus([user.status]);
-      setSelectedSkillIds(user.skills.map((s) => s.id));
-      setError('');
-      setShowRoleForm(false);
-      setShowSkillForm(false);
-    });
-  }, [open, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load catalogs once
-  useEffect(() => {
-    memberRolesApi.list()
-      .then(setMemberRoles).catch(() => setMemberRoles([]))
-      .finally(() => setMemberRolesLoading(false));
-    skillsApi.list()
-      .then(setSkills).catch(() => setSkills([]))
-      .finally(() => setSkillsLoading(false));
-  }, []);
+    if (!open) return;
+    const u = liveUser ?? user;
+    if (!u) return;
+    setName(u.name);
+    setRoles([u.role === 'super_admin' ? 'admin' : u.role]);
+    setStatus([u.status]);
+    setSelectedSkillIds(u.skills.map((s) => s.id));
+    setError('');
+    setShowRoleForm(false);
+    setShowSkillForm(false);
+  }, [open, liveUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Set member role selection after catalogs + live user are both ready
   useEffect(() => {
-    if (!liveUser || memberRolesLoading) return;
-    if (liveUser.member_role) {
-      const match = memberRoles.find((r) => r.name === liveUser.member_role);
+    const u = liveUser ?? user;
+    if (!u || memberRolesLoading) return;
+    if (u.member_role) {
+      const match = memberRoles.find((r) => r.name === u.member_role);
       setSelectedRoleIds(match ? [match.id] : []);
     } else {
       setSelectedRoleIds([]);
     }
-  }, [liveUser, memberRoles, memberRolesLoading]);
+  }, [liveUser, memberRoles, memberRolesLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Catalog add handlers ────────────────────────────────────────────────────
 
   async function handleAddRole(vals: Record<string, string>) {
     if (!vals.name?.trim()) { setRoleAddError('Role name is required'); return; }
-    setRoleAdding(true); setRoleAddError('');
+    setRoleAddError('');
     try {
-      const created = await memberRolesApi.create(vals.name.trim());
-      setMemberRoles((p) => [...p, created]);
+      const created = await createMemberRole.mutateAsync(vals.name.trim());
       setSelectedRoleIds((p) => [...p, created.id]);
       setShowRoleForm(false);
     } catch (e) { setRoleAddError((e as Error).message); }
-    finally { setRoleAdding(false); }
   }
 
   async function handleAddSkill(vals: Record<string, string>) {
     if (!vals.name?.trim()) { setSkillAddError('Skill name is required'); return; }
-    setSkillAdding(true); setSkillAddError('');
+    setSkillAddError('');
     try {
-      const created = await skillsApi.create({ name: vals.name.trim(), category: vals.category?.trim() || undefined });
-      setSkills((p) => [...p, created]);
+      const created = await createSkill.mutateAsync({ name: vals.name.trim(), category: vals.category?.trim() || undefined });
       setSelectedSkillIds((p) => [...p, created.id]);
       setShowSkillForm(false);
     } catch (e) { setSkillAddError((e as Error).message); }
-    finally { setSkillAdding(false); }
   }
 
   // ── Save ────────────────────────────────────────────────────────────────────
 
   async function handleSave() {
-    if (!liveUser) return;
+    const u = liveUser ?? user;
+    if (!u) return;
     if (!name.trim() || roles.length === 0 || status.length === 0) {
       setError('Name, role and status are required.');
       return;
@@ -135,21 +108,22 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
       ? memberRoles.find((r) => r.id === selectedRoleIds[0])?.name
       : undefined;
 
-    setSaving(true); setError('');
+    setError('');
     try {
-      const updated = await usersApi.update(liveUser.id, {
-        name:        name.trim(),
-        role:        roles[0] as 'admin' | 'member',
-        member_role: memberRoleName ?? (isMember ? undefined : ''),
-        status:      status[0] as User['status'],
-        skill_ids:   selectedSkillIds,
+      const updated = await updateUser.mutateAsync({
+        id: u.id,
+        payload: {
+          name:        name.trim(),
+          role:        roles[0] as 'admin' | 'member',
+          member_role: memberRoleName ?? (isMember ? undefined : ''),
+          status:      status[0] as User['status'],
+          skill_ids:   selectedSkillIds,
+        },
       });
       onSaved(updated);
       onClose();
     } catch (e) {
       setError((e as Error).message);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -167,6 +141,8 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
     [skills]
   );
 
+  const displayUser = liveUser ?? user;
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -174,17 +150,17 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
       open={open}
       onClose={onClose}
       title="Edit team member"
-      subtitle={liveUser ? `Updating ${liveUser.name}'s profile` : undefined}
+      subtitle={displayUser ? `Updating ${displayUser.name}'s profile` : undefined}
     >
-      {liveUser && (
+      {displayUser && (
         <div className="flex flex-col gap-5">
 
           {/* Avatar preview */}
           <div className="flex items-center gap-3 pb-4 border-b border-[#F2F4F7]">
-            <Avatar name={liveUser.name} size="lg" />
+            <Avatar name={displayUser.name} size="lg" />
             <div>
-              <p className="text-sm font-semibold text-[#181D27]">{liveUser.name}</p>
-              <p className="text-sm text-[#717680]">{liveUser.email}</p>
+              <p className="text-sm font-semibold text-[#181D27]">{displayUser.name}</p>
+              <p className="text-sm text-[#717680]">{displayUser.email}</p>
             </div>
           </div>
 
@@ -249,7 +225,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
                 <InlineAddPanel
                   title="New member role"
                   fields={[{ key: 'name', placeholder: 'Role name *' }]}
-                  error={roleAddError} saving={roleAdding}
+                  error={roleAddError} saving={createMemberRole.isPending}
                   onSave={handleAddRole}
                   onCancel={() => { setShowRoleForm(false); setRoleAddError(''); }}
                 />
@@ -286,7 +262,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
                   { key: 'name',     placeholder: 'Skill name *' },
                   { key: 'category', placeholder: 'Category (optional)' },
                 ]}
-                error={skillAddError} saving={skillAdding}
+                error={skillAddError} saving={createSkill.isPending}
                 onSave={handleAddSkill}
                 onCancel={() => { setShowSkillForm(false); setSkillAddError(''); }}
               />
@@ -295,10 +271,10 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
 
           {/* Actions */}
           <div className="flex items-center gap-3 pt-2 mt-2 border-t border-[#F2F4F7]">
-            <button type="button" onClick={handleSave} disabled={saving}
+            <button type="button" onClick={handleSave} disabled={updateUser.isPending}
               className="inline-flex items-center gap-2 bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm">
               <Save01 width={16} height={16} />
-              {saving ? 'Saving…' : 'Save changes'}
+              {updateUser.isPending ? 'Saving…' : 'Save changes'}
             </button>
             <button type="button" onClick={onClose}
               className="inline-flex items-center gap-2 bg-white hover:bg-gray-50 border border-[#D5D7DA] text-[#414651] text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm">

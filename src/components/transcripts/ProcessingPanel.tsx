@@ -8,8 +8,8 @@ import {
   RefreshCw01,
   Lightning01,
 } from '@untitled-ui/icons-react';
-import { transcriptsApi } from '../../lib/api';
 import type { Transcript, Firm, Prompt, Task } from '../../lib/api';
+import { useProcessTranscript, useSyncTranscripts } from '../../hooks/useTranscripts';
 import TranscriptStatusBadge from './TranscriptStatusBadge';
 import { formatDate, formatDurationSec } from '../../lib/transcriptUtils';
 
@@ -38,9 +38,9 @@ export default function ProcessingPanel({
   const [notes, setNotes] = useState('');
   const [notesOpen, setNotesOpen] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
-  const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
-  const [syncing, setSyncing] = useState(false);
+  const processTranscript = useProcessTranscript();
+  const syncTranscripts   = useSyncTranscripts();
 
   useEffect(() => {
     if (transcript && open) {
@@ -56,28 +56,23 @@ export default function ProcessingPanel({
       return;
     }
     if (!transcript) return;
-    setProcessing(true);
     setError('');
     try {
-      const result = await transcriptsApi.process(transcript.id, {
-        firm_id: firmId,
-        prompt_id: primaryPromptId,
-        text_notes: notes.trim() || undefined,
+      const result = await processTranscript.mutateAsync({
+        id: transcript.id,
+        payload: { firm_id: firmId, prompt_id: primaryPromptId, text_notes: notes.trim() || undefined },
       });
       onProcessed(result.session_id, result.firm_id, result.tickets);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Processing failed. Please try again.');
-    } finally {
-      setProcessing(false);
     }
   }
 
   async function handleFirefliesSync() {
-    setSyncing(true);
     try {
-      await transcriptsApi.sync();
-    } finally {
-      setSyncing(false);
+      await syncTranscripts.mutateAsync();
+    } catch {
+      // silently ignore
     }
   }
 
@@ -300,11 +295,11 @@ export default function ProcessingPanel({
                   <p className="text-sm text-[#535862]">Pull the latest transcripts from Fireflies.ai</p>
                   <button
                     onClick={handleFirefliesSync}
-                    disabled={syncing}
+                    disabled={syncTranscripts.isPending}
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-60 rounded-lg transition-colors"
                   >
-                    <RefreshCw01 width={16} height={16} className={syncing ? 'animate-spin' : ''} />
-                    {syncing ? 'Syncing…' : 'Sync Now'}
+                    <RefreshCw01 width={16} height={16} className={syncTranscripts.isPending ? 'animate-spin' : ''} />
+                    {syncTranscripts.isPending ? 'Syncing…' : 'Sync Now'}
                   </button>
                 </div>
               )}
@@ -346,11 +341,11 @@ export default function ProcessingPanel({
         <div className="px-6 py-4 border-t border-[#E9EAEB] shrink-0">
           <button
             onClick={handleRun}
-            disabled={processing || !firmId || !primaryPromptId}
+            disabled={processTranscript.isPending || !firmId || !primaryPromptId}
             className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-60 rounded-xl transition-colors"
           >
             <Lightning01 width={18} height={18} />
-            {processing ? 'Processing…' : 'Run Processing'}
+            {processTranscript.isPending ? 'Processing…' : 'Run Processing'}
           </button>
         </div>
       </div>

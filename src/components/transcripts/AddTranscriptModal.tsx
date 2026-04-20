@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, ChevronDown } from '@untitled-ui/icons-react';
-import { transcriptsApi } from '../../lib/api';
 import type { Transcript, Firm } from '../../lib/api';
+import { useCreateTranscript } from '../../hooks/useTranscripts';
 
 export interface AddTranscriptModalProps {
   open: boolean;
@@ -16,8 +16,8 @@ export default function AddTranscriptModal({ open, onClose, firms, onCreated }: 
   const [durationMins, setDurationMins] = useState('');
   const [rawTranscript, setRawTranscript] = useState('');
   const [firmId, setFirmId] = useState('');
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const createTranscript = useCreateTranscript();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,10 +25,9 @@ export default function AddTranscriptModal({ open, onClose, firms, onCreated }: 
       setError('Title, call date, and transcript text are required.');
       return;
     }
-    setSaving(true);
     setError('');
     try {
-      const created = await transcriptsApi.create({
+      const created = await createTranscript.mutateAsync({
         title: title.trim(),
         call_date: callDate,
         duration_sec: durationMins ? parseInt(durationMins, 10) * 60 : 0,
@@ -39,8 +38,6 @@ export default function AddTranscriptModal({ open, onClose, firms, onCreated }: 
       setTitle(''); setCallDate(''); setDurationMins(''); setRawTranscript(''); setFirmId('');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create transcript.');
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -136,10 +133,10 @@ export default function AddTranscriptModal({ open, onClose, firms, onCreated }: 
           </button>
           <button
             onClick={handleSubmit}
-            disabled={saving}
+            disabled={createTranscript.isPending}
             className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-60 rounded-lg transition-colors"
           >
-            {saving ? 'Creating…' : 'Create Transcript'}
+            {createTranscript.isPending ? 'Creating…' : 'Create Transcript'}
           </button>
         </div>
       </div>

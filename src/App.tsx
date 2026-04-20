@@ -1,4 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Sidebar from './components/Sidebar';
@@ -59,21 +61,27 @@ function AppShell() {
   );
 }
 
-// ── Wrapper that reads location state for toast ───────────────────────────────
 
-function UsersPageWrapper() {
-  const location = useLocation();
-  const showToast = (location.state as { showToast?: boolean } | null)?.showToast ?? false;
-  return <UsersPage showToast={showToast} />;
-}
+// ── QueryClient — shared singleton, created once outside the component tree ────
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,       // 1 min before data is considered stale
+      retry:     1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
           {/* Guest-only auth pages */}
           <Route element={<GuestRoute />}>
             <Route path="/login"           element={<Login />} />
@@ -91,7 +99,7 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route path="/inbox"                        element={<InboxPage />} />
               <Route path="/dashboard"                   element={<Dashboard />} />
-              <Route path="/users"                       element={<UsersPageWrapper />} />
+              <Route path="/users"                       element={<UsersPage />} />
               <Route path="/users/new"                   element={<AddUserPage />} />
               <Route path="/settings"                    element={<SettingsPage />} />
               <Route path="/transcripts"                 element={<TranscriptsFlowPage />} />
@@ -103,7 +111,9 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+        </AuthProvider>
+      </BrowserRouter>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   );
 }
