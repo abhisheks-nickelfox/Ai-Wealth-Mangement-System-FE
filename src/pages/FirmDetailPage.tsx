@@ -657,10 +657,9 @@ interface ProjectsTabProps {
   firm: Firm | null;
   tasks: Task[];
   users: User[];
-  onProjectClick?: (projectId: string | null, label: string) => void;
 }
 
-function ProjectsTab({ firm, tasks, users, onProjectClick }: ProjectsTabProps) {
+function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
   const [search, setSearch] = useState('');
   const [groupedByProject, setGroupedByProject] = useState(true);
   const [showAddProject, setShowAddProject] = useState(false);
@@ -985,23 +984,32 @@ export default function FirmDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
-    setError(null);
 
-    Promise.all([
-      firmsApi.get(id),
-      tasksApi.list({ firm_id: id }),
-      usersApi.list(),
-    ])
-      .then(([firmData, tasksData, usersData]) => {
-        setFirm(firmData);
-        setTasks(tasksData);
-        setUsers(usersData);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Failed to load firm data');
-      })
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [firmData, tasksData, usersData] = await Promise.all([
+          firmsApi.get(id!),
+          tasksApi.list({ firm_id: id! }),
+          usersApi.list(),
+        ]);
+        if (!cancelled) {
+          setFirm(firmData);
+          setTasks(tasksData);
+          setUsers(usersData);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load firm data');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => { cancelled = true; };
   }, [id]);
 
   // ── Loading state ──────────────────────────────────────────────────────────
