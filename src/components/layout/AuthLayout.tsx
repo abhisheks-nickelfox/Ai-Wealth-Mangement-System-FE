@@ -49,4 +49,5 @@ export default function AuthLayout({ children, hidePanel = false }: AuthLayoutPr
       </div>
     </div>
   );
+
 }

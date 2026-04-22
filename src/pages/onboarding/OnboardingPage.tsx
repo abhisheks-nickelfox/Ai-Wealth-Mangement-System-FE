@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, AlertCircle } from '@untitled-ui/icons-react';
+import { Eye, EyeOff, AlertCircle, Plus } from '@untitled-ui/icons-react';
 import OnboardingLayout from '../../components/layout/OnboardingLayout';
 import OnboardingStepper from '../../components/onboarding/OnboardingStepper';
 import Button from '../../components/ui/Button';
@@ -8,7 +8,8 @@ import Input from '../../components/ui/Input';
 import PhoneInput from '../../components/ui/PhoneInput';
 import FileUpload from '../../components/ui/FileUpload';
 import ImageCropModal from '../../components/ui/ImageCropModal';
-import { onboardingApi } from '../../lib/api';
+import { onboardingApi, skillsApi } from '../../lib/api';
+import type { Skill } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 
 // ── Steps config ──────────────────────────────────────────────────────────────
@@ -17,13 +18,27 @@ const STEPS = [
   { label: 'Set your password',           sublabel: 'Create a secure password to protect your account.' },
   { label: 'Enter your Personal details', sublabel: 'Add your basic information to set up your profile.' },
   { label: 'Choose your avatar',          sublabel: 'Pick a profile image so your team can recognize you.' },
+  { label: 'Add skill',                   sublabel: 'Highlight your strengths and professional abilities.' },
 ];
+
+const EXPERIENCE_OPTIONS = [
+  '0-2 Years',
+  '2-5 Years',
+  '5 Years',
+  '5-10 Years',
+  '10+ Years',
+];
+
+// skillId = catalog ID, or '__new__' when the user wants to type a custom skill
+type SkillRow = { skillId: string; customName: string; experience: string };
+
+const EMPTY_SKILL_ROW: SkillRow = { skillId: '', customName: '', experience: '' };
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
   const [searchParams] = useSearchParams();
-  const navigate       = useNavigate();
+  const navigate        = useNavigate();
   const { refreshUser } = useAuth();
 
   const token = searchParams.get('token') ?? '';
@@ -56,12 +71,17 @@ export default function OnboardingPage() {
   const [phoneError,     setPhoneError]     = useState('');
 
   // Step 3 — avatar upload & crop
-  const [cropSrc,     setCropSrc]     = useState('');   // object URL for crop modal
+  const [cropSrc,     setCropSrc]     = useState('');
   const [showCrop,    setShowCrop]    = useState(false);
-  const [croppedUrl,  setCroppedUrl]  = useState('');   // base64 result after crop
-  const [avatarUrl,   setAvatarUrl]   = useState('');   // final URL after upload
+  const [croppedUrl,  setCroppedUrl]  = useState('');
+  const [avatarUrl,   setAvatarUrl]   = useState('');
   const [uploadError, setUploadError] = useState('');
-  const cropSrcRef = useRef('');                         // keep ref for cleanup
+  const cropSrcRef = useRef('');
+
+  // Step 4 — skills
+  const [allSkills,  setAllSkills]  = useState<Skill[]>([]);
+  const [skillRows,  setSkillRows]  = useState<SkillRow[]>([{ ...EMPTY_SKILL_ROW }]);
+  const [skillError, setSkillError] = useState('');
 
   // ── Validate token on mount ─────────────────────────────────────────────────
 
@@ -71,7 +91,6 @@ export default function OnboardingPage() {
       setTokenLoading(false);
       return;
     }
-
     onboardingApi
       .validate(token)
       .then(({ name: n }) => setInitialName(n))
@@ -79,12 +98,17 @@ export default function OnboardingPage() {
       .finally(() => setTokenLoading(false));
   }, [token]);
 
+  // Fetch available skills (public endpoint — no auth required)
+  useEffect(() => {
+    skillsApi.list().then(setAllSkills).catch(() => {});
+  }, []);
+
   // Revoke object URL on unmount
   useEffect(() => {
     return () => { if (cropSrcRef.current) URL.revokeObjectURL(cropSrcRef.current); };
   }, []);
 
-  // Auto-redirect to login when the invite was already used
+  // Auto-redirect to login when invite already used
   const alreadyUsed = tokenError.toLowerCase().includes('already been used');
   useEffect(() => {
     if (!alreadyUsed) return;
@@ -130,8 +154,25 @@ export default function OnboardingPage() {
     setUploadError('');
   }
 
+  // Skill row helpers
+  function updateSkillRow(index: number, field: keyof SkillRow, value: string) {
+    setSkillRows((rows) => rows.map((r, i) => i === index ? { ...r, [field]: value } : r));
+    setSkillError('');
+  }
+
+  function addSkillRow() {
+    setSkillRows((rows) => [...rows, { ...EMPTY_SKILL_ROW }]);
+  }
+
+  function removeSkillRow(index: number) {
+    setSkillRows((rows) =>
+      rows.length === 1 ? [{ ...EMPTY_SKILL_ROW }] : rows.filter((_, i) => i !== index)
+    );
+  }
+
   async function handleComplete() {
     setSubmitting(true);
+    setSkillError('');
     setUploadError('');
     try {
       let finalAvatarUrl = avatarUrl;
@@ -140,6 +181,17 @@ export default function OnboardingPage() {
         finalAvatarUrl = avatar_url;
         setAvatarUrl(avatar_url);
       }
+
+      const skills = skillRows
+        .filter((r) => r.skillId === '__new__' ? r.customName.trim() : r.skillId)
+        .map((r) => ({
+          skill_name: r.skillId === '__new__'
+            ? r.customName.trim()
+            : allSkills.find((s) => s.id === r.skillId)?.name ?? '',
+          experience: r.experience || undefined,
+        }))
+        .filter((s) => s.skill_name);
+
       const result = await onboardingApi.complete({
         token,
         first_name:   firstName.trim(),
@@ -147,17 +199,18 @@ export default function OnboardingPage() {
         phone_number: phoneNumber.trim() || undefined,
         avatar_url:   finalAvatarUrl || undefined,
         password,
+        skills: skills.length > 0 ? skills : undefined,
       });
+
       if (result?.token) {
         localStorage.setItem('mw_token', result.token);
         await refreshUser();
         setDone(true);
       } else {
-        // Auto-login failed — account activated but no session returned
         navigate('/login', { replace: true });
       }
     } catch (err) {
-      setUploadError((err as Error).message);
+      setSkillError((err as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -182,8 +235,7 @@ export default function OnboardingPage() {
           <div className={`inline-flex items-center justify-center w-14 h-14 rounded-full mb-4 ${alreadyUsed ? 'bg-success-50' : 'bg-error-50'}`}>
             {alreadyUsed ? (
               <svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-success-600">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
               </svg>
             ) : (
               <AlertCircle width={28} height={28} className="text-error-500" />
@@ -205,7 +257,18 @@ export default function OnboardingPage() {
     );
   }
 
-  // ── Stepper (shared between wizard and completion) ──────────────────────────
+  // ── Shared styles ───────────────────────────────────────────────────────────
+
+  const dropdownCls =
+    'w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-900 bg-white ' +
+    'focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent appearance-none ' +
+    'placeholder-gray-400';
+
+  const chevronSvg = (
+    <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" width={16} height={16} viewBox="0 0 16 16" fill="none">
+      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 
   const stepper = <OnboardingStepper steps={STEPS} currentStep={step} />;
 
@@ -222,9 +285,7 @@ export default function OnboardingPage() {
           Your account setup is complete. You can now start managing projects and collaborating with your team.
         </p>
         <div className="mt-8">
-          <Button onClick={() => navigate('/dashboard', { replace: true })}>
-            Get Started
-          </Button>
+          <Button onClick={() => navigate('/dashboard', { replace: true })}>Get Started</Button>
         </div>
       </OnboardingLayout>
     );
@@ -284,36 +345,21 @@ export default function OnboardingPage() {
         {step === 1 && (
           <div className="flex flex-col gap-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Personal Details</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Welcome</h1>
               <p className="text-base text-gray-600 mt-2">Please enter your personal details.</p>
             </div>
             <div className="flex flex-col gap-5">
-              <Input
-                label="First Name"
-                type="text"
-                value={firstName}
+              <Input label="First Name" type="text" value={firstName}
                 onChange={(e) => { setFirstName(e.target.value); setFirstNameError(''); }}
-                placeholder="First name"
-                error={firstNameError || undefined}
-                required
-              />
-              <Input
-                label="Last Name"
-                type="text"
-                value={lastName}
+                placeholder="First name" error={firstNameError || undefined} required />
+              <Input label="Last Name" type="text" value={lastName}
                 onChange={(e) => { setLastName(e.target.value); setLastNameError(''); }}
-                placeholder="Last name"
-                error={lastNameError || undefined}
-                required
-              />
+                placeholder="Last name" error={lastNameError || undefined} required />
               <PhoneInput
-                label="Phone Number"
-                value={phoneNumber}
+                label="Phone Number" value={phoneNumber}
                 onChange={(v) => { setPhoneNumber(v); setPhoneError(''); }}
-                countryCode={countryCode}
-                onCountryChange={setCountryCode}
-                error={phoneError || undefined}
-                required
+                countryCode={countryCode} onCountryChange={setCountryCode}
+                error={phoneError || undefined} required
               />
             </div>
             <Button className="w-full justify-center" onClick={handleDetailsNext}>
@@ -325,11 +371,6 @@ export default function OnboardingPage() {
         {/* ── STEP 3: Choose Avatar ── */}
         {step === 2 && (
           <div className="flex flex-col gap-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Choose your avatar</h1>
-              <p className="text-base text-gray-600 mt-2">Pick a profile image so your team can recognize you.</p>
-            </div>
-
             {croppedUrl ? (
               <div className="flex flex-col items-center gap-4">
                 <div className="relative">
@@ -337,9 +378,7 @@ export default function OnboardingPage() {
                   <button
                     onClick={() => { setCroppedUrl(''); setAvatarUrl(''); }}
                     className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-500 hover:text-error-500 text-xs"
-                  >
-                    ×
-                  </button>
+                  >×</button>
                 </div>
                 <p className="text-sm text-gray-500">{`${firstName} ${lastName}`.trim() || initialName}</p>
                 <button onClick={() => setShowCrop(true)} className="text-sm font-medium text-brand-600 hover:text-brand-700">
@@ -349,12 +388,122 @@ export default function OnboardingPage() {
             ) : (
               <FileUpload onFile={handleFileSelected} error={uploadError || undefined} />
             )}
-
             {uploadError && !croppedUrl && <p className="text-xs text-error-600 -mt-3">{uploadError}</p>}
-
-            <Button className="w-full justify-center" loading={submitting} onClick={handleComplete}>
-              {croppedUrl ? 'Complete Setup' : 'Skip & Complete Setup'}
+            <Button className="w-full justify-center" onClick={() => setStep(3)}>
+              {croppedUrl ? 'Continue' : 'Skip & Continue'}
             </Button>
+          </div>
+        )}
+
+        {/* ── STEP 4: Add Skills ── */}
+        {step === 3 && (
+          <div className="flex flex-col gap-5">
+            <h1 className="text-2xl font-bold text-gray-900">Choose Skills</h1>
+
+            <div className="flex flex-col gap-3">
+
+              {/* Column headers */}
+              <div className="grid grid-cols-[1fr_1fr_36px] gap-3 items-center">
+                <p className="text-sm font-medium text-[#414651] flex items-center gap-1">
+                  Skills <span className="text-red-500">*</span>
+                  <span title="Select or type a skill" className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-400 text-[10px] text-gray-500 cursor-help leading-none">?</span>
+                </p>
+                <p className="text-sm font-medium text-[#414651] flex items-center gap-1">
+                  Experience <span className="text-red-500">*</span>
+                  <span title="Years of experience" className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-400 text-[10px] text-gray-500 cursor-help leading-none">?</span>
+                </p>
+                <div />
+              </div>
+
+              {/* Skill rows */}
+              {skillRows.map((row, index) => (
+                <div key={index} className="grid grid-cols-[1fr_1fr_36px] gap-3 items-start">
+
+                  {/* Skill select — catalog options + custom entry */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="relative">
+                      <select
+                        value={row.skillId}
+                        onChange={(e) => {
+                          setSkillRows((rows) => rows.map((r, i) =>
+                            i === index ? { ...r, skillId: e.target.value, customName: '' } : r
+                          ));
+                          setSkillError('');
+                        }}
+                        className={dropdownCls}
+                      >
+                        <option value="">Select skill</option>
+                        {allSkills.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                        <option value="__new__">+ Add custom skill…</option>
+                      </select>
+                      {chevronSvg}
+                    </div>
+                    {row.skillId === '__new__' && (
+                      <input
+                        type="text"
+                        value={row.customName}
+                        onChange={(e) => updateSkillRow(index, 'customName', e.target.value)}
+                        placeholder="Enter skill name"
+                        className={dropdownCls}
+                        autoFocus
+                      />
+                    )}
+                  </div>
+
+                  {/* Experience dropdown */}
+                  <div className="relative">
+                    <select
+                      value={row.experience}
+                      onChange={(e) => updateSkillRow(index, 'experience', e.target.value)}
+                      className={dropdownCls}
+                    >
+                      <option value="">Select experience</option>
+                      {EXPERIENCE_OPTIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                    {chevronSvg}
+                  </div>
+
+                  {/* Remove row */}
+                  <button
+                    type="button"
+                    onClick={() => removeSkillRow(index)}
+                    className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-300 text-gray-400 hover:text-gray-600 hover:border-gray-400 flex-shrink-0"
+                  >
+                    <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
+                      <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+                    </svg>
+                  </button>
+
+                </div>
+              ))}
+
+              {/* Add more link */}
+              <button
+                type="button"
+                onClick={addSkillRow}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 mt-1 w-fit"
+              >
+                <Plus width={14} height={14} />
+                Add more skills
+              </button>
+
+            </div>
+
+            {skillError && <p className="text-sm text-error-600">{skillError}</p>}
+
+            {/* Button spans only the skills + experience columns, not the remove-button column */}
+            <div className="grid grid-cols-[1fr_1fr_36px] gap-3">
+              <div className="col-span-2">
+                <Button className="w-full justify-center" loading={submitting} onClick={handleComplete}>
+                  Update &amp; Continue
+                </Button>
+              </div>
+            </div>
+
           </div>
         )}
 

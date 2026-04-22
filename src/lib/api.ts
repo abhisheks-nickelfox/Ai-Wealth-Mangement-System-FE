@@ -123,6 +123,10 @@ export interface UpdateUserPayload {
   permissions?: string[];
   skill_ids?: string[];
   status?: 'Active' | 'invited' | 'Disabled';
+  first_name?: string;
+  last_name?: string;
+  phone_number?: string;
+  avatar_url?: string;
 }
 
 // ── Users API ─────────────────────────────────────────────────────────────────
@@ -191,6 +195,7 @@ export const onboardingApi = {
     phone_number?: string;
     avatar_url?: string;
     password: string;
+    skills?: { skill_name: string; experience?: string }[];
   }) =>
     request<{ data: { token: string | null; user?: { id: string; email: string; name: string } } }>(
       'POST',

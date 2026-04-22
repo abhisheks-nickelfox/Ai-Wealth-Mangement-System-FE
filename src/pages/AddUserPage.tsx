@@ -5,7 +5,6 @@ import MultiSelect from '../components/ui/MultiSelect';
 import InlineAddPanel from '../components/ui/InlineAddPanel';
 import { ROLE_OPTIONS } from '../lib/constants';
 import { useCreateUser } from '../hooks/useUsers';
-import { useSkills, useCreateSkill } from '../hooks/useSkills';
 import { useMemberRoles, useCreateMemberRole } from '../hooks/useMemberRoles';
 
 type SystemRole = 'admin' | 'member' | 'project_manager';
@@ -16,17 +15,14 @@ export default function AddUserPage() {
   const navigate = useNavigate();
 
   // Form state
-  const [name,             setName]             = useState('');
-  const [email,            setEmail]            = useState('');
-  const [roles,            setRoles]            = useState<SystemRole[]>([]);
-  const [selectedRoleIds,  setSelectedRoleIds]  = useState<string[]>([]);
-  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+  const [name,            setName]            = useState('');
+  const [email,           setEmail]           = useState('');
+  const [roles,           setRoles]           = useState<SystemRole[]>([]);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
 
   // Inline add panels
-  const [showRoleForm,  setShowRoleForm]  = useState(false);
-  const [roleAddError,  setRoleAddError]  = useState('');
-  const [showSkillForm, setShowSkillForm] = useState(false);
-  const [skillAddError, setSkillAddError] = useState('');
+  const [showRoleForm, setShowRoleForm] = useState(false);
+  const [roleAddError, setRoleAddError] = useState('');
 
   // Submit error
   const [error, setError] = useState('');
@@ -35,21 +31,12 @@ export default function AddUserPage() {
 
   // TanStack Query hooks
   const { data: memberRoles = [], isLoading: memberRolesLoading } = useMemberRoles();
-  const { data: skills = [],      isLoading: skillsLoading }      = useSkills();
   const createUser       = useCreateUser();
   const createMemberRole = useCreateMemberRole();
-  const createSkill      = useCreateSkill();
 
   const memberRoleOptions = useMemo(
     () => memberRoles.map((r) => ({ value: r.id, label: r.name })),
     [memberRoles]
-  );
-  const skillOptions = useMemo(
-    () => skills.map((s) => ({
-      value: s.id,
-      label: s.category ? `${s.name} (${s.category})` : s.name,
-    })),
-    [skills]
   );
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -66,28 +53,12 @@ export default function AddUserPage() {
     }
   }
 
-  async function handleAddSkill(vals: Record<string, string>) {
-    if (!vals.name?.trim()) { setSkillAddError('Skill name is required'); return; }
-    setSkillAddError('');
-    try {
-      const created = await createSkill.mutateAsync({
-        name: vals.name.trim(),
-        category: vals.category?.trim() || undefined,
-      });
-      setSelectedSkillIds((prev) => [...prev, created.id]);
-      setShowSkillForm(false);
-    } catch (err) {
-      setSkillAddError((err as Error).message);
-    }
-  }
-
   async function handleInvite() {
     if (!name.trim() || !email.trim() || roles.length === 0) {
       setError('Name, email and role are required.');
       return;
     }
 
-    // Resolve selected member role name (first selected)
     const memberRoleName = isMember && selectedRoleIds.length > 0
       ? memberRoles.find((r) => r.id === selectedRoleIds[0])?.name
       : undefined;
@@ -99,7 +70,6 @@ export default function AddUserPage() {
         email:       email.trim(),
         role:        roles[0],
         member_role: memberRoleName,
-        skill_ids:   selectedSkillIds,
         status:      'invited',
       });
       navigate('/users', { state: { toastMessage: 'User invited successfully' } });
@@ -139,8 +109,6 @@ export default function AddUserPage() {
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
               placeholder="user@example.com" className={addPageInputCls} />
           </div>
-
-
 
           {/* System Role */}
           <MultiSelect
@@ -192,46 +160,6 @@ export default function AddUserPage() {
               )}
             </div>
           )}
-
-          {/* Skills */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[#414651]">Skills</label>
-
-            {skillsLoading ? (
-              <p className="text-sm text-[#717680]">Loading skills…</p>
-            ) : (
-              <MultiSelect
-                placeholder="Select skills"
-                options={skillOptions}
-                value={selectedSkillIds}
-                onChange={setSelectedSkillIds}
-                columns={2}
-                showBadges
-                searchable
-                searchPlaceholder="Search skills…"
-              />
-            )}
-
-            {!showSkillForm ? (
-              <button type="button" onClick={() => setShowSkillForm(true)}
-                className="mt-1 inline-flex items-center gap-1.5 text-sm text-[#6941C6] hover:text-[#53389E] font-medium">
-                <Plus width={14} height={14} />
-                Add new skill to catalog
-              </button>
-            ) : (
-              <InlineAddPanel
-                title="New skill"
-                fields={[
-                  { key: 'name',     placeholder: 'Skill name *',       required: true },
-                  { key: 'category', placeholder: 'Category (optional)' },
-                ]}
-                error={skillAddError}
-                saving={createSkill.isPending}
-                onSave={handleAddSkill}
-                onCancel={() => { setShowSkillForm(false); setSkillAddError(''); }}
-              />
-            )}
-          </div>
 
         </div>
 

@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Trash01,
   Edit01,
+  Settings01,
   DotsVertical,
   ArrowLeft,
   ArrowRight,
@@ -262,8 +263,8 @@ export default function UsersPage() {
                           </div>
                         </td>
 
-                        {/* Actions — fixed 3-slot row; resend is invisible when not applicable
-                             so Edit + Delete stay pinned at the same position every row */}
+                        {/* Actions — fixed 4-slot row; resend is invisible when not applicable
+                             so Settings + Edit + Delete stay pinned at the same position every row */}
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-end gap-1">
                             {/* Slot 1: Resend invite — visible only for invited users */}
@@ -281,7 +282,16 @@ export default function UsersPage() {
                               <Send01 width={16} height={16} />
                             </button>
 
-                            {/* Slot 2: Edit */}
+                            {/* Slot 2: Settings */}
+                            <button
+                              onClick={() => navigate(`/users/${user.id}/settings`)}
+                              className="p-1.5 rounded-lg hover:bg-gray-100 text-[#717680] hover:text-[#414651] transition-colors"
+                              title="User settings"
+                            >
+                              <Settings01 width={16} height={16} />
+                            </button>
+
+                            {/* Slot 3: Edit */}
                             <button
                               onClick={() => setEditUser(user)}
                               className="p-1.5 rounded-lg hover:bg-gray-100 text-[#717680] hover:text-[#414651] transition-colors"
@@ -290,7 +300,7 @@ export default function UsersPage() {
                               <Edit01 width={16} height={16} />
                             </button>
 
-                            {/* Slot 3: Delete */}
+                            {/* Slot 4: Delete */}
                             <button
                               onClick={() => handleDelete(user.id)}
                               disabled={deleteUser.isPending}
