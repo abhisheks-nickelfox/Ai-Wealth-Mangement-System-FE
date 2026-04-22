@@ -2,9 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import ErrorBoundary from './components/ErrorBoundary';
-import Sidebar from './components/Sidebar';
-import TopBar from './components/TopBar';
+import AppLayout from './components/layout/AppLayout';
 import Dashboard from './pages/Dashboard';
 import UsersPage from './pages/UsersPage';
 import AddUserPage from './pages/AddUserPage';
@@ -45,23 +43,6 @@ function GuestRoute() {
   return user ? <Navigate to="/dashboard" replace /> : <Outlet />;
 }
 
-// ── App shell (sidebar + topbar) ─────────────────────────────────────────────
-
-function AppShell() {
-  return (
-    <div className="flex h-screen overflow-hidden bg-white font-sans">
-      <Sidebar />
-      <div className="flex flex-col flex-1 min-w-0">
-        <TopBar />
-        <ErrorBoundary>
-          <Outlet />
-        </ErrorBoundary>
-      </div>
-    </div>
-  );
-}
-
-
 // ── QueryClient — shared singleton, created once outside the component tree ────
 
 const queryClient = new QueryClient({
@@ -96,7 +77,7 @@ export default function App() {
 
           {/* Protected app shell */}
           <Route element={<ProtectedRoute />}>
-            <Route element={<AppShell />}>
+            <Route element={<AppLayout />}>
               <Route path="/inbox"                        element={<InboxPage />} />
               <Route path="/dashboard"                   element={<Dashboard />} />
               <Route path="/users"                       element={<UsersPage />} />
