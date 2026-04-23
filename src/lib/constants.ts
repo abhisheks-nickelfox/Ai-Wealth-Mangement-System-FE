@@ -1,5 +1,11 @@
 // ── Shared UI constants used across AddUserPage and EditUserDrawer ─────────────
 
+export const EXTRA_PERMISSIONS = [
+  { key: 'create_projects',       label: 'Project Creation' },
+  { key: 'create_tasks',          label: 'Task Creation' },
+  { key: 'view_global_timesheet', label: 'Global timesheet' },
+] as const;
+
 export const ROLE_OPTIONS = [
   { value: 'member',          label: 'Member' },
   { value: 'admin',           label: 'Admin' },

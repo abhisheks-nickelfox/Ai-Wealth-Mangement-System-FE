@@ -1,24 +1,209 @@
-import { useState, useMemo } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Trash01,
   Edit01,
   Settings01,
   DotsVertical,
-  ArrowLeft,
-  ArrowRight,
   UserPlus01,
   Send01,
+  XClose,
 } from '@untitled-ui/icons-react';
 import Toast from '../components/ui/Toast';
 import StatusBadge from '../components/users/StatusBadge';
 import SkillBadge from '../components/users/SkillBadge';
 import Avatar from '../components/ui/Avatar';
-import EditUserDrawer from '../components/users/EditUserDrawer';
-import type { User } from '../lib/api';
-import { useUsers, useDeleteUser, useResendInvite } from '../hooks/useUsers';
+import Pagination from '../components/ui/Pagination';
+import Checkbox from '../components/ui/Checkbox';
+import { useUsers, useDeleteUser, useResendInvite, useUpdateUser } from '../hooks/useUsers';
+import { useClickOutside } from '../hooks/useClickOutside';
+import type { UserStatus } from '../types';
+import { EXTRA_PERMISSIONS } from '../lib/constants';
 
 const PAGE_SIZE = 6;
+
+function ExtraPermissionsPopup({
+  userId,
+  permissions,
+  onClose,
+}: {
+  userId: string;
+  permissions: string[];
+  onClose: () => void;
+}) {
+  const updateUser = useUpdateUser();
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, onClose);
+
+  async function toggle(key: string) {
+    const next = permissions.includes(key)
+      ? permissions.filter((p) => p !== key)
+      : [...permissions, key];
+    try {
+      await updateUser.mutateAsync({ id: userId, payload: { permissions: next } });
+    } catch {
+      // silent — user stays open
+    }
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="absolute right-0 top-8 z-30 w-56 rounded-2xl bg-white shadow-xl border border-[#E9EAEB] p-4"
+    >
+      <p className="text-sm font-bold text-[#181D27] mb-3">Extra Permissions</p>
+      <div className="flex flex-col gap-3">
+        {EXTRA_PERMISSIONS.map(({ key, label }) => (
+          <label key={key} className="flex items-center gap-3 cursor-pointer select-none">
+            <Checkbox
+              checked={permissions.includes(key)}
+              onChange={() => toggle(key)}
+            />
+            <span className="text-sm font-semibold text-[#181D27]">{label}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DeleteUserModal({
+  userName,
+  open,
+  deleting,
+  onCancel,
+  onConfirm,
+}: {
+  userName: string;
+  open: boolean;
+  deleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/50" onClick={deleting ? undefined : onCancel} />
+      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl">
+        <div className="px-6 pt-6 pb-4">
+          <div className="mb-4 flex items-start justify-between">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#FEF3F2]">
+              <Trash01 width={20} height={20} className="text-[#D92D20]" />
+            </div>
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={deleting}
+              className="rounded-lg p-1 text-[#717680] hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <XClose width={18} height={18} />
+            </button>
+          </div>
+
+          <h2 className="text-lg font-semibold text-[#181D27]">Delete user?</h2>
+          <p className="mt-2 text-sm leading-6 text-[#535862]">
+            <span className="font-medium text-[#181D27]">{userName}</span> will be removed from your team.
+            This action cannot be undone.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 border-t border-[#E9EAEB] px-6 py-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={deleting}
+            className="flex-1 rounded-lg border border-[#D5D7DA] bg-white px-4 py-2.5 text-sm font-semibold text-[#414651] transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={deleting}
+            className="flex-1 rounded-lg bg-[#D92D20] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#B42318] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {deleting ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusMenu({
+  userId,
+  status,
+  onUpdated,
+}: {
+  userId: string;
+  status: UserStatus;
+  onUpdated: (message: string) => void;
+}) {
+  const updateUser = useUpdateUser();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useClickOutside(menuRef, () => setOpen(false));
+
+  if (status === 'invited') {
+    return <StatusBadge status={status} />;
+  }
+
+  const statusOptions: Array<Extract<UserStatus, 'Active' | 'Disabled'>> = ['Active', 'Disabled'];
+
+  async function handleStatusChange(nextStatus: Extract<UserStatus, 'Active' | 'Disabled'>) {
+    if (nextStatus === status) return;
+
+    try {
+      await updateUser.mutateAsync({
+        id: userId,
+        payload: { status: nextStatus },
+      });
+      setOpen(false);
+      onUpdated(`User status changed to ${nextStatus}`);
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
+
+  return (
+    <div ref={menuRef} className="relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={() => !updateUser.isPending && setOpen((value) => !value)}
+        disabled={updateUser.isPending}
+        className={`rounded-full ${updateUser.isPending ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+      >
+        <StatusBadge status={status} />
+      </button>
+
+      {open && !updateUser.isPending && (
+        <div className="absolute left-0 top-full z-20 mt-2 min-w-[132px] rounded-lg border border-[#E9EAEB] bg-white p-1 shadow-lg">
+          {statusOptions.map((option) => {
+            const isCurrent = option === status;
+
+            return (
+              <button
+                key={option}
+                type="button"
+                disabled={isCurrent}
+                onClick={() => handleStatusChange(option)}
+                className={`w-full rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                  isCurrent
+                    ? 'cursor-not-allowed bg-gray-50 text-[#A4A7AE]'
+                    : 'text-[#414651] hover:bg-gray-50'
+                }`}
+              >
+                {option}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function UsersPage() {
   const navigate = useNavigate();
@@ -26,15 +211,16 @@ export default function UsersPage() {
 
   const { data: users = [], isLoading: loading, error: fetchErrorObj } = useUsers();
   const fetchError = fetchErrorObj ? (fetchErrorObj as Error).message : '';
-  const deleteUser    = useDeleteUser();
-  const resendInvite  = useResendInvite();
+  const deleteUser   = useDeleteUser();
+  const resendInvite = useResendInvite();
 
   const [selected,     setSelected]    = useState<Set<string>>(new Set());
   const [currentPage,  setCurrentPage] = useState(1);
   const [toastMessage, setToastMessage] = useState<string | null>(
     (location.state as { toastMessage?: string } | null)?.toastMessage ?? null
   );
-  const [editUser,     setEditUser]    = useState<User | null>(null);
+  const [userPendingDelete, setUserPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [permissionsOpenFor, setPermissionsOpenFor] = useState<string | null>(null);
 
   // ── Pagination ────────────────────────────────────────────────────────────────
   const totalPages  = Math.max(1, Math.ceil(users.length / PAGE_SIZE));
@@ -64,11 +250,6 @@ export default function UsersPage() {
     });
   }
 
-  // ── Edit saved ───────────────────────────────────────────────────────────────
-  function handleUserSaved(_updated: User) {
-    setToastMessage('Profile updated successfully');
-  }
-
   // ── Resend invite ─────────────────────────────────────────────────────────────
   async function handleResendInvite(id: string) {
     try {
@@ -80,28 +261,25 @@ export default function UsersPage() {
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────────
-  async function handleDelete(id: string) {
-    if (!window.confirm('Delete this user? This cannot be undone.')) return;
+  function promptDelete(id: string, name: string) {
+    setUserPendingDelete({ id, name });
+  }
+
+  async function handleDeleteConfirm() {
+    if (!userPendingDelete) return;
+
     try {
-      await deleteUser.mutateAsync(id);
-      setSelected((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      await deleteUser.mutateAsync(userPendingDelete.id);
+      setSelected((prev) => {
+        const n = new Set(prev);
+        n.delete(userPendingDelete.id);
+        return n;
+      });
+      setUserPendingDelete(null);
     } catch (err) {
       alert((err as Error).message);
     }
   }
-
-  // ── Page number pills ─────────────────────────────────────────────────────────
-  function buildPageNumbers(page: number, total: number): (number | '...')[] {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-    if (page <= 4) return [1, 2, 3, 4, 5, '...', total];
-    if (page >= total - 3) return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
-    return [1, '...', page - 1, page, page + 1, '...', total];
-  }
-
-  const pageNumbers = useMemo(
-    () => buildPageNumbers(currentPage, totalPages),
-    [currentPage, totalPages]
-  );
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
@@ -158,12 +336,7 @@ export default function UsersPage() {
                 <tr className="bg-white border-b border-[#E9EAEB]">
                   <th className="px-6 py-3 text-left w-[280px]">
                     <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={isAllSelected}
-                        onChange={toggleAll}
-                        className="w-4 h-4 rounded border-[#D5D7DA] accent-[#7F56D9] cursor-pointer"
-                      />
+                      <Checkbox checked={isAllSelected} onChange={toggleAll} />
                       <span className="text-xs font-semibold text-[#717680]">Name</span>
                     </div>
                   </th>
@@ -171,7 +344,7 @@ export default function UsersPage() {
                     <span className="text-xs font-semibold text-[#717680]">Status</span>
                   </th>
                   <th className="px-6 py-3 text-left w-[176px]">
-                    <span className="text-xs font-semibold text-[#717680]">Role / Title</span>
+                    <span className="text-xs font-semibold text-[#717680]">Role</span>
                   </th>
                   <th className="px-6 py-3 text-left w-[224px]">
                     <span className="text-xs font-semibold text-[#717680]">Email address</span>
@@ -191,15 +364,19 @@ export default function UsersPage() {
                   </tr>
                 ) : (
                   pageMembers.map((user, idx) => {
-                    const isEven   = idx % 2 === 0;
+                    const isEven    = idx % 2 === 0;
                     const isChecked = selected.has(user.id);
-                    const displayRole = user.member_role ?? user.role;
+                    // For invited users the name is the email until onboarding is done
+                    const displayName = (user.name && user.name !== user.email)
+                      ? user.name
+                      : user.email;
+                    const displayRole = user.role.replace(/_/g, ' ');
                     const SKILL_PREVIEW = 3;
                     const visibleSkills = user.skills.slice(0, SKILL_PREVIEW);
                     const extraCount    = user.skills.length - SKILL_PREVIEW;
-
-                    // Derive @handle from email local part
-                    const handle = '@' + user.email.split('@')[0];
+                    const rateDisplay = user.rate_amount
+                      ? `$${user.rate_amount}/${user.rate_frequency ?? 'Weekly'}`
+                      : '—';
 
                     return (
                       <tr
@@ -209,20 +386,15 @@ export default function UsersPage() {
                         {/* Name */}
                         <td className="px-6 py-4 h-[72px]">
                           <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => toggleOne(user.id)}
-                              className="w-4 h-4 rounded border-[#D5D7DA] accent-[#7F56D9] cursor-pointer shrink-0"
-                            />
+                            <Checkbox checked={isChecked} onChange={() => toggleOne(user.id)} />
                             <div className="flex items-center gap-3">
-                              <Avatar name={user.name} />
+                              <Avatar src={user.avatar_url ?? undefined} name={displayName} />
                               <div>
                                 <p className="text-sm font-medium text-[#181D27] whitespace-nowrap">
-                                  {user.name}
+                                  {displayName}
                                 </p>
                                 <p className="text-sm text-[#535862] whitespace-nowrap">
-                                  {handle}
+                                  {rateDisplay}
                                 </p>
                               </div>
                             </div>
@@ -231,7 +403,11 @@ export default function UsersPage() {
 
                         {/* Status */}
                         <td className="px-6 py-4">
-                          <StatusBadge status={user.status} />
+                          <StatusMenu
+                            userId={user.id}
+                            status={user.status}
+                            onUpdated={setToastMessage}
+                          />
                         </td>
 
                         {/* Role / Title */}
@@ -263,11 +439,10 @@ export default function UsersPage() {
                           </div>
                         </td>
 
-                        {/* Actions — fixed 4-slot row; resend is invisible when not applicable
-                             so Settings + Edit + Delete stay pinned at the same position every row */}
+                        {/* Actions */}
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-end gap-1">
-                            {/* Slot 1: Resend invite — visible only for invited users */}
+                            {/* Resend invite — visible only for invited users */}
                             <button
                               onClick={() => handleResendInvite(user.id)}
                               disabled={resendInvite.isPending}
@@ -282,27 +457,40 @@ export default function UsersPage() {
                               <Send01 width={16} height={16} />
                             </button>
 
-                            {/* Slot 2: Settings */}
+                            {/* Extra Permissions popup */}
+                            <div className="relative">
+                              <button
+                                className="p-1.5 rounded-lg hover:bg-gray-100 text-[#717680] hover:text-[#414651] transition-colors"
+                                title="Extra permissions"
+                                onClick={() =>
+                                  setPermissionsOpenFor((prev) =>
+                                    prev === user.id ? null : user.id
+                                  )
+                                }
+                              >
+                                <Settings01 width={16} height={16} />
+                              </button>
+                              {permissionsOpenFor === user.id && (
+                                <ExtraPermissionsPopup
+                                  userId={user.id}
+                                  permissions={user.permissions ?? []}
+                                  onClose={() => setPermissionsOpenFor(null)}
+                                />
+                              )}
+                            </div>
+
+                            {/* Edit — navigates to UserSettingsPage */}
                             <button
                               onClick={() => navigate(`/users/${user.id}/settings`)}
-                              className="p-1.5 rounded-lg hover:bg-gray-100 text-[#717680] hover:text-[#414651] transition-colors"
-                              title="User settings"
-                            >
-                              <Settings01 width={16} height={16} />
-                            </button>
-
-                            {/* Slot 3: Edit */}
-                            <button
-                              onClick={() => setEditUser(user)}
                               className="p-1.5 rounded-lg hover:bg-gray-100 text-[#717680] hover:text-[#414651] transition-colors"
                               title="Edit user"
                             >
                               <Edit01 width={16} height={16} />
                             </button>
 
-                            {/* Slot 4: Delete */}
+                            {/* Delete */}
                             <button
-                              onClick={() => handleDelete(user.id)}
+                              onClick={() => promptDelete(user.id, displayName)}
                               disabled={deleteUser.isPending}
                               className="p-1.5 rounded-lg hover:bg-gray-100 text-[#717680] hover:text-red-600 disabled:opacity-40 transition-colors"
                               title="Delete user"
@@ -322,44 +510,11 @@ export default function UsersPage() {
 
         {/* Pagination */}
         {!loading && !fetchError && totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 pt-3 pb-4 border-t border-[#E9EAEB]">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="inline-flex items-center gap-1.5 bg-white border border-[#E9EAEB] text-sm font-semibold text-[#414651] px-3 py-2 rounded-lg shadow-sm hover:bg-gray-50 disabled:text-[#A4A7AE] disabled:cursor-not-allowed transition-colors"
-            >
-              <ArrowLeft width={18} height={18} />
-              Previous
-            </button>
-
-            <div className="flex items-center gap-0.5">
-              {pageNumbers.map((page, i) => (
-                <button
-                  key={typeof page === 'number' ? page : `ellipsis-${i}`}
-                  onClick={() => typeof page === 'number' && setCurrentPage(page)}
-                  disabled={page === '...'}
-                  className={`w-10 h-10 rounded-lg text-sm font-medium transition-colors
-                    ${page === currentPage
-                      ? 'bg-[#FAFAFA] text-[#414651]'
-                      : page === '...'
-                      ? 'text-[#717680] cursor-default'
-                      : 'text-[#717680] hover:bg-gray-50'}
-                  `}
-                >
-                  {page}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="inline-flex items-center gap-1.5 bg-white border border-[#D5D7DA] text-sm font-semibold text-[#414651] px-3 py-2 rounded-lg shadow-sm hover:bg-gray-50 disabled:text-[#A4A7AE] disabled:cursor-not-allowed transition-colors"
-            >
-              Next
-              <ArrowRight width={18} height={18} />
-            </button>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onChange={setCurrentPage}
+          />
         )}
       </div>
 
@@ -372,12 +527,12 @@ export default function UsersPage() {
         />
       )}
 
-      {/* Edit slide-over */}
-      <EditUserDrawer
-        user={editUser}
-        open={editUser !== null}
-        onClose={() => setEditUser(null)}
-        onSaved={handleUserSaved}
+      <DeleteUserModal
+        open={!!userPendingDelete}
+        userName={userPendingDelete?.name ?? 'this user'}
+        deleting={deleteUser.isPending}
+        onCancel={() => setUserPendingDelete(null)}
+        onConfirm={handleDeleteConfirm}
       />
     </main>
   );

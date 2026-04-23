@@ -6,11 +6,11 @@ import {
   FolderClosed,
   Plus,
   FilterLines,
-  SearchLg,
   X,
   Calendar,
   User01,
 } from '@untitled-ui/icons-react';
+import TabBar from '../components/ui/TabBar';
 
 import type { Firm, Task, User } from '../lib/api';
 import { useFirmDetail } from '../hooks/useFirms';
@@ -18,6 +18,7 @@ import { useTasksByFirm } from '../hooks/useTasks';
 import { useUsers } from '../hooks/useUsers';
 import AvatarStack from '../components/ui/AvatarStack';
 import Avatar from '../components/ui/Avatar';
+import SearchInput from '../components/ui/SearchInput';
 import { PriorityBadge, TaskStatusBadge } from '../components/tasks/TaskBadges';
 import AddProjectModal from '../components/firms/AddProjectModal';
 import ProjectDetailPanel, { type ProjectDetail } from '../components/firms/ProjectDetailPanel';
@@ -572,20 +573,12 @@ function FilterPanel({
           <p className="text-sm font-semibold text-[#181D27] pt-5 pb-2">By Assignee</p>
 
           {/* Assignee search input */}
-          <div className="flex items-center gap-2 border border-[#D0D5DD] rounded-lg px-3 py-2 bg-white mb-1">
-            <SearchLg width={15} height={15} className="text-[#A4A7AE] shrink-0" aria-hidden="true" />
-            <input
-              type="search"
-              value={assigneeSearch}
-              onChange={(e) => setAssigneeSearch(e.target.value)}
-              placeholder="Search"
-              aria-label="Search assignees"
-              className="flex-1 text-[13px] text-[#181D27] placeholder:text-[#A4A7AE] bg-transparent outline-none"
-            />
-            <kbd className="border border-[#E9EAEB] rounded px-1.5 py-0.5 text-[11px] text-[#A4A7AE] font-medium leading-none shrink-0">
-              ⌘K
-            </kbd>
-          </div>
+          <SearchInput
+            value={assigneeSearch}
+            onChange={setAssigneeSearch}
+            placeholder="Search"
+            className="mb-1"
+          />
 
           {/* Assignee list */}
           <ul className="flex flex-col" role="group" aria-label="Filter by assignee">
@@ -798,20 +791,12 @@ function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-6 py-3 border-b border-[#E9EAEB] bg-white shrink-0 flex-wrap">
         {/* Search */}
-        <div className="flex items-center gap-2 border border-[#E9EAEB] rounded-lg px-3 py-1.5 bg-white text-sm w-56">
-          <SearchLg width={16} height={16} className="text-[#A4A7AE] shrink-0" aria-hidden="true" />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search"
-            aria-label="Search tasks"
-            className="flex-1 text-[13px] text-[#181D27] placeholder:text-[#A4A7AE] bg-transparent outline-none"
-          />
-          <kbd className="border border-[#E9EAEB] rounded px-1.5 py-0.5 text-[11px] text-[#A4A7AE] font-medium leading-none shrink-0">
-            ⌘K
-          </kbd>
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search"
+          className="w-56 py-1.5 border-[#E9EAEB]"
+        />
 
         {/* Grouped by Project toggle */}
         <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -1052,27 +1037,16 @@ export default function FirmDetailPage() {
 
         {/* Tab bar */}
         <div
-          className="flex items-end gap-0 overflow-x-auto"
+          className="overflow-x-auto"
           role="tablist"
           aria-label="Firm sections"
           style={{ scrollbarWidth: 'none' }}
         >
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              aria-controls={`tabpanel-${tab.id}`}
-              onClick={() => setActiveTab(tab.id)}
-              className={`shrink-0 px-4 py-2 text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'border-[#7F56D9] text-[#7F56D9]'
-                  : 'border-transparent text-[#717680] hover:text-[#414651] hover:border-[#D0D5DD]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          <TabBar
+            tabs={TABS.map((t) => ({ id: t.id, label: t.label }))}
+            activeId={activeTab}
+            onChange={(id) => setActiveTab(id as TabId)}
+          />
         </div>
       </header>
 

@@ -56,7 +56,7 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'member' | 'super_admin';
+  role: 'admin' | 'member' | 'project_manager' | 'super_admin';
   permissions: string[];
 }
 
@@ -95,17 +95,19 @@ export interface User {
   phone_number: string | null;
   avatar_url: string | null;
   email: string;
-  role: 'admin' | 'member' | 'super_admin';
+  role: 'admin' | 'member' | 'project_manager' | 'super_admin';
   member_role: string | null;
   status: 'Active' | 'invited' | 'Disabled';
   permissions: string[];
   skills: Skill[];
+  rate_amount: number | null;
+  rate_frequency: 'Hourly' | 'Daily' | 'Weekly' | 'Monthly' | null;
   created_at: string;
   updated_at: string | null;
 }
 
 export interface CreateUserPayload {
-  name: string;
+  name?: string;
   email: string;
   password?: string;
   role?: 'admin' | 'member' | 'project_manager';
@@ -113,6 +115,8 @@ export interface CreateUserPayload {
   permissions?: string[];
   skill_ids?: string[];
   status?: 'Active' | 'invited' | 'Disabled';
+  rate_amount?: number | null;
+  rate_frequency?: 'Hourly' | 'Daily' | 'Weekly' | 'Monthly' | null;
 }
 
 export interface UpdateUserPayload {
@@ -127,6 +131,8 @@ export interface UpdateUserPayload {
   last_name?: string;
   phone_number?: string;
   avatar_url?: string;
+  rate_amount?: number | null;
+  rate_frequency?: 'Hourly' | 'Daily' | 'Weekly' | 'Monthly' | null;
 }
 
 // ── Users API ─────────────────────────────────────────────────────────────────
@@ -196,6 +202,7 @@ export const onboardingApi = {
     avatar_url?: string;
     password: string;
     skills?: { skill_name: string; experience?: string }[];
+    pending_skills?: string[];
   }) =>
     request<{ data: { token: string | null; user?: { id: string; email: string; name: string } } }>(
       'POST',

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, Link01, Copy01, HelpCircle, ChevronDown, Plus } from '@untitled-ui/icons-react';
+import { Link01, Copy01, HelpCircle, ChevronDown, Plus } from '@untitled-ui/icons-react';
 import Avatar from '../ui/Avatar';
+import SlideOver from '../ui/SlideOver';
+import Input from '../ui/Input';
 import type { User } from '../../lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ export default function ProjectDetailPanel({
     }
   }, [project]);
 
-  if (!open || !project) return null;
+  if (!project) return null;
 
   const shareLink = `${project.firmAbbr}.com/project/marketing-site`;
 
@@ -102,78 +104,47 @@ export default function ProjectDetailPanel({
   const members      = users.filter((u) => memberIds.includes(u.id));
   const nonMembers   = users.filter((u) => !memberIds.includes(u.id));
 
-  const inputCls = 'w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white';
-  const labelCls = 'block text-sm font-medium text-[#344054] mb-1.5';
-
   return (
-    <>
-      {/* Backdrop */}
-      <div onClick={onClose} className="fixed inset-0 z-40 bg-black/20" />
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      title={`${project.name} · ${project.firmAbbr}`}
+      subtitle={`Redesign of ${project.firmAbbr}`}
+      width="max-w-[420px]"
+    >
+      <div className="flex flex-col gap-5">
 
-      {/* Panel */}
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[420px] bg-white shadow-2xl flex flex-col border-l-2 border-[#7F56D9]">
-
-        {/* ── Header ──────────────────────────────────────────────────────── */}
-        <div className="shrink-0 px-5 pt-5 pb-4 border-b border-[#E9EAEB]">
-          <div className="flex items-start justify-between">
-            <div className="min-w-0 pr-3">
-              <h2 className="text-base font-semibold text-[#181D27] leading-snug truncate">
-                {project.name}
-                <span className="text-[#717680] font-normal ml-1.5">
-                  For {project.firmAbbr}
-                </span>
-              </h2>
-              <p className="text-sm text-[#717680] mt-0.5">
-                Redesign of {project.firmAbbr}
-              </p>
+        {/* Share project */}
+        <div>
+          <p className="text-sm font-medium text-[#344054] mb-2">Share project</p>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-sm text-[#717680] min-w-0">
+              <Link01 width={14} height={14} className="shrink-0 text-[#A4A7AE]" />
+              <span className="truncate text-[13px]">{shareLink}</span>
             </div>
             <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-[#717680] hover:text-[#414651] hover:bg-[#F9FAFB] transition-colors shrink-0"
+              type="button"
+              onClick={handleCopy}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#D5D7DA] rounded-lg text-[13px] text-[#344054] bg-white hover:bg-[#F9FAFB] transition-colors shrink-0"
             >
-              <X width={18} height={18} />
+              <Copy01 width={13} height={13} />
+              {copied ? 'Copied!' : 'Copy link'}
             </button>
-          </div>
-
-          {/* Share project */}
-          <div className="mt-4">
-            <p className="text-sm font-medium text-[#344054] mb-2">Share project</p>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 text-sm text-[#717680] min-w-0">
-                <Link01 width={14} height={14} className="shrink-0 text-[#A4A7AE]" />
-                <span className="truncate text-[13px]">{shareLink}</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#D5D7DA] rounded-lg text-[13px] text-[#344054] bg-white hover:bg-[#F9FAFB] transition-colors shrink-0"
-              >
-                <Copy01 width={13} height={13} />
-                {copied ? 'Copied!' : 'Copy link'}
-              </button>
-            </div>
           </div>
         </div>
 
-        {/* ── Scrollable body ─────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-5">
-
           {/* Name of project */}
-          <div>
-            <label className={labelCls}>
-              Name of project <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={inputCls}
-            />
-          </div>
+          <Input
+            label="Name of project"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
 
           {/* Description */}
           <div>
-            <label className={`${labelCls} flex items-center gap-1`}>
+            <label className="block text-sm font-medium text-[#344054] mb-1.5 flex items-center gap-1">
               Description
               <HelpCircle width={13} height={13} className="text-[#A4A7AE]" />
             </label>
@@ -182,18 +153,18 @@ export default function ProjectDetailPanel({
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
               placeholder="A little about the company and the team that you'll be working with."
-              className={`${inputCls} resize-none`}
+              className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white resize-none"
             />
           </div>
 
           {/* Project status */}
           <div>
-            <label className={labelCls}>Project status</label>
+            <label className="block text-sm font-medium text-[#344054] mb-1.5">Project status</label>
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setShowStatus((v) => !v)}
-                className={`${inputCls} flex items-center gap-2`}
+                className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white flex items-center gap-2"
               >
                 <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
                 <span className="flex-1 text-left">{status}</span>
@@ -281,10 +252,9 @@ export default function ProjectDetailPanel({
               )}
             </div>
           </div>
-        </div>
 
-        {/* ── Sticky footer ────────────────────────────────────────────────── */}
-        <div className="shrink-0 border-t border-[#E9EAEB] px-5 py-4 flex items-center gap-3 bg-white">
+        {/* Footer actions */}
+        <div className="flex items-center gap-3 pt-4 border-t border-[#E9EAEB]">
           <button
             type="button"
             onClick={handleSave}
@@ -312,6 +282,6 @@ export default function ProjectDetailPanel({
         </div>
 
       </div>
-    </>
+    </SlideOver>
   );
 }

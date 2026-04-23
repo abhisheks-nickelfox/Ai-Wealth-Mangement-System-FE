@@ -1,22 +1,15 @@
 import { useState } from 'react';
-import Header from '../components/Header';
 import MetricCard from '../components/dashboard/MetricCard';
 import QuickLinks from '../components/dashboard/QuickLinks';
 import TasksTable from '../components/dashboard/TasksTable';
 import DateRangePicker from '../components/DateRangePicker';
 import WelcomeGuide from '../components/ui/WelcomeGuide';
+import TabBar from '../components/ui/TabBar';
+import TimeFilterBar from '../components/ui/TimeFilterBar';
+import type { TimeFilter } from '../components/ui/TimeFilterBar';
 import { useAuth } from '../context/AuthContext';
 
-type TimeFilter = 'all' | 'custom' | '30d' | '7d' | '24h';
-type SubTab     = 'tasks' | 'timesheets' | 'transcripts';
-
-const TIME_FILTERS: { id: TimeFilter; label: string }[] = [
-  { id: 'all',    label: 'All time'  },
-  { id: 'custom', label: 'Custom'    },
-  { id: '30d',    label: '30 days'   },
-  { id: '7d',     label: '7 days'    },
-  { id: '24h',    label: '24 hours'  },
-];
+type SubTab = 'tasks' | 'timesheets' | 'transcripts';
 
 const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'tasks',       label: 'Tasks'       },
@@ -51,44 +44,19 @@ export default function Dashboard() {
       )}
       <main className="flex-1 min-w-0 overflow-y-auto bg-white">
 
-      <Header />
-
       {/* Time filter + date picker */}
       <div className="flex items-center justify-between px-8 pt-4">
-        <div className="flex items-center gap-0.5 bg-gray-50 border border-gray-200 rounded-lg p-0.5">
-          {TIME_FILTERS.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTime(id)}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-semibold whitespace-nowrap transition-all ${
-                activeTime === id
-                  ? 'bg-white text-gray-700 border border-gray-300 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
+        <TimeFilterBar value={activeTime} onChange={setActiveTime} />
         <DateRangePicker />
       </div>
 
       {/* Sub-tabs */}
-      <div className="flex border-b border-gray-200 px-8 mt-1">
-        {SUB_TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`pb-2.5 pt-2 mr-5 text-[14px] font-semibold transition-all border-b-2 ${
-              activeTab === id
-                ? 'text-brand-700 border-brand-600'
-                : 'text-gray-500 border-transparent hover:text-gray-700'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="px-8 mt-1">
+        <TabBar
+          tabs={SUB_TABS}
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as SubTab)}
+        />
       </div>
 
       {/* Content */}

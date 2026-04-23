@@ -1,8 +1,3 @@
-// StepIcon — matches the Figma "StepIconBase" design (24px)
-// Current:   purple circle with double-ring shadow + white inner dot
-// Completed: purple circle with white checkmark
-// Upcoming:  white circle with gray border + gray inner dot
-
 interface StepIconProps {
   state: 'current' | 'completed' | 'upcoming';
   size?: number;
@@ -14,8 +9,9 @@ export default function StepIcon({ state, size = 24 }: StepIconProps) {
   if (state === 'completed') {
     return (
       <div
+        key="completed"
         style={{ width: size, height: size }}
-        className="rounded-xl bg-[#7F56D9] flex items-center justify-center shrink-0"
+        className="rounded-xl bg-[#7F56D9] flex items-center justify-center shrink-0 step-icon-pop"
       >
         <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 12 12" fill="none">
           <path
@@ -24,6 +20,7 @@ export default function StepIcon({ state, size = 24 }: StepIconProps) {
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
+            className="step-check-path"
           />
         </svg>
       </div>
@@ -33,12 +30,9 @@ export default function StepIcon({ state, size = 24 }: StepIconProps) {
   if (state === 'current') {
     return (
       <div
-        style={{
-          width: size,
-          height: size,
-          boxShadow: '0 0 0 2px #fff, 0 0 0 4px #9E77ED',
-        }}
-        className="rounded-xl bg-[#7F56D9] flex items-center justify-center shrink-0"
+        key="current"
+        style={{ width: size, height: size }}
+        className="rounded-xl bg-[#7F56D9] flex items-center justify-center shrink-0 step-icon-pop-delayed step-icon-current"
       >
         <div
           style={{ width: dotSize, height: dotSize }}
@@ -51,6 +45,7 @@ export default function StepIcon({ state, size = 24 }: StepIconProps) {
   // upcoming
   return (
     <div
+      key="upcoming"
       style={{ width: size, height: size }}
       className="rounded-xl border-[1.5px] border-[#E9EAEB] bg-white flex items-center justify-center shrink-0"
     >

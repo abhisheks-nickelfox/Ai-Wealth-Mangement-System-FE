@@ -3,9 +3,10 @@ import { Save01, Plus } from '@untitled-ui/icons-react';
 import SlideOver from '../ui/SlideOver';
 import MultiSelect from '../ui/MultiSelect';
 import Avatar from '../ui/Avatar';
+import Input from '../ui/Input';
 import InlineAddPanel from '../ui/InlineAddPanel';
 import type { User } from '../../lib/api';
-import { ROLE_OPTIONS, STATUS_OPTIONS, inputCls } from '../../lib/constants';
+import { ROLE_OPTIONS, STATUS_OPTIONS } from '../../lib/constants';
 import { useUser, useUpdateUser } from '../../hooks/useUsers';
 import { useSkills, useCreateSkill } from '../../hooks/useSkills';
 import { useMemberRoles, useCreateMemberRole } from '../../hooks/useMemberRoles';
@@ -172,11 +173,13 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
           )}
 
           {/* Name */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[#414651]">Name</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="Full name" className={inputCls} />
-          </div>
+          <Input
+            label="Name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Full name"
+          />
 
           {/* Status */}
           <MultiSelect

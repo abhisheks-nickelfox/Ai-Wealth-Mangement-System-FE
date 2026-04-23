@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import {
-  X,
   ChevronDown,
   AlertCircle,
   Users01,
   Archive,
-  UploadCloud01,
 } from '@untitled-ui/icons-react';
 import Avatar from '../ui/Avatar';
+import SlideOver from '../ui/SlideOver';
+import Input from '../ui/Input';
+import FileUpload from '../ui/FileUpload';
 import type { Task, User } from '../../lib/api';
 import { useUpdateTask, useDiscardTask, useArchiveTask, useAssignApproveTask } from '../../hooks/useTasks';
 import { PriorityBadge, TaskStatusBadge } from './TaskBadges';
@@ -103,26 +104,22 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
 
   return (
     <>
-      <div
-        onClick={onClose}
-        className={`fixed inset-0 z-40 bg-black/20 transition-opacity duration-200 ${open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-      />
-      <div
-        className={`fixed inset-y-0 right-0 z-50 flex flex-col bg-white border-l border-[#E9EAEB] shadow-xl transition-transform duration-300 ease-in-out w-[560px] ${open ? 'translate-x-0' : 'translate-x-full'}`}
+      <SlideOver
+        open={open}
+        onClose={onClose}
+        title={task?.title ?? 'Task Details'}
+        subtitle={task ? undefined : undefined}
+        width="max-w-[560px]"
       >
-        {/* Header */}
-        <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-[#E9EAEB] shrink-0">
-          <div className="flex-1 min-w-0 pr-4">
-            <p className="text-sm font-semibold text-[#181D27] truncate mb-1">{task?.title ?? ''}</p>
-            {task && <TaskStatusBadge status={task.status} />}
+        {/* Status badge beneath title (SlideOver header only renders title/subtitle) */}
+        {task && (
+          <div className="-mt-2 mb-3">
+            <TaskStatusBadge status={task.status} />
           </div>
-          <button onClick={onClose} className="p-1 rounded text-[#717680] hover:text-[#414651] hover:bg-gray-100 transition-colors shrink-0">
-            <X width={18} height={18} />
-          </button>
-        </div>
+        )}
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
+        <div className="flex flex-col gap-5">
           {task?.firms?.name && <p className="text-sm text-[#535862]">{task.firms.name}</p>}
 
           {/* Source Quote */}
@@ -185,14 +182,12 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
           </div>
 
           {/* Task name */}
-          <div>
-            <label className="block text-sm font-medium text-[#414651] mb-1.5">Task name <span className="text-red-500">*</span></label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent"
-            />
-          </div>
+          <Input
+            label="Task name"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
 
           {/* Description */}
           <div>
@@ -208,15 +203,12 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
 
           {/* Due date + Assignee */}
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-[#414651] mb-1.5">Due date</label>
-              <input
-                type="date"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent"
-              />
-            </div>
+            <Input
+              label="Due date"
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+            />
             <div>
               <label className="block text-sm font-medium text-[#414651] mb-1.5">Assignee</label>
               <div className="relative">
@@ -268,13 +260,10 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
           {/* Attach a file */}
           <div>
             <label className="block text-sm font-medium text-[#414651] mb-1.5">Attach a file</label>
-            <div className="flex flex-col items-center gap-2 py-6 border-2 border-dashed border-[#D5D7DA] rounded-xl bg-[#FAFAFA] cursor-pointer hover:border-[#7F56D9] transition-colors">
-              <UploadCloud01 width={28} height={28} className="text-[#A4A7AE]" />
-              <p className="text-sm text-[#535862]">
-                <span className="text-[#7F56D9] font-medium">Click to upload</span> or drag and drop
-              </p>
-              <p className="text-xs text-[#A4A7AE]">SVG, PNG, JPG or GIF (max. 800×400px)</p>
-            </div>
+            <FileUpload
+              accept="image/svg+xml,image/png,image/jpeg,image/gif"
+              onFile={() => {}}
+            />
           </div>
 
           {error && (
@@ -286,7 +275,7 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-2 px-6 py-4 border-t border-[#E9EAEB] shrink-0">
+        <div className="flex items-center gap-2 pt-4 mt-4 border-t border-[#E9EAEB]">
           <button
             onClick={handleSave}
             disabled={updateTask.isPending}
@@ -326,7 +315,7 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
             Approve
           </button>
         </div>
-      </div>
+      </SlideOver>
 
       <ApprovalConfirmModal
         open={showConfirm}

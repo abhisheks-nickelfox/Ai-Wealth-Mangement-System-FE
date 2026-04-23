@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, AlertCircle } from '@untitled-ui/icons-react';
 import AuthLayout from '../../components/layout/AuthLayout';
+import Input from '../../components/ui/Input';
 import { authApi } from '../../lib/api';
 
 export default function ResetPasswordPage() {
@@ -55,45 +56,37 @@ export default function ResetPasswordPage() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
 
           {/* Enter Password */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Enter Password</label>
-            <div className="relative">
-              <input
-                type={showPw ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600 transition pr-10"
-              />
+          <Input
+            label="Enter Password"
+            type={showPw ? 'text' : 'password'}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+            rightIcon={
               <button type="button" onClick={() => setShowPw(v => !v)} tabIndex={-1}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                className="text-gray-400 hover:text-gray-600">
                 {showPw ? <EyeOff width={18} height={18} /> : <Eye width={18} height={18} />}
               </button>
-            </div>
-          </div>
+            }
+          />
 
           {/* Confirm Password */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm Password</label>
-            <div className="relative">
-              <input
-                type={showConf ? 'text' : 'password'}
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="••••••••"
-                required
-                className={`w-full border rounded-lg px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:ring-2 transition pr-10 ${
-                  error ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-brand-600 focus:border-brand-600'
-                }`}
-              />
+          <Input
+            label="Confirm Password"
+            type={showConf ? 'text' : 'password'}
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="••••••••"
+            required
+            error={error || undefined}
+            rightIcon={
               <button type="button" onClick={() => setShowConf(v => !v)} tabIndex={-1}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 ${error ? 'text-red-400' : 'text-gray-400 hover:text-gray-600'}`}>
+                className={error ? 'text-error-400' : 'text-gray-400 hover:text-gray-600'}>
                 {error ? <AlertCircle width={18} height={18} /> : showConf ? <EyeOff width={18} height={18} /> : <Eye width={18} height={18} />}
               </button>
-            </div>
-            {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-          </div>
+            }
+          />
 
           <button
             type="submit"

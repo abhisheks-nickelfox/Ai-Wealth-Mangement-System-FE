@@ -7,6 +7,7 @@ import { useUsers } from '../hooks/useUsers';
 import { formatDate, formatDurationSec } from '../lib/transcriptUtils';
 import TaskCard from '../components/tasks/TaskCard';
 import TaskDetailPanel from '../components/tasks/TaskDetailPanel';
+import TabBar from '../components/ui/TabBar';
 
 // ── Tab helpers ───────────────────────────────────────────────────────────────
 
@@ -120,19 +121,12 @@ export default function TranscriptTasksPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 px-6 border-b border-[#E9EAEB]">
-        {TABS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex items-center gap-1.5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === key ? 'border-[#7F56D9] text-[#7F56D9]' : 'border-transparent text-[#717680] hover:text-[#414651]'}`}
-          >
-            {label}
-            <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${activeTab === key ? 'bg-[#F4EBFF] text-[#6941C6]' : 'bg-[#F2F4F7] text-[#717680]'}`}>
-              {tabCounts[key]}
-            </span>
-          </button>
-        ))}
+      <div className="px-6">
+        <TabBar
+          tabs={TABS.map(({ key, label }) => ({ id: key, label, count: tabCounts[key] }))}
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as TaskTab)}
+        />
       </div>
 
       {/* Task list */}

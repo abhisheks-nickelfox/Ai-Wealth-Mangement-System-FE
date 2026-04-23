@@ -11,6 +11,7 @@ import ImageCropModal from '../../components/ui/ImageCropModal';
 import { onboardingApi, skillsApi } from '../../lib/api';
 import type { Skill } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { COUNTRIES } from '../../components/ui/PhoneInput';
 
 // ── Steps config ──────────────────────────────────────────────────────────────
 
@@ -29,10 +30,75 @@ const EXPERIENCE_OPTIONS = [
   '10+ Years',
 ];
 
-// skillId = catalog ID, or '__new__' when the user wants to type a custom skill
+// skillId = catalog ID, or '__other__' when the user wants to request a new skill
 type SkillRow = { skillId: string; customName: string; experience: string };
 
 const EMPTY_SKILL_ROW: SkillRow = { skillId: '', customName: '', experience: '' };
+const E164_PHONE_REGEX = /^\+[1-9]\d{6,14}$/;
+
+function buildE164PhoneNumber(rawPhoneNumber: string, countryCode: string): string {
+  const trimmed = rawPhoneNumber.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.startsWith('+')) {
+    return `+${trimmed.slice(1).replace(/\D/g, '')}`;
+  }
+
+  const selectedCountry = COUNTRIES.find((country) => country.code === countryCode) ?? COUNTRIES[0];
+  const localDigits = trimmed.replace(/\D/g, '');
+
+  return `${selectedCountry.dial}${localDigits}`;
+}
+
+function getPhoneValidationError(rawPhoneNumber: string, countryCode: string): string {
+  if (!rawPhoneNumber.trim()) {
+    return 'Phone number is required';
+  }
+
+  const hasInvalidCharacters = /[^\d\s\-().+]/.test(rawPhoneNumber);
+  if (hasInvalidCharacters) {
+    return 'Invalid characters in phone number';
+  }
+
+  const normalizedPhone = buildE164PhoneNumber(rawPhoneNumber, countryCode);
+  if (!E164_PHONE_REGEX.test(normalizedPhone)) {
+    return 'Phone number must be in E.164 format, e.g. +12025551234';
+  }
+
+  return '';
+}
+
+function getSkillsValidationError(skillRows: SkillRow[]): string {
+  const hasAtLeastOneSkill = skillRows.some((row) => row.skillId.trim());
+  if (!hasAtLeastOneSkill) {
+    return 'Please add at least one skill and select experience.';
+  }
+
+  for (const row of skillRows) {
+    const hasSkill = row.skillId.trim().length > 0;
+    const hasExperience = row.experience.trim().length > 0;
+    const needsCustomName = row.skillId === '__other__';
+    const hasCustomName = row.customName.trim().length > 0;
+
+    if (!hasSkill && !hasExperience && !hasCustomName) {
+      continue;
+    }
+
+    if (!hasSkill) {
+      return 'Please select a skill for every filled row.';
+    }
+
+    if (needsCustomName && !hasCustomName) {
+      return 'Please describe the custom skill before continuing.';
+    }
+
+    if (!hasExperience) {
+      return 'Please select experience for every skill before continuing.';
+    }
+  }
+
+  return '';
+}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -131,10 +197,10 @@ export default function OnboardingPage() {
     let valid = true;
     if (!firstName.trim()) { setFirstNameError('First name is required'); valid = false; }
     if (!lastName.trim())  { setLastNameError('Last name is required');   valid = false; }
-    if (!phoneNumber.trim()) {
-      setPhoneError('Enter a valid phone number'); valid = false;
-    } else if (!/^[\d\s\-().+]{7,15}$/.test(phoneNumber.trim())) {
-      setPhoneError('Enter a valid phone number'); valid = false;
+    const phoneValidationError = getPhoneValidationError(phoneNumber, countryCode);
+    if (phoneValidationError) {
+      setPhoneError(phoneValidationError);
+      valid = false;
     }
     if (!valid) return;
     setStep(2);
@@ -171,6 +237,12 @@ export default function OnboardingPage() {
   }
 
   async function handleComplete() {
+    const skillsValidationError = getSkillsValidationError(skillRows);
+    if (skillsValidationError) {
+      setSkillError(skillsValidationError);
+      return;
+    }
+
     setSubmitting(true);
     setSkillError('');
     setUploadError('');
@@ -182,24 +254,29 @@ export default function OnboardingPage() {
         setAvatarUrl(avatar_url);
       }
 
+      // Catalog skills — rows where a catalog ID was selected
       const skills = skillRows
-        .filter((r) => r.skillId === '__new__' ? r.customName.trim() : r.skillId)
+        .filter((r) => r.skillId && r.skillId !== '__other__')
         .map((r) => ({
-          skill_name: r.skillId === '__new__'
-            ? r.customName.trim()
-            : allSkills.find((s) => s.id === r.skillId)?.name ?? '',
+          skill_name: allSkills.find((s) => s.id === r.skillId)?.name ?? '',
           experience: r.experience || undefined,
         }))
         .filter((s) => s.skill_name);
 
+      // Pending (other) skills — member typed a custom name; admin will review
+      const pending_skills = skillRows
+        .filter((r) => r.skillId === '__other__' && r.customName.trim())
+        .map((r) => r.customName.trim());
+
       const result = await onboardingApi.complete({
         token,
-        first_name:   firstName.trim(),
-        last_name:    lastName.trim(),
-        phone_number: phoneNumber.trim() || undefined,
-        avatar_url:   finalAvatarUrl || undefined,
+        first_name:     firstName.trim(),
+        last_name:      lastName.trim(),
+        phone_number:   buildE164PhoneNumber(phoneNumber, countryCode) || undefined,
+        avatar_url:     finalAvatarUrl || undefined,
         password,
-        skills: skills.length > 0 ? skills : undefined,
+        skills:         skills.length > 0 ? skills : undefined,
+        pending_skills: pending_skills.length > 0 ? pending_skills : undefined,
       });
 
       if (result?.token) {
@@ -270,7 +347,13 @@ export default function OnboardingPage() {
     </svg>
   );
 
-  const stepper = <OnboardingStepper steps={STEPS} currentStep={step} />;
+  const stepper = (
+    <OnboardingStepper
+      steps={STEPS}
+      currentStep={step}
+      onStepClick={(i) => setStep(i)}
+    />
+  );
 
   // ── Completion screen ───────────────────────────────────────────────────────
 
@@ -300,7 +383,7 @@ export default function OnboardingPage() {
       )}
 
       <OnboardingLayout stepper={stepper}>
-
+        <div key={step} className="onboarding-step-enter">
         {/* ── STEP 1: Set Password ── */}
         {step === 0 && (
           <div className="flex flex-col gap-6">
@@ -357,8 +440,14 @@ export default function OnboardingPage() {
                 placeholder="Last name" error={lastNameError || undefined} required />
               <PhoneInput
                 label="Phone Number" value={phoneNumber}
-                onChange={(v) => { setPhoneNumber(v); setPhoneError(''); }}
-                countryCode={countryCode} onCountryChange={setCountryCode}
+                onChange={(v) => {
+                  setPhoneNumber(v);
+                  setPhoneError(v.trim() ? getPhoneValidationError(v, countryCode) : '');
+                }}
+                countryCode={countryCode} onCountryChange={(code) => {
+                  setCountryCode(code);
+                  setPhoneError(phoneNumber.trim() ? getPhoneValidationError(phoneNumber, code) : '');
+                }}
                 error={phoneError || undefined} required
               />
             </div>
@@ -436,16 +525,16 @@ export default function OnboardingPage() {
                         {allSkills.map((s) => (
                           <option key={s.id} value={s.id}>{s.name}</option>
                         ))}
-                        <option value="__new__">+ Add custom skill…</option>
+                        <option value="__other__">Other…</option>
                       </select>
                       {chevronSvg}
                     </div>
-                    {row.skillId === '__new__' && (
+                    {row.skillId === '__other__' && (
                       <input
                         type="text"
                         value={row.customName}
                         onChange={(e) => updateSkillRow(index, 'customName', e.target.value)}
-                        placeholder="Enter skill name"
+                        placeholder="Describe the skill (admin will review)"
                         className={dropdownCls}
                         autoFocus
                       />
@@ -506,6 +595,7 @@ export default function OnboardingPage() {
 
           </div>
         )}
+        </div>
 
       </OnboardingLayout>
     </>

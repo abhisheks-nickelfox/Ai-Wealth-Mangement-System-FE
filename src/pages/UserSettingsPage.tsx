@@ -1,32 +1,25 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Edit02, Trash01, Plus, ChevronRight } from '@untitled-ui/icons-react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Edit02, Trash01, Plus, HelpCircle, Mail01, XClose } from '@untitled-ui/icons-react';
 import { useUser, useUpdateUser } from '../hooks/useUsers';
-import { useMemberRoles } from '../hooks/useMemberRoles';
 import { useSkills } from '../hooks/useSkills';
 import { profileApi } from '../lib/api';
+import { EXTRA_PERMISSIONS } from '../lib/constants';
+import type { User, Skill } from '../lib/api';
 import Avatar from '../components/ui/Avatar';
 import Toast from '../components/ui/Toast';
 import FileUpload from '../components/ui/FileUpload';
 import ImageCropModal from '../components/ui/ImageCropModal';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Checkbox from '../components/ui/Checkbox';
+import Badge from '../components/ui/Badge';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const KNOWN_PERMISSIONS = [
-  { key: 'create_projects',        label: 'Project Creation' },
-  { key: 'create_tasks',           label: 'Task Creation' },
-  { key: 'view_global_timesheet',  label: 'Global timesheet' },
-];
 
-const EXPERIENCE_OPTIONS = [
-  '0-2 Years',
-  '2-5 Years',
-  '5 Years',
-  '5-10 Years',
-  '10+ Years',
-];
-
-// ── Local types ───────────────────────────────────────────────────────────────
+const EXPERIENCE_OPTIONS = ['0-2 Years', '2-5 Years', '5 Years', '5-10 Years', '10+ Years'];
+const RATE_FREQUENCIES   = ['Hourly', 'Daily', 'Weekly', 'Monthly'];
 
 interface LocalSkill {
   id: string;
@@ -34,94 +27,238 @@ interface LocalSkill {
   experience: string | null;
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Shared styles ─────────────────────────────────────────────────────────────
 
-function SectionRow({ label, sublabel, children }: {
+const selectCls =
+  'border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white ' +
+  'focus:outline-none focus:ring-2 focus:ring-[#9E77ED] focus:border-transparent w-full appearance-none pr-8';
+
+// ── SectionRow ────────────────────────────────────────────────────────────────
+// Border on the outer div spans full content width.
+// Inner flex is right-padded via inline style to align with Status block.
+
+const ROW_RIGHT_PAD = 200;
+
+function SectionRow({ label, sublabel, required, helpText, rightPad, children }: {
   label: string;
   sublabel?: string;
+  required?: boolean;
+  helpText?: string;
+  rightPad?: number;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex gap-8 py-6 border-b border-gray-100">
-      <div className="w-52 shrink-0 pt-0.5">
-        <p className="text-sm font-medium text-gray-700">{label}</p>
-        {sublabel && <p className="text-sm text-gray-500 mt-0.5">{sublabel}</p>}
+    <div className="border-b border-gray-100">
+      <div className="flex gap-8 py-5" style={{ paddingRight: rightPad ?? ROW_RIGHT_PAD }}>
+        <div className="w-[265px] shrink-0">
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium text-gray-700">
+              {label}
+              {required && <span className="text-gray-500 ml-0.5">*</span>}
+            </p>
+            {helpText && <HelpCircle width={14} height={14} className="text-gray-400 shrink-0" />}
+          </div>
+          {sublabel && <p className="text-sm text-gray-500 mt-0.5 leading-snug">{sublabel}</p>}
+        </div>
+        <div className="flex-1 min-w-0">{children}</div>
       </div>
-      <div className="flex-1">{children}</div>
     </div>
   );
 }
 
-const inputCls =
-  'border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white ' +
-  'focus:outline-none focus:ring-2 focus:ring-[#9E77ED] focus:border-transparent w-full';
+// ── ChevronSelect — no reusable Select component exists yet ───────────────────
 
-const selectCls =
-  'border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white ' +
-  'focus:outline-none focus:ring-2 focus:ring-[#9E77ED] focus:border-transparent w-full appearance-none';
+function ChevronSelect({ children, className = '', ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <div className="relative">
+      <select className={`${selectCls} ${className}`} {...props}>
+        {children}
+      </select>
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
+    </div>
+  );
+}
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── AddSkillsModal ────────────────────────────────────────────────────────────
 
-export default function UserSettingsPage() {
-  const { id = '' } = useParams<{ id: string }>();
-  const { data: user, isLoading, error } = useUser(id);
-  const { data: memberRoles = [], isLoading: rolesLoading } = useMemberRoles();
+interface SkillRowEntry {
+  rowId: string;
+  skillId: string;
+  experience: string;
+}
+
+function AddSkillsModal({
+  skillCatalog,
+  initialSkills,
+  onClose,
+  onSave,
+}: {
+  skillCatalog: Skill[];
+  initialSkills: LocalSkill[];
+  onClose: () => void;
+  onSave: (skills: LocalSkill[]) => void;
+}) {
+  const [rows, setRows] = useState<SkillRowEntry[]>(
+    initialSkills.length > 0
+      ? initialSkills.map((s) => ({
+          rowId: s.id,
+          skillId: s.id.startsWith('temp-') ? '' : s.id,
+          experience: s.experience ?? '',
+        }))
+      : [{ rowId: 'row-0', skillId: '', experience: '' }]
+  );
+
+  function updateRow(rowId: string, field: 'skillId' | 'experience', value: string) {
+    setRows((prev) => prev.map((r) => r.rowId === rowId ? { ...r, [field]: value } : r));
+  }
+
+  function removeRow(rowId: string) {
+    setRows((prev) => prev.length > 1 ? prev.filter((r) => r.rowId !== rowId) : prev);
+  }
+
+  function addRow() {
+    setRows((prev) => [...prev, { rowId: `row-${Date.now()}`, skillId: '', experience: '' }]);
+  }
+
+  function handleSave() {
+    const skills: LocalSkill[] = rows
+      .filter((r) => r.skillId)
+      .map((r) => {
+        const catalog = skillCatalog.find((s) => s.id === r.skillId);
+        return { id: r.skillId, name: catalog?.name ?? r.skillId, experience: r.experience || null };
+      });
+    onSave(skills);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+
+      {/* Modal card */}
+      <div className="relative bg-white shadow-2xl w-[660px] max-w-[95vw] px-10 py-10">
+        <button
+          onClick={onClose}
+          className="absolute top-5 right-5 flex items-center justify-center w-8 h-8 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+        >
+          <XClose width={18} height={18} />
+        </button>
+        <h2 className="text-3xl font-bold text-[#181D27] mb-8">Add More Skills</h2>
+
+        {/* Column headers */}
+        <div className="grid mb-3" style={{ gridTemplateColumns: '1fr 1fr 40px', gap: '16px' }}>
+          <div className="flex items-center gap-1.5 text-sm font-medium text-gray-600">
+            Skills <span className="text-gray-400">*</span>
+            <HelpCircle width={15} height={15} className="text-[#7F56D9] ml-0.5" />
+          </div>
+          <div className="flex items-center gap-1.5 text-sm font-medium text-gray-600">
+            Experience <span className="text-gray-400">*</span>
+            <HelpCircle width={15} height={15} className="text-[#7F56D9] ml-0.5" />
+          </div>
+          <div />
+        </div>
+
+        {/* Skill rows — fixed height for 3 rows, scrollable beyond that */}
+        <div className="overflow-y-auto flex flex-col gap-4" style={{ maxHeight: '228px' }}>
+          {rows.map((row) => (
+            <div key={row.rowId} className="grid items-center shrink-0" style={{ gridTemplateColumns: '1fr 1fr 40px', gap: '16px' }}>
+              <div className="relative">
+                <select
+                  value={row.skillId}
+                  onChange={(e) => updateRow(row.rowId, 'skillId', e.target.value)}
+                  className="border border-[#D5D7DA] rounded-lg px-4 py-3 text-sm text-gray-500 bg-white focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full appearance-none pr-9"
+                >
+                  <option value="">Select skill…</option>
+                  {skillCatalog.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
+              </div>
+
+              <div className="relative">
+                <select
+                  value={row.experience}
+                  onChange={(e) => updateRow(row.rowId, 'experience', e.target.value)}
+                  className="border border-[#D5D7DA] rounded-lg px-4 py-3 text-sm text-gray-500 bg-white focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full appearance-none pr-9"
+                >
+                  <option value="">Select…</option>
+                  {EXPERIENCE_OPTIONS.map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
+              </div>
+
+              <button
+                onClick={() => removeRow(row.rowId)}
+                className="flex items-center justify-center w-9 h-9 rounded-full border border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-colors shrink-0"
+              >
+                <XClose width={15} height={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Add another + button always below the scroll area */}
+        <button
+          onClick={addRow}
+          className="mt-4 text-sm font-medium text-[#7F56D9] hover:text-[#6941C6] transition-colors block"
+        >
+          + Add another
+        </button>
+
+        <div className="flex justify-center mt-6">
+          <Button variant="primary" onClick={handleSave} className="w-[60%] justify-center">
+            Update &amp; Continue
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── UserSettingsForm — state initialised from props, no useEffect ─────────────
+
+function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
   const { data: skillCatalog = [] } = useSkills();
   const updateUser = useUpdateUser();
+  const isInvitedUser = user.status === 'invited';
 
-  // ── Form state ────────────────────────────────────────────────────────────────
-  const [firstName,    setFirstName]    = useState('');
-  const [lastName,     setLastName]     = useState('');
-  const [memberRole,   setMemberRole]   = useState('');
-  const [status,       setStatus]       = useState<'Active' | 'invited' | 'Disabled'>('Active');
-  const [permissions,  setPermissions]  = useState<string[]>([]);
-  const [localSkills,  setLocalSkills]  = useState<LocalSkill[]>([]);
-  const [avatarUrl,    setAvatarUrl]    = useState<string | null>(null);
+  const [firstName,     setFirstName]     = useState(user.first_name ?? '');
+  const [lastName,      setLastName]      = useState(user.last_name ?? '');
+  const [role,          setRole]          = useState<'admin' | 'member' | 'project_manager'>(
+    user.role === 'super_admin' ? 'admin' : user.role
+  );
+  const [status,        setStatus]        = useState<'Active' | 'invited' | 'Disabled'>(user.status);
+  const [permissions,   setPermissions]   = useState<string[]>(user.permissions ?? []);
+  const [localSkills,   setLocalSkills]   = useState<LocalSkill[]>(
+    (user.skills ?? []).map((s) => ({
+      id:         s.id,
+      name:       s.name,
+      experience: (s as { experience?: string | null }).experience ?? null,
+    }))
+  );
+  const [avatarUrl,     setAvatarUrl]     = useState<string | null>(user.avatar_url ?? null);
+  const [rateAmount,    setRateAmount]    = useState(user.rate_amount != null ? String(user.rate_amount) : '');
+  const [rateFrequency, setRateFrequency] = useState<'Hourly' | 'Daily' | 'Weekly' | 'Monthly'>(user.rate_frequency ?? 'Weekly');
 
-  // ── Avatar upload state ───────────────────────────────────────────────────────
-  const [cropSrc,      setCropSrc]      = useState<string | null>(null);
-  const [croppedUrl,   setCroppedUrl]   = useState<string | null>(null);
+  const [cropSrc,    setCropSrc]    = useState<string | null>(null);
+  const [croppedUrl, setCroppedUrl] = useState<string | null>(null);
 
-  // ── Skill form state ──────────────────────────────────────────────────────────
-  const [addingSkill,     setAddingSkill]     = useState(false);
-  const [newSkillId,      setNewSkillId]      = useState('');
-  const [newSkillName,    setNewSkillName]    = useState('');
-  const [newSkillExp,     setNewSkillExp]     = useState('');
+  const [skillsModalOpen, setSkillsModalOpen] = useState(false);
   const [editingSkillId,  setEditingSkillId]  = useState<string | null>(null);
   const [editSkillExp,    setEditSkillExp]    = useState('');
 
-  // ── Toast state ───────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<{ message: string; isError?: boolean } | null>(null);
 
-  // ── Seed form when user loads ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!user) return;
-    setFirstName(user.first_name ?? '');
-    setLastName(user.last_name ?? '');
-    setMemberRole(user.member_role ?? '');
-    setStatus(user.status);
-    setPermissions(user.permissions ?? []);
-    setAvatarUrl(user.avatar_url ?? null);
-    setLocalSkills(
-      (user.skills ?? []).map((s) => ({
-        id:         s.id,
-        name:       s.name,
-        experience: (s as { experience?: string | null }).experience ?? null,
-      }))
-    );
-  }, [user]);
+  // ── Helpers ──────────────────────────────────────────────────────────────────
 
-  // ── Permission toggle ─────────────────────────────────────────────────────────
-  function togglePermission(key: string) {
-    setPermissions((prev) =>
-      prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]
-    );
+  function togglePermission(key: string, checked: boolean) {
+    setPermissions((p) => checked ? [...p, key] : p.filter((k) => k !== key));
   }
 
-  // ── Skill management ──────────────────────────────────────────────────────────
-  function removeSkill(skillId: string) {
-    setLocalSkills((prev) => prev.filter((s) => s.id !== skillId));
-  }
+  function removeSkill(id: string) { setLocalSkills((p) => p.filter((s) => s.id !== id)); }
 
   function startEditSkill(skill: LocalSkill) {
     setEditingSkillId(skill.id);
@@ -129,37 +266,11 @@ export default function UserSettingsPage() {
   }
 
   function saveEditSkill(skillId: string) {
-    setLocalSkills((prev) =>
-      prev.map((s) => s.id === skillId ? { ...s, experience: editSkillExp || null } : s)
-    );
+    setLocalSkills((p) => p.map((s) => s.id === skillId ? { ...s, experience: editSkillExp || null } : s));
     setEditingSkillId(null);
   }
 
-  function addSkill() {
-    const catalogSkill = skillCatalog.find((s) => s.id === newSkillId);
-    const name = catalogSkill?.name ?? newSkillName.trim();
-    if (!name) return;
-
-    const alreadyAdded = localSkills.some((s) => s.id === newSkillId || s.name.toLowerCase() === name.toLowerCase());
-    if (alreadyAdded) return;
-
-    const newEntry: LocalSkill = {
-      id:         newSkillId || `temp-${Date.now()}`,
-      name,
-      experience: newSkillExp || null,
-    };
-    setLocalSkills((prev) => [...prev, newEntry]);
-    setAddingSkill(false);
-    setNewSkillId('');
-    setNewSkillName('');
-    setNewSkillExp('');
-  }
-
-  // ── Avatar flow ───────────────────────────────────────────────────────────────
-  function handleFile(file: File) {
-    const objectUrl = URL.createObjectURL(file);
-    setCropSrc(objectUrl);
-  }
+  function handleFile(file: File) { setCropSrc(URL.createObjectURL(file)); }
 
   function handleCropSave(dataUrl: string) {
     setCroppedUrl(dataUrl);
@@ -167,35 +278,26 @@ export default function UserSettingsPage() {
     setCropSrc(null);
   }
 
-  // ── Save handler ──────────────────────────────────────────────────────────────
   async function handleSave() {
     let finalAvatarUrl = avatarUrl;
-
-    if (croppedUrl && croppedUrl.startsWith('data:')) {
-      try {
-        const result = await profileApi.uploadAvatar(id, croppedUrl);
-        finalAvatarUrl = result.avatar_url;
-      } catch {
-        // Falls back to data URL storage (local dev without bucket)
-      }
+    if (croppedUrl?.startsWith('data:')) {
+      try { finalAvatarUrl = (await profileApi.uploadAvatar(userId, croppedUrl)).avatar_url; } catch { /* local dev fallback */ }
     }
-
-    // Only send skill_ids that exist in the catalog; temp IDs are excluded
-    const skill_ids = localSkills
-      .filter((s) => !s.id.startsWith('temp-'))
-      .map((s) => s.id);
-
+    const skill_ids = localSkills.filter((s) => !s.id.startsWith('temp-')).map((s) => s.id);
     try {
       await updateUser.mutateAsync({
-        id,
+        id: userId,
         payload: {
-          first_name:  firstName,
-          last_name:   lastName,
-          member_role: memberRole || undefined,
+          first_name:     firstName,
+          last_name:      lastName,
+          role,
+          member_role:    '',
           status,
           permissions,
           skill_ids,
-          avatar_url:  finalAvatarUrl ?? undefined,
+          avatar_url:     finalAvatarUrl ?? undefined,
+          rate_amount:    rateAmount ? parseFloat(rateAmount) : null,
+          rate_frequency: rateFrequency,
         },
       });
       setToast({ message: 'Profile updated successfully' });
@@ -205,359 +307,286 @@ export default function UserSettingsPage() {
     }
   }
 
-  // ── Unknown permissions (not in KNOWN_PERMISSIONS list) ───────────────────────
-  const knownKeys = KNOWN_PERMISSIONS.map((p) => p.key);
-  const unknownPerms = permissions.filter((p) => !knownKeys.includes(p));
+  const displayAvatar = croppedUrl ?? avatarUrl ?? undefined;
+  const displayTitle  = role.replace(/_/g, ' ');
+  const photoLabel    = firstName || user.first_name || user.name.split(' ')[0];
+  const statusOptions = isInvitedUser
+    ? [{ value: 'invited', label: 'Invited' as const }]
+    : [
+        { value: 'Active', label: 'Active' as const },
+        { value: 'Disabled', label: 'Disabled' as const },
+      ];
 
-  // ── Render states ─────────────────────────────────────────────────────────────
+  return (
+    <>
+      <div className="px-8 py-8 flex flex-col gap-6">
+
+        {/* ── Header: name left, status right, border-b acts as section divider ── */}
+        <div className="flex items-start justify-between pb-6 border-b border-gray-100">
+
+          {/* Left: name + subtitle */}
+          <div>
+            <h1 className="text-2xl font-bold text-[#181D27]">{user.name}</h1>
+            <p className="text-sm text-gray-500 mt-0.5 capitalize">{displayTitle}</p>
+          </div>
+
+          {/* Right: Status panel */}
+          <div className="flex flex-col gap-1.5" style={{ width: 170 }}>
+            <span className="text-sm font-medium text-gray-700">Status</span>
+            <div className="relative">
+              <span className={`absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full pointer-events-none ${
+                status === 'Active' ? 'bg-green-500' : status === 'invited' ? 'bg-amber-400' : 'bg-gray-400'
+              }`} />
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as typeof status)}
+                disabled={isInvitedUser}
+                className="border border-[#D5D7DA] rounded-lg pl-7 pr-8 py-2.5 text-sm text-[#181D27] bg-white
+                  focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full appearance-none disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed"
+              >
+                {statusOptions.map((option) => (
+                  <option
+                    key={option.value}
+                    value={option.value}
+                    disabled={option.value === status}
+                  >
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Form: full-width so SectionRow borders span edge to edge ── */}
+        <div>
+
+          {/* Name */}
+          <SectionRow label="Name" required>
+            <div className="flex gap-3">
+              <div className="flex-1 min-w-0">
+                <Input
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="First name"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <Input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Last name"
+                />
+              </div>
+            </div>
+          </SectionRow>
+
+          {/* Email */}
+          <SectionRow label="Email address" required>
+            <Input
+              type="email"
+              value={user.email}
+              readOnly
+              leftIcon={<Mail01 width={16} height={16} />}
+              className="bg-gray-50 text-gray-500 cursor-not-allowed"
+            />
+          </SectionRow>
+
+          {/* Photo */}
+          <SectionRow label={`${photoLabel} photo`} required helpText="x"
+            sublabel="This will be displayed on your profile.">
+            <div className="flex gap-4 items-start">
+              <Avatar src={displayAvatar} name={user.name} size="lg" className="shrink-0" />
+              <div className="flex-1">
+                <FileUpload accept="image/svg+xml,image/png,image/jpeg,image/gif"
+                  maxSizeMB={2} onFile={handleFile} />
+              </div>
+            </div>
+          </SectionRow>
+
+          {/* Role */}
+          <SectionRow label="Role">
+            <ChevronSelect value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+              <option value="project_manager">Project Manager</option>
+            </ChevronSelect>
+          </SectionRow>
+
+          {/* Cost */}
+          <SectionRow label="Cost" rightPad={320}>
+            <div className="flex gap-3">
+              <div className="w-[600px]">
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={rateAmount}
+                  onChange={(e) => setRateAmount(e.target.value)}
+                  placeholder="0"
+                  leftIcon={<span className="text-sm font-medium text-gray-500">$</span>}
+                />
+              </div>
+              <div className="w-[3  25px]">
+                <ChevronSelect value={rateFrequency} onChange={(e) => setRateFrequency(e.target.value as 'Hourly' | 'Daily' | 'Weekly' | 'Monthly')}>
+                  {RATE_FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
+                </ChevronSelect>
+              </div>
+            </div>
+          </SectionRow>
+
+          {/* Two-factor authentication */}
+          <SectionRow label="Two-factor authentication">
+            <div className="flex items-center h-10">
+              <Badge variant="success">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                  Enabled
+                </span>
+              </Badge>
+            </div>
+          </SectionRow>
+
+          {/* Skills — 3-column card grid */}
+          <SectionRow label="Skills">
+            <div className="flex flex-col gap-3">
+              {localSkills.length > 0 && (
+                <div className="grid grid-cols-3 gap-3">
+                  {localSkills.map((skill) =>
+                    editingSkillId === skill.id ? (
+                      <div key={skill.id}
+                        className="flex flex-col gap-2 bg-white border border-[#D5D7DA] rounded-lg p-3">
+                        <span className="text-sm font-medium text-[#181D27]">{skill.name}</span>
+                        <select value={editSkillExp} onChange={(e) => setEditSkillExp(e.target.value)}
+                          className="text-sm border border-[#D5D7DA] rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED]">
+                          <option value="">No experience</option>
+                          {EXPERIENCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="primary" onClick={() => saveEditSkill(skill.id)}
+                            className="flex-1">
+                            Save
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditingSkillId(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div key={skill.id}
+                        className="flex items-start justify-between bg-white border border-[#E9EAEB] rounded-lg px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[#181D27] truncate">{skill.name}</p>
+                          <p className="text-sm text-gray-500 mt-0.5">
+                            {skill.experience ?? '—'} experience
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 ml-2 shrink-0">
+                          <button onClick={() => startEditSkill(skill)}
+                            className="p-1 rounded hover:bg-gray-100 text-[#717680] hover:text-[#414651] transition-colors">
+                            <Edit02 width={14} height={14} />
+                          </button>
+                          <button onClick={() => removeSkill(skill.id)}
+                            className="p-1 rounded hover:bg-gray-100 text-[#717680] hover:text-red-600 transition-colors">
+                            <Trash01 width={14} height={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<Plus width={14} height={14} />}
+                onClick={() => setSkillsModalOpen(true)}
+                className="self-start"
+              >
+                Add more skills
+              </Button>
+            </div>
+          </SectionRow>
+
+          {/* Extra Permissions */}
+          <SectionRow label="Extra Permissions">
+            <div className="flex flex-wrap gap-x-6 gap-y-3 pt-0.5">
+              {EXTRA_PERMISSIONS.map(({ key, label }) => (
+                <Checkbox
+                  key={key}
+                  checked={permissions.includes(key)}
+                  onChange={(checked) => togglePermission(key, checked)}
+                  label={label}
+                />
+              ))}
+            </div>
+          </SectionRow>
+
+          {/* Save */}
+          <div className="pt-6 flex justify-end gap-3">
+            <Button variant="secondary">Cancel</Button>
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              loading={updateUser.isPending}
+            >
+              Save changes
+            </Button>
+          </div>
+
+        </div>{/* end form */}
+      </div>{/* end px-8 py-8 */}
+
+      {skillsModalOpen && (
+        <AddSkillsModal
+          skillCatalog={skillCatalog}
+          initialSkills={localSkills}
+          onClose={() => setSkillsModalOpen(false)}
+          onSave={(skills) => { setLocalSkills(skills); setSkillsModalOpen(false); }}
+        />
+      )}
+      {cropSrc && <ImageCropModal src={cropSrc} onSave={handleCropSave} onCancel={() => setCropSrc(null)} />}
+      {toast && (
+        <Toast message={toast.message} subtitle={toast.isError ? undefined : 'Changes saved to profile.'}
+          onClose={() => setToast(null)} />
+      )}
+    </>
+  );
+}
+
+// ── Page shell — handles loading, then mounts form ────────────────────────────
+
+export default function UserSettingsPage() {
+  const navigate = useNavigate();
+  const { id = '' } = useParams<{ id: string }>();
+  const { data: user, isLoading, error } = useUser(id);
+
+  useEffect(() => {
+    if (!isLoading && (error || !user)) {
+      navigate('/users', {
+        replace: true,
+        state: { toastMessage: 'User profile is no longer available' },
+      });
+    }
+  }, [error, isLoading, navigate, user]);
+
   if (isLoading) {
     return (
-      <main className="flex-1 min-w-0 overflow-y-auto bg-gray-50 flex items-center justify-center">
+      <main className="flex-1 min-w-0 overflow-y-auto bg-white flex items-center justify-center">
         <p className="text-sm text-gray-400">Loading…</p>
       </main>
     );
   }
 
   if (error || !user) {
-    return (
-      <main className="flex-1 min-w-0 overflow-y-auto bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-red-600">{(error as Error)?.message ?? 'User not found'}</p>
-      </main>
-    );
+    return null;
   }
 
-  const displayTitle = user.member_role ?? user.role;
-  const displayAvatar = croppedUrl ?? avatarUrl ?? undefined;
-
   return (
-    <>
-      <main className="flex-1 min-w-0 overflow-y-auto bg-gray-50">
-        <div className="max-w-3xl mx-auto px-8 py-8">
-
-          {/* Breadcrumb + status */}
-          <div className="relative flex items-center mb-6">
-            <nav className="flex items-center gap-1.5 text-sm text-gray-500">
-              <Link to="/settings" className="hover:text-gray-700 transition-colors">
-                Settings
-              </Link>
-              <ChevronRight width={14} height={14} className="text-gray-400 shrink-0" />
-              <Link to="/users" className="hover:text-gray-700 transition-colors">
-                Users
-              </Link>
-              <ChevronRight width={14} height={14} className="text-gray-400 shrink-0" />
-              <span className="text-gray-900 font-medium">{user.name}</span>
-            </nav>
-
-            {/* Status selector — floated to top-right of content column */}
-            <div className="absolute top-0 right-0 flex items-center gap-2">
-              <span
-                className={`inline-block w-2 h-2 rounded-full shrink-0 ${
-                  status === 'Active'   ? 'bg-green-500' :
-                  status === 'invited' ? 'bg-amber-400' :
-                  'bg-gray-400'
-                }`}
-              />
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as typeof status)}
-                className="text-sm font-medium text-gray-700 bg-transparent border-none outline-none cursor-pointer pr-1"
-              >
-                <option value="Active">Active</option>
-                <option value="invited">Invited</option>
-                <option value="Disabled">Disabled</option>
-              </select>
-            </div>
-          </div>
-
-          {/* User identity header */}
-          <div className="flex items-center gap-4 mb-8">
-            <Avatar
-              src={displayAvatar}
-              name={user.name}
-              size="lg"
-            />
-            <div>
-              <h1 className="text-xl font-semibold text-[#181D27]">{user.name}</h1>
-              <p className="text-sm text-gray-500 capitalize">{displayTitle}</p>
-            </div>
-          </div>
-
-          {/* ── Form sections ── */}
-
-          {/* Name */}
-          <SectionRow label="Name" sublabel="*">
-            <div className="flex gap-3">
-              <input
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                placeholder="First name"
-                className={inputCls}
-              />
-              <input
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                placeholder="Last name"
-                className={inputCls}
-              />
-            </div>
-          </SectionRow>
-
-          {/* Email — read-only */}
-          <SectionRow label="Email address" sublabel="*">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                ✉
-              </span>
-              <input
-                type="email"
-                value={user.email}
-                readOnly
-                className={`${inputCls} pl-8 bg-gray-50 text-gray-500 cursor-not-allowed`}
-              />
-            </div>
-          </SectionRow>
-
-          {/* Avatar */}
-          <SectionRow
-            label={`${firstName || user.first_name || user.name.split(' ')[0]} photo`}
-            sublabel="This will be displayed on your profile."
-          >
-            <div className="flex gap-4 items-start">
-              <Avatar
-                src={displayAvatar}
-                name={user.name}
-                size="lg"
-                className="shrink-0"
-              />
-              <div className="flex-1">
-                <FileUpload
-                  accept="image/png,image/jpeg,image/gif,image/webp"
-                  maxSizeMB={2}
-                  onFile={handleFile}
-                />
-              </div>
-            </div>
-          </SectionRow>
-
-          {/* Role (member_role) */}
-          <SectionRow label="Role">
-            {rolesLoading ? (
-              <div className="h-10 bg-gray-100 rounded-lg animate-pulse" />
-            ) : (
-              <div className="relative">
-                <select
-                  value={memberRole}
-                  onChange={(e) => setMemberRole(e.target.value)}
-                  className={selectCls}
-                >
-                  <option value="">— No role —</option>
-                  {memberRoles.map((r) => (
-                    <option key={r.id} value={r.name}>{r.name}</option>
-                  ))}
-                </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
-                  ▾
-                </span>
-              </div>
-            )}
-          </SectionRow>
-
-          {/* Skills */}
-          <SectionRow label="Skills">
-            <div className="flex flex-col gap-2">
-              {localSkills.map((skill) =>
-                editingSkillId === skill.id ? (
-                  /* Inline edit row */
-                  <div
-                    key={skill.id}
-                    className="flex items-center gap-2 bg-white border border-[#D5D7DA] rounded-lg px-3 py-2"
-                  >
-                    <span className="text-sm font-medium text-[#181D27] flex-1">{skill.name}</span>
-                    <select
-                      value={editSkillExp}
-                      onChange={(e) => setEditSkillExp(e.target.value)}
-                      className="text-sm border border-[#D5D7DA] rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED]"
-                    >
-                      <option value="">No experience</option>
-                      {EXPERIENCE_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => saveEditSkill(skill.id)}
-                      className="text-xs font-semibold text-white bg-[#7F56D9] hover:bg-[#6941C6] px-3 py-1.5 rounded-md transition-colors"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setEditingSkillId(null)}
-                      className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  /* Skill card */
-                  <div
-                    key={skill.id}
-                    className="flex items-center justify-between bg-white border border-[#E9EAEB] rounded-lg px-4 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-[#181D27]">{skill.name}</p>
-                      {skill.experience && (
-                        <p className="text-sm text-gray-500 mt-0.5">{skill.experience} exp</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => startEditSkill(skill)}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-[#717680] hover:text-[#414651] transition-colors"
-                        title="Edit experience"
-                      >
-                        <Edit02 width={15} height={15} />
-                      </button>
-                      <button
-                        onClick={() => removeSkill(skill.id)}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-[#717680] hover:text-red-600 transition-colors"
-                        title="Remove skill"
-                      >
-                        <Trash01 width={15} height={15} />
-                      </button>
-                    </div>
-                  </div>
-                )
-              )}
-
-              {/* Add skill form */}
-              {addingSkill && (
-                <div className="flex items-center gap-2 bg-white border border-[#D5D7DA] rounded-lg px-3 py-2">
-                  {skillCatalog.length > 0 ? (
-                    <select
-                      value={newSkillId}
-                      onChange={(e) => setNewSkillId(e.target.value)}
-                      className="text-sm border border-[#D5D7DA] rounded-md px-2 py-1.5 flex-1 focus:outline-none focus:ring-2 focus:ring-[#9E77ED]"
-                    >
-                      <option value="">Select skill…</option>
-                      {skillCatalog
-                        .filter((s) => !localSkills.some((ls) => ls.id === s.id))
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={newSkillName}
-                      onChange={(e) => setNewSkillName(e.target.value)}
-                      placeholder="Skill name"
-                      className="text-sm border border-[#D5D7DA] rounded-md px-2 py-1.5 flex-1 focus:outline-none focus:ring-2 focus:ring-[#9E77ED]"
-                    />
-                  )}
-                  <select
-                    value={newSkillExp}
-                    onChange={(e) => setNewSkillExp(e.target.value)}
-                    className="text-sm border border-[#D5D7DA] rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED]"
-                  >
-                    <option value="">No experience</option>
-                    {EXPERIENCE_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={addSkill}
-                    className="text-xs font-semibold text-white bg-[#7F56D9] hover:bg-[#6941C6] px-3 py-1.5 rounded-md transition-colors"
-                  >
-                    Add
-                  </button>
-                  <button
-                    onClick={() => {
-                      setAddingSkill(false);
-                      setNewSkillId('');
-                      setNewSkillName('');
-                      setNewSkillExp('');
-                    }}
-                    className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-
-              {!addingSkill && (
-                <button
-                  onClick={() => setAddingSkill(true)}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-[#6941C6] hover:text-[#7F56D9] transition-colors mt-1 self-start"
-                >
-                  <Plus width={16} height={16} />
-                  Add more skills
-                </button>
-              )}
-            </div>
-          </SectionRow>
-
-          {/* Permissions */}
-          <SectionRow label="Extra Permissions">
-            <div className="flex flex-wrap gap-x-6 gap-y-3">
-              {KNOWN_PERMISSIONS.map(({ key, label }) => (
-                <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={permissions.includes(key)}
-                    onChange={() => togglePermission(key)}
-                    className="w-4 h-4 rounded border-[#D5D7DA] accent-[#7F56D9] cursor-pointer"
-                  />
-                  <span className="text-sm text-gray-700">{label}</span>
-                </label>
-              ))}
-
-              {/* Unknown permissions not in the known list — still show them checked */}
-              {unknownPerms.map((perm) => (
-                <label key={perm} className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked
-                    onChange={() => togglePermission(perm)}
-                    className="w-4 h-4 rounded border-[#D5D7DA] accent-[#7F56D9] cursor-pointer"
-                  />
-                  <span className="text-sm text-gray-700">{perm}</span>
-                </label>
-              ))}
-            </div>
-          </SectionRow>
-
-          {/* Save */}
-          <div className="pt-6 flex justify-end">
-            <button
-              onClick={handleSave}
-              disabled={updateUser.isPending}
-              className="inline-flex items-center gap-2 bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
-            >
-              {updateUser.isPending ? 'Saving…' : 'Save changes'}
-            </button>
-          </div>
-
-        </div>
-      </main>
-
-      {/* Image crop modal — rendered outside the scrollable main */}
-      {cropSrc && (
-        <ImageCropModal
-          src={cropSrc}
-          onSave={handleCropSave}
-          onCancel={() => setCropSrc(null)}
-        />
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          subtitle={toast.isError ? undefined : 'Changes saved to profile.'}
-          onClose={() => setToast(null)}
-        />
-      )}
-    </>
+    <main className="flex-1 min-w-0 overflow-y-auto bg-white">
+      <UserSettingsForm key={user.id} userId={id} user={user} />
+    </main>
   );
 }

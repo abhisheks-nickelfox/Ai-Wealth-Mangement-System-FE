@@ -1,4 +1,5 @@
 import type { UserStatus } from '../../types';
+import { CheckCircle } from '@untitled-ui/icons-react';
 import arrowRight from '../../assets/arrow-right.png';
 
 interface StatusBadgeProps {
@@ -10,7 +11,8 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
     return (
       <span className="inline-flex items-center gap-1 bg-[#ECFDF3] border border-[#ABEFC6] text-[#067647] text-xs font-medium px-2 py-0.5 rounded-full">
         Active
-        <img src={arrowRight} alt="arrow" className="w-3 h-3 object-contain" />
+        <CheckCircle className="w-3 h-3" aria-hidden="true" />
+        <img src={arrowRight} alt="" className="w-3 h-3 object-contain" aria-hidden="true" />
       </span>
     );
   }

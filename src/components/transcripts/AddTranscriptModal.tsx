@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, ChevronDown } from '@untitled-ui/icons-react';
+import Input from '../ui/Input';
 import type { Transcript, Firm } from '../../lib/api';
 import { useCreateTranscript } from '../../hooks/useTranscripts';
 
@@ -59,40 +60,29 @@ export default function AddTranscriptModal({ open, onClose, firms, onCreated }: 
               {error}
             </p>
           )}
-          <div>
-            <label className="block text-sm font-medium text-[#414651] mb-1.5">
-              Title <span className="text-red-500">*</span>
-            </label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Q1 Strategy Call"
-              className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent"
-            />
-          </div>
+          <Input
+            label="Title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Q1 Strategy Call"
+            required
+          />
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-[#414651] mb-1.5">
-                Call Date <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={callDate}
-                onChange={(e) => setCallDate(e.target.value)}
-                className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[#414651] mb-1.5">Duration (minutes)</label>
-              <input
-                type="number"
-                min="0"
-                value={durationMins}
-                onChange={(e) => setDurationMins(e.target.value)}
-                placeholder="e.g. 55"
-                className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent"
-              />
-            </div>
+            <Input
+              label="Call Date"
+              type="date"
+              value={callDate}
+              onChange={(e) => setCallDate(e.target.value)}
+              required
+            />
+            <Input
+              label="Duration (minutes)"
+              type="number"
+              min={0}
+              value={durationMins}
+              onChange={(e) => setDurationMins(e.target.value)}
+              placeholder="e.g. 55"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-[#414651] mb-1.5">Firm</label>

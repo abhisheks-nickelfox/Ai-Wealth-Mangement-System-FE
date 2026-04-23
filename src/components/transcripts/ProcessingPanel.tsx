@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  X,
   Calendar,
   Clock,
   ChevronDown,
@@ -10,6 +9,7 @@ import {
 } from '@untitled-ui/icons-react';
 import type { Transcript, Firm, Prompt, Task } from '../../lib/api';
 import { useProcessTranscript, useSyncTranscripts } from '../../hooks/useTranscripts';
+import SlideOver from '../ui/SlideOver';
 import TranscriptStatusBadge from './TranscriptStatusBadge';
 import { formatDate, formatDurationSec } from '../../lib/transcriptUtils';
 
@@ -81,69 +81,52 @@ export default function ProcessingPanel({
   const hasSummaryMore = summary.length > SUMMARY_LIMIT;
 
   return (
-    <>
-      <div
-        onClick={onClose}
-        className={`fixed inset-0 z-40 bg-black/20 transition-opacity duration-200 ${
-          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
-      />
-      <div
-        className={`fixed inset-y-0 right-0 z-50 flex flex-col bg-white border-l border-[#E9EAEB] shadow-xl transition-transform duration-300 ease-in-out w-[600px] ${
-          open ? 'translate-x-0' : 'translate-x-full'
-        }`}
-      >
-        {/* Header */}
-        <div className="px-6 pt-5 pb-4 border-b border-[#E9EAEB] shrink-0">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2 flex-wrap min-w-0 pr-3">
-              <h2 className="text-base font-semibold text-[#181D27] truncate">
-                {transcript?.title ?? 'Processing'}
-              </h2>
-              {transcript && <TranscriptStatusBadge transcript={transcript} />}
-            </div>
-            <button
-              onClick={onClose}
-              className="p-1 rounded text-[#717680] hover:text-[#414651] hover:bg-gray-100 transition-colors shrink-0"
-            >
-              <X width={18} height={18} />
-            </button>
-          </div>
-          <div className="flex items-center gap-4 text-sm text-[#535862]">
-            <span className="flex items-center gap-1.5">
-              <Calendar width={14} height={14} className="text-[#A4A7AE]" />
-              {transcript?.call_date ? formatDate(transcript.call_date) : '—'}
-            </span>
-            {transcript?.duration_sec ? (
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      title={transcript?.title ?? 'Processing'}
+      width="max-w-[600px]"
+    >
+      <div className="flex flex-col gap-6">
+
+        {/* Transcript meta + status badge */}
+        {transcript && (
+          <div className="flex flex-col gap-2 -mt-2">
+            <TranscriptStatusBadge transcript={transcript} />
+            <div className="flex items-center gap-4 text-sm text-[#535862]">
               <span className="flex items-center gap-1.5">
-                <Clock width={14} height={14} className="text-[#A4A7AE]" />
-                Duration {formatDurationSec(transcript.duration_sec)}
+                <Calendar width={14} height={14} className="text-[#A4A7AE]" />
+                {transcript.call_date ? formatDate(transcript.call_date) : '—'}
               </span>
-            ) : null}
-          </div>
-          {/* Firm */}
-          <div className="mt-3">
-            <label className="block text-xs font-medium text-[#414651] mb-1">
-              Firm <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <select
-                value={firmId}
-                onChange={(e) => setFirmId(e.target.value)}
-                className="w-full appearance-none border border-[#D5D7DA] rounded-lg px-3 py-2 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent bg-white"
-              >
-                <option value="">Select a firm…</option>
-                {firms.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))}
-              </select>
-              <ChevronDown width={16} height={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A4A7AE] pointer-events-none" />
+              {transcript.duration_sec ? (
+                <span className="flex items-center gap-1.5">
+                  <Clock width={14} height={14} className="text-[#A4A7AE]" />
+                  Duration {formatDurationSec(transcript.duration_sec)}
+                </span>
+              ) : null}
             </div>
+          </div>
+        )}
+
+        {/* Firm selector */}
+        <div>
+          <label className="block text-xs font-medium text-[#414651] mb-1">
+            Firm <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <select
+              value={firmId}
+              onChange={(e) => setFirmId(e.target.value)}
+              className="w-full appearance-none border border-[#D5D7DA] rounded-lg px-3 py-2 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent bg-white"
+            >
+              <option value="">Select a firm…</option>
+              {firms.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+            <ChevronDown width={16} height={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A4A7AE] pointer-events-none" />
           </div>
         </div>
-
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-6">
 
           {/* ── Section 1: Transcript Summary ─────────────────────────── */}
           <div className="flex gap-4">
@@ -335,20 +318,17 @@ export default function ProcessingPanel({
               {error}
             </p>
           )}
-        </div>
 
-        {/* Sticky footer */}
-        <div className="px-6 py-4 border-t border-[#E9EAEB] shrink-0">
-          <button
-            onClick={handleRun}
-            disabled={processTranscript.isPending || !firmId || !primaryPromptId}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-60 rounded-xl transition-colors"
-          >
-            <Lightning01 width={18} height={18} />
-            {processTranscript.isPending ? 'Processing…' : 'Run Processing'}
-          </button>
-        </div>
+        {/* Run button */}
+        <button
+          onClick={handleRun}
+          disabled={processTranscript.isPending || !firmId || !primaryPromptId}
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-60 rounded-xl transition-colors"
+        >
+          <Lightning01 width={18} height={18} />
+          {processTranscript.isPending ? 'Processing…' : 'Run Processing'}
+        </button>
       </div>
-    </>
+    </SlideOver>
   );
 }

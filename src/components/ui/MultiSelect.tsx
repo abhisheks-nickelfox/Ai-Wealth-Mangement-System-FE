@@ -1,18 +1,7 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { ChevronDown, ChevronUp, SearchLg } from '@untitled-ui/icons-react';
 import { useClickOutside } from '../../hooks/useClickOutside';
-
-const BADGE_PALETTE = [
-  'bg-[#E9D7FE] border-[#E9D7FE] text-[#6941C6]',
-  'bg-[#EFF8FF] border-[#B2DDFF] text-[#175CD3]',
-  'bg-[#ECFDF3] border-[#ABEFC6] text-[#067647]',
-];
-
-function badgeClass(label: string): string {
-  let h = 0;
-  for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) & 0xffffffff;
-  return BADGE_PALETTE[Math.abs(h) % BADGE_PALETTE.length];
-}
+import { skillBadgeClass } from '../users/SkillBadge';
 
 interface MultiSelectOption {
   value: string;
@@ -111,7 +100,7 @@ export default function MultiSelect({
               {selectedLabels.map((lbl) => (
                 <span
                   key={lbl}
-                  className={`inline-flex items-center border text-xs font-medium px-2 py-0.5 rounded-full ${badgeClass(lbl)}`}
+                  className={`inline-flex items-center border text-xs font-medium px-2 py-0.5 rounded-full ${skillBadgeClass(lbl)}`}
                 >
                   {lbl}
                 </span>

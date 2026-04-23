@@ -1,13 +1,18 @@
 import { ChevronRight } from '@untitled-ui/icons-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Header() {
+  const { user } = useAuth();
+  const displayName = user?.name ?? 'Welcome';
+  const firstName = displayName.split(' ')[0];
+
   return (
     <div className="px-8 pt-6 pb-0">
       <nav className="flex items-center gap-1 mb-3">
         <div className="flex items-center gap-1.5">
           <div className="w-7 h-7 rounded-md border border-gray-200 bg-warning-200 shrink-0" />
           <span className="text-[13px] font-semibold text-gray-500 px-2 py-1 rounded-md">
-            Sienna Hewitt
+            {displayName}
           </span>
         </div>
         <ChevronRight width={16} height={16} className="text-gray-400" />
@@ -17,7 +22,7 @@ export default function Header() {
       </nav>
 
       <h1 className="text-[22px] font-semibold text-gray-900 leading-snug mb-1">
-        Welcome back, Sienna
+        Welcome back, {firstName}
       </h1>
       <p className="text-sm text-gray-500">
         Here's an overview of your site traffic and recently active users.

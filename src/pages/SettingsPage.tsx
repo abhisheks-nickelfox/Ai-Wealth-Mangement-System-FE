@@ -1,14 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Mail01,
   Trash01,
   Edit01,
 } from '@untitled-ui/icons-react';
+import TabBar from '../components/ui/TabBar';
 import Avatar from '../components/ui/Avatar';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import Toast from '../components/ui/Toast';
 import ImageCropModal from '../components/ui/ImageCropModal';
+import FileUpload from '../components/ui/FileUpload';
+import Checkbox from '../components/ui/Checkbox';
 import { useAuth } from '../context/AuthContext';
 import { skillsApi, profileApi } from '../lib/api';
 import type { User, Skill } from '../lib/api';
@@ -70,7 +73,6 @@ export default function SettingsPage() {
   const [cropSrc,     setCropSrc]     = useState<string | null>(null);
   const [avatarUrl,   setAvatarUrl]   = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // 2FA
   const [twoFAMethod, setTwoFAMethod] = useState<'app' | 'email' | null>(null);
@@ -97,14 +99,10 @@ export default function SettingsPage() {
 
   // ── Avatar pick ──────────────────────────────────────────────────────────────
 
-  function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function handleAvatarFile(file: File) {
     const reader = new FileReader();
     reader.onload = () => setCropSrc(reader.result as string);
     reader.readAsDataURL(file);
-    // reset so same file can be chosen again
-    e.target.value = '';
   }
 
   async function handleCropComplete(dataUrl: string) {
@@ -180,21 +178,14 @@ export default function SettingsPage() {
         </p>
 
         {/* Tab strip */}
-        <div className="flex gap-0">
-          {(['details', 'projects'] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
-                tab === t
-                  ? 'border-[#7F56D9] text-[#7F56D9]'
-                  : 'border-transparent text-[#717680] hover:text-[#414651]'
-              }`}
-            >
-              {t === 'details' ? 'My details' : 'Project settings'}
-            </button>
-          ))}
-        </div>
+        <TabBar
+          tabs={[
+            { id: 'details',  label: 'My details'       },
+            { id: 'projects', label: 'Project settings' },
+          ]}
+          activeId={tab}
+          onChange={(id) => setTab(id as Tab)}
+        />
       </div>
 
       {/* Content */}
@@ -257,33 +248,13 @@ export default function SettingsPage() {
               </div>
 
               {/* Upload zone */}
-              <div
-                onClick={() => avatarInputRef.current?.click()}
-                className="flex-1 flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-200 rounded-xl px-6 py-6 cursor-pointer hover:border-[#9E77ED] hover:bg-[#F9F5FF] transition-colors"
-              >
-                <div className="w-10 h-10 rounded-full border border-gray-200 bg-white shadow-sm flex items-center justify-center">
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <path d="M6.667 13.333S5 13.333 5 11.667c0-1.5 1.25-2.417 2.5-2.5.083-1.5 1.25-2.917 2.917-2.917 1.916 0 3.083 1.584 3.083 3 1.417.25 2.5 1.5 2.5 2.917 0 1.75-1.333 1.833-1.333 1.833H6.667z" stroke="#344054" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M8.333 11.25 10 9.583l1.667 1.667M10 9.583V13.75" stroke="#344054" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-[#535862]">
-                    <span className="font-semibold text-[#6941C6]">Click to upload</span>{' '}
-                    or drag and drop
-                  </p>
-                  <p className="text-xs text-[#717680] mt-0.5">
-                    SVG, PNG, JPG or GIF (max. 800×400px)
-                  </p>
-                </div>
+              <div className="flex-1">
+                <FileUpload
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  maxSizeMB={2}
+                  onFile={handleAvatarFile}
+                />
               </div>
-              <input
-                ref={avatarInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/gif,image/webp"
-                className="hidden"
-                onChange={handleAvatarFile}
-              />
             </div>
           </FormRow>
 
@@ -367,7 +338,7 @@ export default function SettingsPage() {
                     {TWO_FA_METHODS.map((m) => {
                       const checked = twoFAMethod === m.id;
                       return (
-                        <label
+                        <div
                           key={m.id}
                           className={`flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors ${
                             checked
@@ -375,14 +346,12 @@ export default function SettingsPage() {
                               : 'border-[#E9EAEB] bg-white hover:border-[#9E77ED]'
                           }`}
                         >
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={checked}
                             onChange={() => setTwoFAMethod(checked ? null : m.id)}
-                            className="w-4 h-4 rounded accent-[#7F56D9] cursor-pointer shrink-0"
                           />
                           <span className="text-sm font-medium text-[#414651]">{m.label}</span>
-                        </label>
+                        </div>
                       );
                     })}
                   </div>

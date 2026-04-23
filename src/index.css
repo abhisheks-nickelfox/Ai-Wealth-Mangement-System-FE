@@ -32,6 +32,68 @@
   }
 }
 
+/* ── Onboarding stepper animations ──────────────────────────────────────── */
+
+/* Connector line fill — purple overlay grows top→bottom */
+@keyframes stepLineFill {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+.step-line-fill {
+  transform-origin: top;
+  animation: stepLineFill 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transform: scaleY(0);
+}
+
+/* Current step — outer ring pulses outward */
+@keyframes stepRingPulse {
+  0%   { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #9E77ED; }
+  50%  { box-shadow: 0 0 0 2px #fff, 0 0 0 6px #9E77ED88; }
+  100% { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #9E77ED; }
+}
+.step-icon-current {
+  animation: stepRingPulse 1.8s ease-in-out infinite;
+}
+
+/* Icon entrance — pop in with a tiny bounce */
+@keyframes stepIconPop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  70%  { transform: scale(1.12); }
+  100% { transform: scale(1);   opacity: 1; }
+}
+.step-icon-pop {
+  animation: stepIconPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.step-icon-pop-delayed {
+  opacity: 0;
+  animation: stepIconPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s both;
+}
+
+/* Checkmark SVG draw */
+@keyframes stepCheckDraw {
+  from { stroke-dashoffset: 18; }
+  to   { stroke-dashoffset: 0; }
+}
+.step-check-path {
+  stroke-dasharray: 18;
+  stroke-dashoffset: 18;
+  animation: stepCheckDraw 0.3s ease-out 0.1s forwards;
+}
+
+@keyframes onboardingStepEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.onboarding-step-enter {
+  animation: onboardingStepEnter 0.28s ease-out;
+}
+
 /* ── react-day-picker → Untitled UI style overrides ─────────────────────── */
 .rdp-untitled {
   --rdp-accent-color: #6941C6;

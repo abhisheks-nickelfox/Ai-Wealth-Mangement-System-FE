@@ -1,9 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  SearchLg,
   FilterLines,
-  Calendar,
   RefreshCw01,
   Plus,
   Archive,
@@ -18,8 +16,11 @@ import TranscriptStatusBadge from '../components/transcripts/TranscriptStatusBad
 import FilterPanel from '../components/transcripts/FilterPanel';
 import AddTranscriptModal from '../components/transcripts/AddTranscriptModal';
 import ProcessingPanel from '../components/transcripts/ProcessingPanel';
+import TabBar from '../components/ui/TabBar';
+import TimeFilterBar from '../components/ui/TimeFilterBar';
+import type { TimeFilter } from '../components/ui/TimeFilterBar';
+import SearchInput from '../components/ui/SearchInput';
 
-type TimeFilter = 'all' | 'custom' | '30d' | '7d' | '24h';
 type StatusTab = 'all' | 'to-process' | 'archived' | 'completed';
 
 // ── Transcript row ─────────────────────────────────────────────────────────────
@@ -97,8 +98,6 @@ export default function TranscriptsFlowPage() {
   const error = errorObj ? (errorObj as Error).message : '';
 
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
   const [search, setSearch] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
@@ -174,13 +173,6 @@ export default function TranscriptsFlowPage() {
       list = list.filter((t) => now - new Date(t.created_at).getTime() < 7 * 86400000);
     } else if (timeFilter === '30d') {
       list = list.filter((t) => now - new Date(t.created_at).getTime() < 30 * 86400000);
-    } else if (timeFilter === 'custom' && dateFrom && dateTo) {
-      const from = new Date(dateFrom).getTime();
-      const to = new Date(dateTo).getTime() + 86400000;
-      list = list.filter((t) => {
-        const ts = new Date(t.created_at).getTime();
-        return ts >= from && ts <= to;
-      });
     }
 
     if (selectedFirmIds.length > 0) {
@@ -193,7 +185,7 @@ export default function TranscriptsFlowPage() {
     }
 
     return list;
-  }, [transcripts, statusTab, timeFilter, dateFrom, dateTo, selectedFirmIds, search]);
+  }, [transcripts, statusTab, timeFilter, selectedFirmIds, search]);
 
   const counts = useMemo(() => ({
     all: transcripts.length,
@@ -202,19 +194,11 @@ export default function TranscriptsFlowPage() {
     completed: 0,
   }), [transcripts]);
 
-  const TIME_FILTERS: { key: TimeFilter; label: string }[] = [
-    { key: 'all', label: 'All time' },
-    { key: 'custom', label: 'Custom' },
-    { key: '30d', label: '30 days' },
-    { key: '7d', label: '7 days' },
-    { key: '24h', label: '24 hours' },
-  ];
-
-  const STATUS_TABS: { key: StatusTab; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: counts.all },
-    { key: 'to-process', label: 'To process', count: counts.toProcess },
-    { key: 'archived', label: 'Archived', count: counts.archived },
-    { key: 'completed', label: 'Completed', count: counts.completed },
+  const STATUS_TABS = [
+    { id: 'all',        label: 'All',        count: counts.all       },
+    { id: 'to-process', label: 'To process', count: counts.toProcess },
+    { id: 'archived',   label: 'Archived',   count: counts.archived  },
+    { id: 'completed',  label: 'Completed',  count: counts.completed },
   ];
 
   return (
@@ -247,72 +231,24 @@ export default function TranscriptsFlowPage() {
       </div>
 
       {/* Time filter tabs */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-[#E9EAEB]">
-        <div className="flex items-center gap-1">
-          {TIME_FILTERS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setTimeFilter(key)}
-              className={`px-3 py-1.5 text-sm rounded-full transition-colors ${
-                timeFilter === key
-                  ? 'bg-white border border-[#D5D7DA] font-semibold text-[#181D27] shadow-sm'
-                  : 'text-[#535862] hover:text-[#181D27] hover:bg-gray-50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {timeFilter === 'custom' && (
-          <div className="flex items-center gap-1 border border-[#D5D7DA] rounded-full px-3 py-1.5 bg-white">
-            <Calendar width={14} height={14} className="text-[#A4A7AE] shrink-0" />
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="text-sm text-[#181D27] bg-transparent outline-none w-32"
-            />
-            <span className="text-[#A4A7AE] text-sm">–</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="text-sm text-[#181D27] bg-transparent outline-none w-32"
-            />
-          </div>
-        )}
+      <div className="flex items-center px-6 py-3 border-b border-[#E9EAEB]">
+        <TimeFilterBar value={timeFilter} onChange={setTimeFilter} />
       </div>
 
       {/* Sub-tabs + search/filter */}
       <div className="flex items-center justify-between px-6 py-2 border-b border-[#E9EAEB]">
-        <div className="flex items-center gap-0">
-          {STATUS_TABS.map(({ key, label, count }) => (
-            <button
-              key={key}
-              onClick={() => setStatusTab(key)}
-              className={`px-4 py-3 text-sm transition-colors border-b-2 -mb-px ${
-                statusTab === key
-                  ? 'border-[#7F56D9] text-[#7F56D9] font-semibold'
-                  : 'border-transparent text-[#717680] hover:text-[#414651]'
-              }`}
-            >
-              {label}{' '}
-              <span className={`text-xs ${statusTab === key ? 'text-[#7F56D9]' : 'text-[#A4A7AE]'}`}>
-                {count}
-              </span>
-            </button>
-          ))}
-        </div>
+        <TabBar
+          tabs={STATUS_TABS}
+          activeId={statusTab}
+          onChange={(id) => setStatusTab(id as StatusTab)}
+        />
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 border border-[#D5D7DA] rounded-lg px-3 py-2 bg-white">
-            <SearchLg width={14} height={14} className="text-[#A4A7AE] shrink-0" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search transcripts…"
-              className="text-sm text-[#181D27] placeholder-[#A4A7AE] bg-transparent outline-none w-48"
-            />
-          </div>
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search transcripts…"
+            className="w-64"
+          />
           <button
             onClick={() => setFilterOpen(true)}
             className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold text-[#414651] bg-white border border-[#D5D7DA] rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
