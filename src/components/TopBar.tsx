@@ -57,8 +57,7 @@ function useBreadcrumbs(): Crumb[] {
   // /users/:id/settings
   if (parts[0] === 'users' && parts[2] === 'settings') {
     return [
-      { label: 'Settings', to: '/settings' },
-      { label: 'Users',    to: '/users' },
+      { label: 'Users', to: '/users' },
       { label: parts[1] }, // resolved by UserNameCrumb below
     ];
   }
@@ -66,18 +65,14 @@ function useBreadcrumbs(): Crumb[] {
   // /users/new
   if (parts[0] === 'users' && parts[1] === 'new') {
     return [
-      { label: 'Settings', to: '/settings' },
-      { label: 'Users',    to: '/users' },
+      { label: 'Users', to: '/users' },
       { label: 'Invite' },
     ];
   }
 
   // /users
   if (pathname === '/users') {
-    return [
-      { label: 'Settings', to: '/settings' },
-      { label: 'Users' },
-    ];
+    return [{ label: 'Users' }];
   }
 
   return [];

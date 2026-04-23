@@ -44,6 +44,14 @@ export default function Dashboard() {
       )}
       <main className="flex-1 min-w-0 overflow-y-auto bg-white">
 
+      {/* Welcome heading */}
+      <div className="px-8 pt-6 pb-2">
+        <h1 className="text-2xl font-bold text-[#181D27]">
+          Welcome back, {user?.name?.split(' ')[0] ?? 'there'}
+        </h1>
+        <p className="text-sm text-[#535862] mt-1">You have 6 tasks due today</p>
+      </div>
+
       {/* Time filter + date picker */}
       <div className="flex items-center justify-between px-8 pt-4">
         <TimeFilterBar value={activeTime} onChange={setActiveTime} />

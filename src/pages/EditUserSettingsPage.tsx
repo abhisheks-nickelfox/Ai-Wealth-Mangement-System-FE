@@ -279,11 +279,17 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
   }
 
   async function handleSave() {
+    if (rateAmount && parseFloat(rateAmount) > 99999999.99) {
+      setToast({ message: 'Rate amount cannot exceed 99,999,999.99.', isError: true });
+      return;
+    }
     let finalAvatarUrl = avatarUrl;
     if (croppedUrl?.startsWith('data:')) {
       try { finalAvatarUrl = (await profileApi.uploadAvatar(userId, croppedUrl)).avatar_url; } catch { /* local dev fallback */ }
     }
-    const skill_ids = localSkills.filter((s) => !s.id.startsWith('temp-')).map((s) => s.id);
+    const skills_with_experience = localSkills
+      .filter((s) => !s.id.startsWith('temp-'))
+      .map((s) => ({ skill_id: s.id, experience: s.experience ?? null }));
     try {
       await updateUser.mutateAsync({
         id: userId,
@@ -294,7 +300,7 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
           member_role:    '',
           status,
           permissions,
-          skill_ids,
+          skills_with_experience,
           avatar_url:     finalAvatarUrl ?? undefined,
           rate_amount:    rateAmount ? parseFloat(rateAmount) : null,
           rate_frequency: rateFrequency,
@@ -558,7 +564,7 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
 
 // ── Page shell — handles loading, then mounts form ────────────────────────────
 
-export default function UserSettingsPage() {
+export default function EditUserSettingsPage() {
   const navigate = useNavigate();
   const { id = '' } = useParams<{ id: string }>();
   const { data: user, isLoading, error } = useUser(id);

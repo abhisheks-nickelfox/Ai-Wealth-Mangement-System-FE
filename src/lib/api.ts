@@ -126,6 +126,7 @@ export interface UpdateUserPayload {
   member_role?: string;
   permissions?: string[];
   skill_ids?: string[];
+  skills_with_experience?: { skill_id: string; experience?: string | null }[];
   status?: 'Active' | 'invited' | 'Disabled';
   first_name?: string;
   last_name?: string;
@@ -221,6 +222,7 @@ export interface UpdateProfilePayload {
   avatar_url?: string;
   member_role?: string;
   skill_ids?: string[];
+  skills_with_experience?: { skill_id: string; experience?: string | null }[];
 }
 
 export const profileApi = {
@@ -341,4 +343,25 @@ export const tasksApi = {
     request<{ data: Task }>('PATCH', `/tasks/${id}/discard`).then((r) => r.data),
   archive: (id: string, archived: boolean) =>
     request<{ data: Task }>('PATCH', `/tasks/${id}/archive`, { archived }).then((r) => r.data),
+};
+
+// ── Notifications API ─────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  ticket_id: string | null;
+  title: string;
+  message: string;
+  read: boolean;
+  created_at: string;
+}
+
+export const notificationsApi = {
+  list: () =>
+    request<{ data: AppNotification[] }>('GET', '/notifications').then((r) => r.data),
+  markRead: (id: string) =>
+    request<void>('PATCH', `/notifications/${id}/read`),
+  markAllRead: () =>
+    request<void>('PATCH', '/notifications/read-all'),
 };
