@@ -9,6 +9,7 @@ import {
   Send01,
   XClose,
 } from '@untitled-ui/icons-react';
+import SearchInput from '../components/ui/SearchInput';
 import Toast from '../components/ui/Toast';
 import StatusBadge from '../components/users/StatusBadge';
 import SkillBadge from '../components/users/SkillBadge';
@@ -216,16 +217,32 @@ export default function UsersPage() {
 
   const [selected,     setSelected]    = useState<Set<string>>(new Set());
   const [currentPage,  setCurrentPage] = useState(1);
+  const [search,       setSearch]      = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(
     (location.state as { toastMessage?: string } | null)?.toastMessage ?? null
   );
   const [userPendingDelete, setUserPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [permissionsOpenFor, setPermissionsOpenFor] = useState<string | null>(null);
 
+  // ── Search filter ─────────────────────────────────────────────────────────────
+  const needle = search.trim().toLowerCase();
+  const filteredUsers = needle
+    ? users.filter(
+        (u) =>
+          u.name.toLowerCase().includes(needle) ||
+          u.email.toLowerCase().includes(needle),
+      )
+    : users;
+
+  function handleSearch(value: string) {
+    setSearch(value);
+    setCurrentPage(1);
+  }
+
   // ── Pagination ────────────────────────────────────────────────────────────────
-  const totalPages  = Math.max(1, Math.ceil(users.length / PAGE_SIZE));
+  const totalPages  = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const pageStart   = (currentPage - 1) * PAGE_SIZE;
-  const pageMembers = users.slice(pageStart, pageStart + PAGE_SIZE);
+  const pageMembers = filteredUsers.slice(pageStart, pageStart + PAGE_SIZE);
 
   const isAllSelected = pageMembers.length > 0 && pageMembers.every((m) => selected.has(m.id));
 
@@ -307,17 +324,21 @@ export default function UsersPage() {
 
         {/* Card header */}
         <div className="flex items-center gap-4 px-6 pt-5 pb-0">
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-[#181D27]">Team members</h2>
-              {!loading && (
-                <span className="bg-[#F9F5FF] border border-[#E9D7FE] text-[#6941C6] text-xs font-medium px-2 py-0.5 rounded-full">
-                  {users.length} {users.length === 1 ? 'user' : 'users'}
-                </span>
-              )}
-            </div>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <h2 className="text-lg font-semibold text-[#181D27] shrink-0">Team members</h2>
+            {!loading && (
+              <span className="bg-[#F9F5FF] border border-[#E9D7FE] text-[#6941C6] text-xs font-medium px-2 py-0.5 rounded-full shrink-0">
+                {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
+              </span>
+            )}
           </div>
-          <button className="text-[#717680] hover:text-[#414651] p-1">
+          <SearchInput
+            value={search}
+            onChange={handleSearch}
+            placeholder="Search by name or email…"
+            className="w-72"
+          />
+          <button className="text-[#717680] hover:text-[#414651] p-1 shrink-0">
             <DotsVertical width={20} height={20} />
           </button>
         </div>
@@ -359,7 +380,7 @@ export default function UsersPage() {
                 {pageMembers.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-sm text-[#717680]">
-                      No team members yet.
+                      {needle ? `No members match "${search}".` : 'No team members yet.'}
                     </td>
                   </tr>
                 ) : (

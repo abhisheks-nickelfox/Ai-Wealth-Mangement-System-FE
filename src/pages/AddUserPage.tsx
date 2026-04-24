@@ -34,6 +34,10 @@ export default function AddUserPage() {
       setError('Rate amount must be a valid number.');
       return;
     }
+    if (rateAmount && parseFloat(rateAmount) > 99999999.99) {
+      setError('Rate amount cannot exceed 99,999,999.99.');
+      return;
+    }
     setError('');
     try {
       await createUser.mutateAsync({
