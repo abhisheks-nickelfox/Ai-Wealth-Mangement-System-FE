@@ -7,26 +7,30 @@ import NavItem from './sidebar/NavItem';
 import ExpandableNavItem from './sidebar/ExpandableNavItem';
 import { useFirms } from '../hooks/useFirms';
 
-import vectorLogo    from '../assets/logo/Logomark.svg';
-import iconInbox     from '../assets/navbar-icon/Icon.png';
-import iconDashboard from '../assets/navbar-icon/Icon (2).png';
-import iconFirms     from '../assets/navbar-icon/building-07.png';
-import iconTasks     from '../assets/navbar-icon/check-done-02.png';
-import iconTimesheet from '../assets/navbar-icon/Icon (1).png';
-import iconSettings  from '../assets/navbar-icon/settings-01.png';
-import iconUsers     from '../assets/navbar-icon/users-01.png';
-import iconTranscripts from '../assets/navbar-icon/cpu-chip-02.png';
+import vectorLogo      from '../assets/logo/Logomark.svg';
+import iconInbox       from '../assets/navbar-icon/icon-inbox.png';
+import iconDashboard   from '../assets/navbar-icon/icon-dashboard.png';
+import iconFirms       from '../assets/navbar-icon/icon-firms.png';
+import iconMyTasks     from '../assets/navbar-icon/icon-my-tasks.png';
+import iconSettings    from '../assets/navbar-icon/icon-settings.png';
+import iconUsers       from '../assets/navbar-icon/icon-users.png';
+import iconProjects    from '../assets/navbar-icon/icon-projects.svg';
+import iconTimeReports from '../assets/navbar-icon/icon-time-reports.svg';
+import iconTeamPulse   from '../assets/navbar-icon/icon-team-pulse.svg';
+import iconTranscripts from '../assets/navbar-icon/icon-transcripts.png';
 
 const NavIcon = ({ src }: { src: string }) => (
   <img src={src} alt="" width={20} height={20} className="shrink-0" />
 );
 
-// ── My Tasks sub-items (from Figma / screenshot) ──────────────────────────────
+// ── My Tasks sub-items ────────────────────────────────────────────────────────
 const MY_TASKS = [
-  { id: 'todo',          label: 'Todo',          badge: { count: 10, variant: 'blue'    as const } },
-  { id: 'assigned-me',   label: 'Assigned to me',badge: { count: 10, variant: 'brand'   as const } },
-  { id: 'today-due',     label: 'Today Due',     badge: { count: 10, variant: 'success' as const } },
-  { id: 'overdue',       label: 'Overdue',       badge: { count: 10, variant: 'error'   as const } },
+  { id: 'my-timesheet',  label: 'My Timesheet' },
+  { id: 'transcripts',   label: 'Transcripts Flow' },
+  { id: 'todo',          label: 'Todo',           badge: { count: 10, variant: 'blue'    as const } },
+  { id: 'assigned-me',   label: 'Assigned to me', badge: { count: 10, variant: 'brand'   as const } },
+  { id: 'today-due',     label: 'Today Due',      badge: { count: 10, variant: 'success' as const } },
+  { id: 'overdue',       label: 'Overdue',        badge: { count: 10, variant: 'error'   as const } },
   { id: 'active',        label: 'Active' },
   { id: 'assigned',      label: 'Assigned' },
   { id: 'in-progress',   label: 'In Progress' },
@@ -39,36 +43,45 @@ const MY_TASKS = [
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-/** Maps the current pathname to a nav item ID for active highlighting. */
 function getActiveNav(pathname: string): string {
   if (pathname === '/dashboard' || pathname === '/') return 'dashboard';
-  if (pathname.startsWith('/users'))                 return 'users';
-  if (pathname.startsWith('/inbox'))                 return 'inbox';
-  if (pathname.startsWith('/timesheet'))             return 'timesheet';
-  if (pathname.startsWith('/transcripts'))           return 'transcripts';
-  if (pathname.startsWith('/settings'))              return 'settings';
-  if (pathname.startsWith('/firms'))                 return 'firms';
+  if (pathname.startsWith('/users'))       return 'users';
+  if (pathname.startsWith('/inbox'))       return 'inbox';
+  if (pathname.startsWith('/transcripts')) return 'transcripts';
+  if (pathname.startsWith('/settings'))    return 'settings';
+  if (pathname.startsWith('/firms'))       return 'firms';
+  if (pathname.startsWith('/projects'))    return 'projects';
+  if (pathname.startsWith('/time-reports')) return 'time-reports';
+  if (pathname.startsWith('/team-pulse'))  return 'team-pulse';
+  if (pathname.startsWith('/timesheet'))   return 'my-timesheet';
   return '';
 }
 
-/** Extract the firm id from a /firms/:id pathname */
 function getActiveFirmId(pathname: string): string {
   const match = pathname.match(/^\/firms\/([^/]+)/);
   return match ? match[1] : '';
 }
 
 export default function Sidebar() {
-  const navigate   = useNavigate();
-  const location   = useLocation();
-  const activeNav  = getActiveNav(location.pathname);
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const activeNav = getActiveNav(location.pathname);
 
-  const [activeTask, setActiveTask] = useState('');
+  // Derive the active My Tasks sub-item from the URL
+  const defaultTaskId =
+    activeNav === 'transcripts' ? 'transcripts' :
+    activeNav === 'my-timesheet' ? 'my-timesheet' : '';
+  const [activeTask, setActiveTask] = useState(defaultTaskId);
 
   const { data: firms = [], isLoading: firmsLoading } = useFirms();
   const firmItems = firms.map((f) => ({ id: f.id, label: f.name }));
-
-  // Derive active firm from URL
   const activeFirm = getActiveFirmId(location.pathname);
+
+  function handleMyTaskClick(id: string) {
+    if (id === 'transcripts') { navigate('/transcripts'); setActiveTask(id); }
+    else if (id === 'my-timesheet') { navigate('/timesheet'); setActiveTask(id); }
+    else setActiveTask(id);
+  }
 
   return (
     <aside className="w-64 shrink-0 bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0 overflow-y-auto">
@@ -131,20 +144,25 @@ export default function Sidebar() {
           )}
         </NavSection>
 
-        {/* YOU */}
-        <NavSection heading="YOU">
-          <ExpandableNavItem
-            label="My Tasks"
-            icon={<NavIcon src={iconTasks} />}
-            items={MY_TASKS}
-            activeItemId={activeTask}
-            onItemClick={setActiveTask}
+        {/* WORK MANAGEMENT */}
+        <NavSection heading="WORK MANAGEMENT">
+          <NavItem
+            label="Projects"
+            icon={<NavIcon src={iconProjects} />}
+            active={activeNav === 'projects'}
+            onClick={() => navigate('/projects')}
           />
           <NavItem
-            label="Timesheet"
-            icon={<NavIcon src={iconTimesheet} />}
-            active={activeNav === 'timesheet'}
-            onClick={() => navigate('/timesheet')}
+            label="Time reports"
+            icon={<NavIcon src={iconTimeReports} />}
+            active={activeNav === 'time-reports'}
+            onClick={() => navigate('/time-reports')}
+          />
+          <NavItem
+            label="Team Pulse"
+            icon={<NavIcon src={iconTeamPulse} />}
+            active={activeNav === 'team-pulse'}
+            onClick={() => navigate('/team-pulse')}
           />
         </NavSection>
 
@@ -158,6 +176,17 @@ export default function Sidebar() {
               onClick={() => navigate('/transcripts')}
             />
           </div>
+        </NavSection>
+
+        {/* YOU */}
+        <NavSection heading="YOU">
+          <ExpandableNavItem
+            label="My Tasks"
+            icon={<NavIcon src={iconMyTasks} />}
+            items={MY_TASKS}
+            activeItemId={activeTask}
+            onItemClick={handleMyTaskClick}
+          />
         </NavSection>
 
         {/* PLATFORM */}
