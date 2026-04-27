@@ -2,7 +2,8 @@
 // All requests go through this module. Never use fetch() directly in components.
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000/api';
-
+console.log('API base URL:', BASE_URL);
+console.log('Running in production: meta.env.VITE_API_URL', import.meta.env.VITE_API_URL);
 function getToken(): string | null {
   return localStorage.getItem('mw_token') ?? sessionStorage.getItem('mw_token');
 }
