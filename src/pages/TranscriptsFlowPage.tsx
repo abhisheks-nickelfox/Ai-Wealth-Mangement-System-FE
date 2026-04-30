@@ -120,14 +120,14 @@ export default function TranscriptsFlowPage() {
     setProcessingOpen(true);
   }
 
-  function handleProcessed(sessionId: string, firmId: string, tickets: Task[]) {
+  function handleProcessed(sessionId: string, firmId: string, tasks: Task[]) {
     setProcessingOpen(false);
     if (activeTranscript) {
       navigate(`/transcripts/${activeTranscript.id}/tasks`, {
         state: {
           sessionId,
           firmId,
-          tickets,
+          tasks,
           transcript: activeTranscript,
         },
       });

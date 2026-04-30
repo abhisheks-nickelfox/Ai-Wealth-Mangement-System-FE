@@ -8,6 +8,7 @@ interface SlideOverProps {
   title: string;
   subtitle?: string;
   children: ReactNode;
+  footer?: ReactNode;
   width?: string;
 }
 
@@ -17,6 +18,7 @@ export default function SlideOver({
   title,
   subtitle,
   children,
+  footer,
   width = 'max-w-md',
 }: SlideOverProps) {
   // Lock body scroll while open
@@ -67,6 +69,13 @@ export default function SlideOver({
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {children}
         </div>
+
+        {/* Optional footer */}
+        {footer && (
+          <div className="shrink-0 px-6 py-4 border-t border-[#E9EAEB]">
+            {footer}
+          </div>
+        )}
       </div>
     </>
   );

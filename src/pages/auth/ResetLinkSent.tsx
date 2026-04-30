@@ -1,12 +1,19 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft } from '@untitled-ui/icons-react';
+import { ArrowLeft, Mail01 } from '@untitled-ui/icons-react';
 import AuthLayout from '../../components/layout/AuthLayout';
 
 export default function ResetLinkSent() {
   return (
     <AuthLayout hidePanel>
+      {/* Icon */}
+      <div className="flex justify-center mb-5">
+        <div className="w-14 h-14 rounded-xl border border-[#E9EAEB] shadow-sm flex items-center justify-center bg-white">
+          <Mail01 width={28} height={28} className="text-[#344054]" />
+        </div>
+      </div>
+
       {/* Heading */}
-      <h1 className="text-[32px] font-semibold text-gray-900 mb-2 text-center">
+      <h1 className="text-2xl font-semibold text-gray-900 mb-2 text-center">
         Password reset link sent
       </h1>
       <p className="text-sm text-gray-500 mb-7 text-center leading-relaxed">

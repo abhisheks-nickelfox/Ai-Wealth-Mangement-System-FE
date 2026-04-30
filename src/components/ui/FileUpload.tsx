@@ -83,7 +83,10 @@ export default function FileUpload({
         type="file"
         accept={accept}
         className="hidden"
-        onChange={(e) => handleFiles(e.target.files)}
+        onChange={(e) => {
+          handleFiles(e.target.files);
+          e.target.value = '';
+        }}
       />
     </div>
   );

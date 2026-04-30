@@ -5,13 +5,12 @@ import OnboardingLayout from '../../components/layout/OnboardingLayout';
 import OnboardingStepper from '../../components/onboarding/OnboardingStepper';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import PhoneInput from '../../components/ui/PhoneInput';
+import PhoneInput, { buildE164Phone, getPhoneValidationError } from '../../components/ui/PhoneInput';
 import FileUpload from '../../components/ui/FileUpload';
 import ImageCropModal from '../../components/ui/ImageCropModal';
 import { onboardingApi, skillsApi } from '../../lib/api';
 import type { Skill } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { COUNTRIES } from '../../components/ui/PhoneInput';
 
 // ── Steps config ──────────────────────────────────────────────────────────────
 
@@ -22,56 +21,15 @@ const STEPS = [
   { label: 'Add skill',                   sublabel: 'Highlight your strengths and professional abilities.' },
 ];
 
-const EXPERIENCE_OPTIONS = [
-  '0-2 Years',
-  '2-5 Years',
-  '5 Years',
-  '5-10 Years',
-  '10+ Years',
-];
-
 // skillId = catalog ID, or '__other__' when the user wants to request a new skill
 type SkillRow = { skillId: string; customName: string; experience: string };
 
 const EMPTY_SKILL_ROW: SkillRow = { skillId: '', customName: '', experience: '' };
-const E164_PHONE_REGEX = /^\+[1-9]\d{6,14}$/;
-
-function buildE164PhoneNumber(rawPhoneNumber: string, countryCode: string): string {
-  const trimmed = rawPhoneNumber.trim();
-  if (!trimmed) return '';
-
-  if (trimmed.startsWith('+')) {
-    return `+${trimmed.slice(1).replace(/\D/g, '')}`;
-  }
-
-  const selectedCountry = COUNTRIES.find((country) => country.code === countryCode) ?? COUNTRIES[0];
-  const localDigits = trimmed.replace(/\D/g, '');
-
-  return `${selectedCountry.dial}${localDigits}`;
-}
-
-function getPhoneValidationError(rawPhoneNumber: string, countryCode: string): string {
-  if (!rawPhoneNumber.trim()) {
-    return 'Phone number is required';
-  }
-
-  const hasInvalidCharacters = /[^\d\s\-().+]/.test(rawPhoneNumber);
-  if (hasInvalidCharacters) {
-    return 'Invalid characters in phone number';
-  }
-
-  const normalizedPhone = buildE164PhoneNumber(rawPhoneNumber, countryCode);
-  if (!E164_PHONE_REGEX.test(normalizedPhone)) {
-    return 'Phone number must be in E.164 format, e.g. +12025551234';
-  }
-
-  return '';
-}
 
 function getSkillsValidationError(skillRows: SkillRow[]): string {
   const hasAtLeastOneSkill = skillRows.some((row) => row.skillId.trim());
   if (!hasAtLeastOneSkill) {
-    return 'Please add at least one skill and select experience.';
+    return 'Please add at least one skill and enter experience.';
   }
 
   for (const row of skillRows) {
@@ -93,7 +51,7 @@ function getSkillsValidationError(skillRows: SkillRow[]): string {
     }
 
     if (!hasExperience) {
-      return 'Please select experience for every skill before continuing.';
+      return 'Please enter experience for every skill before continuing.';
     }
   }
 
@@ -272,7 +230,7 @@ export default function OnboardingPage() {
         token,
         first_name:     firstName.trim(),
         last_name:      lastName.trim(),
-        phone_number:   buildE164PhoneNumber(phoneNumber, countryCode) || undefined,
+        phone_number:   buildE164Phone(phoneNumber, countryCode) || undefined,
         avatar_url:     finalAvatarUrl || undefined,
         password,
         skills:         skills.length > 0 ? skills : undefined,
@@ -347,11 +305,19 @@ export default function OnboardingPage() {
     </svg>
   );
 
+  function goToStep(i: number) {
+    // Clear errors for the step being navigated away from so they don't
+    // reappear when the user goes back without touching anything
+    if (i !== 1) { setFirstNameError(''); setLastNameError(''); setPhoneError(''); }
+    if (i !== 0) { setPwError(''); }
+    setStep(i);
+  }
+
   const stepper = (
     <OnboardingStepper
       steps={STEPS}
       currentStep={step}
-      onStepClick={(i) => setStep(i)}
+      onStepClick={goToStep}
     />
   );
 
@@ -361,10 +327,10 @@ export default function OnboardingPage() {
     const displayName = firstName || initialName;
     return (
       <OnboardingLayout stepper={<OnboardingStepper steps={STEPS} currentStep={STEPS.length} />}>
-        <h1 className="text-3xl font-bold text-gray-900 whitespace-nowrap">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
           Hi {displayName}, You're all set!
         </h1>
-        <p className="text-base text-gray-500 mt-3" style={{ width: '466px' }}>
+        <p className="text-base text-gray-500 mt-3 max-w-md">
           Your account setup is complete. You can now start managing projects and collaborating with your team.
         </p>
         <div className="mt-8">
@@ -432,23 +398,44 @@ export default function OnboardingPage() {
               <p className="text-base text-gray-600 mt-2">Please enter your personal details.</p>
             </div>
             <div className="flex flex-col gap-5">
-              <Input label="First Name" type="text" value={firstName}
-                onChange={(e) => { setFirstName(e.target.value); setFirstNameError(''); }}
-                placeholder="First name" error={firstNameError || undefined} required />
-              <Input label="Last Name" type="text" value={lastName}
-                onChange={(e) => { setLastName(e.target.value); setLastNameError(''); }}
-                placeholder="Last name" error={lastNameError || undefined} required />
+              <Input
+                label="First Name"
+                type="text"
+                value={firstName}
+                onChange={(e) => { setFirstName(e.target.value); if (e.target.value.trim()) setFirstNameError(''); }}
+                onBlur={() => { if (!firstName.trim()) setFirstNameError('First name is required'); }}
+                placeholder="First name"
+                error={firstNameError || undefined}
+                required
+              />
+              <Input
+                label="Last Name"
+                type="text"
+                value={lastName}
+                onChange={(e) => { setLastName(e.target.value); if (e.target.value.trim()) setLastNameError(''); }}
+                onBlur={() => { if (!lastName.trim()) setLastNameError('Last name is required'); }}
+                placeholder="Last name"
+                error={lastNameError || undefined}
+                required
+              />
               <PhoneInput
-                label="Phone Number" value={phoneNumber}
+                label="Phone Number"
+                value={phoneNumber}
                 onChange={(v) => {
                   setPhoneNumber(v);
-                  setPhoneError(v.trim() ? getPhoneValidationError(v, countryCode) : '');
+                  // Only re-validate while typing if there's already an error — so the
+                  // message clears in real-time as the user fixes it, but never fires
+                  // on a fresh untouched field
+                  if (phoneError) setPhoneError(getPhoneValidationError(v, countryCode));
                 }}
-                countryCode={countryCode} onCountryChange={(code) => {
+                onBlur={() => setPhoneError(getPhoneValidationError(phoneNumber, countryCode))}
+                countryCode={countryCode}
+                onCountryChange={(code) => {
                   setCountryCode(code);
-                  setPhoneError(phoneNumber.trim() ? getPhoneValidationError(phoneNumber, code) : '');
+                  if (phoneNumber.trim()) setPhoneError(getPhoneValidationError(phoneNumber, code));
                 }}
-                error={phoneError || undefined} required
+                error={phoneError || undefined}
+                required
               />
             </div>
             <Button className="w-full justify-center" onClick={handleDetailsNext}>
@@ -541,19 +528,15 @@ export default function OnboardingPage() {
                     )}
                   </div>
 
-                  {/* Experience dropdown */}
-                  <div className="relative">
-                    <select
+                  {/* Experience input */}
+                  <div>
+                    <input
+                      type="text"
                       value={row.experience}
                       onChange={(e) => updateSkillRow(index, 'experience', e.target.value)}
+                      placeholder="e.g. 2-5 years"
                       className={dropdownCls}
-                    >
-                      <option value="">Select experience</option>
-                      {EXPERIENCE_OPTIONS.map((o) => (
-                        <option key={o} value={o}>{o}</option>
-                      ))}
-                    </select>
-                    {chevronSvg}
+                    />
                   </div>
 
                   {/* Remove row */}

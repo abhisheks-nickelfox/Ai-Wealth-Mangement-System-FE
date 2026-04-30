@@ -30,7 +30,7 @@ export function useUpdateTask() {
 export function useDiscardTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => tasksApi.discard(id),
+    mutationFn: (id: string) => tasksApi.transition(id, 'to_do'),
     onSuccess:  () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
   });
 }

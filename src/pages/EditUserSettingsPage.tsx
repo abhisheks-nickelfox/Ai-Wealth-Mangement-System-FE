@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Edit02, Trash01, Plus, HelpCircle, Mail01, XClose } from '@untitled-ui/icons-react';
 import { useUser, useUpdateUser } from '../hooks/useUsers';
@@ -8,6 +8,8 @@ import { EXTRA_PERMISSIONS } from '../lib/constants';
 import type { User, Skill } from '../lib/api';
 import Avatar from '../components/ui/Avatar';
 import Toast from '../components/ui/Toast';
+import SettingsRow from '../components/ui/SettingsRow';
+import Select from '../components/ui/Select';
 import FileUpload from '../components/ui/FileUpload';
 import ImageCropModal from '../components/ui/ImageCropModal';
 import Button from '../components/ui/Button';
@@ -18,8 +20,7 @@ import Badge from '../components/ui/Badge';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 
-const EXPERIENCE_OPTIONS = ['0-2 Years', '2-5 Years', '5 Years', '5-10 Years', '10+ Years'];
-const RATE_FREQUENCIES   = ['Hourly', 'Daily', 'Weekly', 'Monthly'];
+const RATE_FREQUENCIES = ['Hourly', 'Daily', 'Weekly', 'Monthly'];
 
 interface LocalSkill {
   id: string;
@@ -27,57 +28,6 @@ interface LocalSkill {
   experience: string | null;
 }
 
-// ── Shared styles ─────────────────────────────────────────────────────────────
-
-const selectCls =
-  'border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white ' +
-  'focus:outline-none focus:ring-2 focus:ring-[#9E77ED] focus:border-transparent w-full appearance-none pr-8';
-
-// ── SectionRow ────────────────────────────────────────────────────────────────
-// Border on the outer div spans full content width.
-// Inner flex is right-padded via inline style to align with Status block.
-
-const ROW_RIGHT_PAD = 200;
-
-function SectionRow({ label, sublabel, required, helpText, rightPad, children }: {
-  label: string;
-  sublabel?: string;
-  required?: boolean;
-  helpText?: string;
-  rightPad?: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="border-b border-gray-100">
-      <div className="flex gap-8 py-5" style={{ paddingRight: rightPad ?? ROW_RIGHT_PAD }}>
-        <div className="w-[265px] shrink-0">
-          <div className="flex items-center gap-1.5">
-            <p className="text-sm font-medium text-gray-700">
-              {label}
-              {required && <span className="text-gray-500 ml-0.5">*</span>}
-            </p>
-            {helpText && <HelpCircle width={14} height={14} className="text-gray-400 shrink-0" />}
-          </div>
-          {sublabel && <p className="text-sm text-gray-500 mt-0.5 leading-snug">{sublabel}</p>}
-        </div>
-        <div className="flex-1 min-w-0">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-// ── ChevronSelect — no reusable Select component exists yet ───────────────────
-
-function ChevronSelect({ children, className = '', ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <div className="relative">
-      <select className={`${selectCls} ${className}`} {...props}>
-        {children}
-      </select>
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
-    </div>
-  );
-}
 
 // ── AddSkillsModal ────────────────────────────────────────────────────────────
 
@@ -107,13 +57,20 @@ function AddSkillsModal({
         }))
       : [{ rowId: 'row-0', skillId: '', experience: '' }]
   );
+  const [errorRowIds, setErrorRowIds] = useState<Set<string>>(new Set());
+  const [errorMsg,    setErrorMsg]    = useState('');
 
   function updateRow(rowId: string, field: 'skillId' | 'experience', value: string) {
     setRows((prev) => prev.map((r) => r.rowId === rowId ? { ...r, [field]: value } : r));
+    // Clear error for this row once the user starts fixing it
+    if (field === 'experience' && value) {
+      setErrorRowIds((prev) => { const n = new Set(prev); n.delete(rowId); return n; });
+    }
   }
 
   function removeRow(rowId: string) {
     setRows((prev) => prev.length > 1 ? prev.filter((r) => r.rowId !== rowId) : prev);
+    setErrorRowIds((prev) => { const n = new Set(prev); n.delete(rowId); return n; });
   }
 
   function addRow() {
@@ -121,12 +78,23 @@ function AddSkillsModal({
   }
 
   function handleSave() {
-    const skills: LocalSkill[] = rows
-      .filter((r) => r.skillId)
-      .map((r) => {
-        const catalog = skillCatalog.find((s) => s.id === r.skillId);
-        return { id: r.skillId, name: catalog?.name ?? r.skillId, experience: r.experience || null };
-      });
+    // Only validate rows that have a skill selected
+    const activeRows = rows.filter((r) => r.skillId);
+    const missing = new Set(activeRows.filter((r) => !r.experience).map((r) => r.rowId));
+
+    if (missing.size > 0) {
+      setErrorRowIds(missing);
+      setErrorMsg('Please enter an experience level for every skill.');
+      return;
+    }
+
+    setErrorRowIds(new Set());
+    setErrorMsg('');
+
+    const skills: LocalSkill[] = activeRows.map((r) => {
+      const catalog = skillCatalog.find((s) => s.id === r.skillId);
+      return { id: r.skillId, name: catalog?.name ?? r.skillId, experience: r.experience || null };
+    });
     onSave(skills);
   }
 
@@ -160,45 +128,51 @@ function AddSkillsModal({
 
         {/* Skill rows — fixed height for 3 rows, scrollable beyond that */}
         <div className="overflow-y-auto flex flex-col gap-4" style={{ maxHeight: '228px' }}>
-          {rows.map((row) => (
-            <div key={row.rowId} className="grid items-center shrink-0" style={{ gridTemplateColumns: '1fr 1fr 40px', gap: '16px' }}>
-              <div className="relative">
-                <select
-                  value={row.skillId}
-                  onChange={(e) => updateRow(row.rowId, 'skillId', e.target.value)}
-                  className="border border-[#D5D7DA] rounded-lg px-4 py-3 text-sm text-gray-500 bg-white focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full appearance-none pr-9"
-                >
-                  <option value="">Select skill…</option>
-                  {skillCatalog.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
-              </div>
+          {rows.map((row) => {
+            const hasError = errorRowIds.has(row.rowId) && !!row.skillId;
+            return (
+              <div key={row.rowId} className="grid items-center shrink-0" style={{ gridTemplateColumns: '1fr 1fr 40px', gap: '16px' }}>
+                <div className="relative">
+                  <select
+                    value={row.skillId}
+                    onChange={(e) => updateRow(row.rowId, 'skillId', e.target.value)}
+                    className="border border-[#D5D7DA] rounded-lg px-4 py-3 text-sm text-gray-500 bg-white focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full appearance-none pr-9"
+                  >
+                    <option value="">Select skill…</option>
+                    {skillCatalog.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
+                </div>
 
-              <div className="relative">
-                <select
+                <input
+                  type="text"
                   value={row.experience}
                   onChange={(e) => updateRow(row.rowId, 'experience', e.target.value)}
-                  className="border border-[#D5D7DA] rounded-lg px-4 py-3 text-sm text-gray-500 bg-white focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full appearance-none pr-9"
-                >
-                  <option value="">Select…</option>
-                  {EXPERIENCE_OPTIONS.map((o) => (
-                    <option key={o} value={o}>{o}</option>
-                  ))}
-                </select>
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
-              </div>
+                  placeholder="e.g. 2-5 years"
+                  className={`rounded-lg px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 w-full border transition-colors ${
+                    hasError
+                      ? 'border-red-400 text-red-600 focus:ring-red-300'
+                      : 'border-[#D5D7DA] text-gray-500 focus:ring-[#9E77ED]'
+                  }`}
+                />
 
-              <button
-                onClick={() => removeRow(row.rowId)}
-                className="flex items-center justify-center w-9 h-9 rounded-full border border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-colors shrink-0"
-              >
-                <XClose width={15} height={15} />
-              </button>
-            </div>
-          ))}
+                <button
+                  onClick={() => removeRow(row.rowId)}
+                  className="flex items-center justify-center w-9 h-9 rounded-full border border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition-colors shrink-0"
+                >
+                  <XClose width={15} height={15} />
+                </button>
+              </div>
+            );
+          })}
         </div>
+
+        {/* Validation error message */}
+        {errorMsg && (
+          <p className="mt-3 text-sm text-red-600">{errorMsg}</p>
+        )}
 
         {/* Add another + button always below the scroll area */}
         <button
@@ -221,6 +195,7 @@ function AddSkillsModal({
 // ── UserSettingsForm — state initialised from props, no useEffect ─────────────
 
 function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
+  const navigate    = useNavigate();
   const { data: skillCatalog = [] } = useSkills();
   const updateUser = useUpdateUser();
   const isInvitedUser = user.status === 'invited';
@@ -228,7 +203,7 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
   const [firstName,     setFirstName]     = useState(user.first_name ?? '');
   const [lastName,      setLastName]      = useState(user.last_name ?? '');
   const [role,          setRole]          = useState<'admin' | 'member' | 'project_manager'>(
-    user.role === 'super_admin' ? 'admin' : user.role
+    user.role
   );
   const [status,        setStatus]        = useState<'Active' | 'invited' | 'Disabled'>(user.status);
   const [permissions,   setPermissions]   = useState<string[]>(user.permissions ?? []);
@@ -250,7 +225,11 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
   const [editingSkillId,  setEditingSkillId]  = useState<string | null>(null);
   const [editSkillExp,    setEditSkillExp]    = useState('');
 
-  const [toast, setToast] = useState<{ message: string; isError?: boolean } | null>(null);
+  const [toast, setToast]   = useState<{ message: string; isError?: boolean } | null>(null);
+  const redirectRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear any pending redirect if the component unmounts before it fires
+  useEffect(() => () => { if (redirectRef.current) clearTimeout(redirectRef.current); }, []);
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -283,6 +262,17 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
       setToast({ message: 'Rate amount cannot exceed 99,999,999.99.', isError: true });
       return;
     }
+
+    // Block save if any skill is missing an experience level
+    const missingExp = localSkills.filter((s) => !s.experience);
+    if (missingExp.length > 0) {
+      const names = missingExp.map((s) => s.name).join(', ');
+      setToast({
+        message: `Experience level required for: ${names}. Click the edit icon on the skill card to set it.`,
+        isError: true,
+      });
+      return;
+    }
     let finalAvatarUrl = avatarUrl;
     if (croppedUrl?.startsWith('data:')) {
       try { finalAvatarUrl = (await profileApi.uploadAvatar(userId, croppedUrl)).avatar_url; } catch { /* local dev fallback */ }
@@ -306,8 +296,11 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
           rate_frequency: rateFrequency,
         },
       });
-      setToast({ message: 'Profile updated successfully' });
       setCroppedUrl(null);
+      // Brief success flash, then redirect to users list
+      redirectRef.current = setTimeout(() => {
+        navigate('/users', { state: { toastMessage: 'Profile updated successfully' } });
+      }, 1200);
     } catch (err) {
       setToast({ message: (err as Error).message, isError: true });
     }
@@ -369,7 +362,7 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
         <div>
 
           {/* Name */}
-          <SectionRow label="Name" required>
+          <SettingsRow label="Name" required>
             <div className="flex gap-3">
               <div className="flex-1 min-w-0">
                 <Input
@@ -386,10 +379,10 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
                 />
               </div>
             </div>
-          </SectionRow>
+          </SettingsRow>
 
           {/* Email */}
-          <SectionRow label="Email address" required>
+          <SettingsRow label="Email address" required>
             <Input
               type="email"
               value={user.email}
@@ -397,31 +390,48 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
               leftIcon={<Mail01 width={16} height={16} />}
               className="bg-gray-50 text-gray-500 cursor-not-allowed"
             />
-          </SectionRow>
+          </SettingsRow>
 
           {/* Photo */}
-          <SectionRow label={`${photoLabel} photo`} required helpText="x"
+          <SettingsRow label={`${photoLabel} photo`} required helpText="x"
             sublabel="This will be displayed on your profile.">
             <div className="flex gap-4 items-start">
-              <Avatar src={displayAvatar} name={user.name} size="lg" className="shrink-0" />
-              <div className="flex-1">
+              <div className="relative shrink-0">
+                <Avatar src={displayAvatar} name={user.name} size="lg" />
+                {croppedUrl && (
+                  <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-green-500 ring-2 ring-white">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                      <path d="M2 5l2 2 4-4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 flex flex-col gap-2">
                 <FileUpload accept="image/svg+xml,image/png,image/jpeg,image/gif"
                   maxSizeMB={2} onFile={handleFile} />
+                {croppedUrl && (
+                  <p className="text-xs font-medium text-green-600 flex items-center gap-1.5">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M2.5 6l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    New photo ready — will be saved when you click Save changes
+                  </p>
+                )}
               </div>
             </div>
-          </SectionRow>
+          </SettingsRow>
 
           {/* Role */}
-          <SectionRow label="Role">
-            <ChevronSelect value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+          <SettingsRow label="Role">
+            <Select value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
               <option value="member">Member</option>
               <option value="admin">Admin</option>
               <option value="project_manager">Project Manager</option>
-            </ChevronSelect>
-          </SectionRow>
+            </Select>
+          </SettingsRow>
 
           {/* Cost */}
-          <SectionRow label="Cost" rightPad={320}>
+          <SettingsRow label="Cost" rightPad={320}>
             <div className="flex gap-3">
               <div className="w-[600px]">
                 <Input
@@ -435,15 +445,15 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
                 />
               </div>
               <div className="w-[3  25px]">
-                <ChevronSelect value={rateFrequency} onChange={(e) => setRateFrequency(e.target.value as 'Hourly' | 'Daily' | 'Weekly' | 'Monthly')}>
+                <Select value={rateFrequency} onChange={(e) => setRateFrequency(e.target.value as 'Hourly' | 'Daily' | 'Weekly' | 'Monthly')}>
                   {RATE_FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}
-                </ChevronSelect>
+                </Select>
               </div>
             </div>
-          </SectionRow>
+          </SettingsRow>
 
           {/* Two-factor authentication */}
-          <SectionRow label="Two-factor authentication">
+          <SettingsRow label="Two-factor authentication">
             <div className="flex items-center h-10">
               <Badge variant="success">
                 <span className="flex items-center gap-1.5">
@@ -452,10 +462,10 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
                 </span>
               </Badge>
             </div>
-          </SectionRow>
+          </SettingsRow>
 
           {/* Skills — 3-column card grid */}
-          <SectionRow label="Skills">
+          <SettingsRow label="Skills">
             <div className="flex flex-col gap-3">
               {localSkills.length > 0 && (
                 <div className="grid grid-cols-3 gap-3">
@@ -464,11 +474,13 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
                       <div key={skill.id}
                         className="flex flex-col gap-2 bg-white border border-[#D5D7DA] rounded-lg p-3">
                         <span className="text-sm font-medium text-[#181D27]">{skill.name}</span>
-                        <select value={editSkillExp} onChange={(e) => setEditSkillExp(e.target.value)}
-                          className="text-sm border border-[#D5D7DA] rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED]">
-                          <option value="">No experience</option>
-                          {EXPERIENCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                        </select>
+                        <input
+                          type="text"
+                          value={editSkillExp}
+                          onChange={(e) => setEditSkillExp(e.target.value)}
+                          placeholder="e.g. 2-5 years"
+                          className="text-sm border border-[#D5D7DA] rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full"
+                        />
                         <div className="flex gap-2">
                           <Button size="sm" variant="primary" onClick={() => saveEditSkill(skill.id)}
                             className="flex-1">
@@ -514,10 +526,10 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
                 Add more skills
               </Button>
             </div>
-          </SectionRow>
+          </SettingsRow>
 
           {/* Extra Permissions */}
-          <SectionRow label="Extra Permissions">
+          <SettingsRow label="Extra Permissions">
             <div className="flex flex-wrap gap-x-6 gap-y-3 pt-0.5">
               {EXTRA_PERMISSIONS.map(({ key, label }) => (
                 <Checkbox
@@ -528,11 +540,11 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
                 />
               ))}
             </div>
-          </SectionRow>
+          </SettingsRow>
 
           {/* Save */}
           <div className="pt-6 flex justify-end gap-3">
-            <Button variant="secondary">Cancel</Button>
+            <Button variant="secondary" onClick={() => navigate('/users')}>Cancel</Button>
             <Button
               variant="primary"
               onClick={handleSave}

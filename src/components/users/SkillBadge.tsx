@@ -14,9 +14,20 @@ export function skillBadgeClass(label: string): string {
 
 interface SkillBadgeProps {
   label: string;
+  color?: string | null;
 }
 
-export default function SkillBadge({ label }: SkillBadgeProps) {
+export default function SkillBadge({ label, color }: SkillBadgeProps) {
+  if (color && color.startsWith('#')) {
+    return (
+      <span
+        className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full"
+        style={{ backgroundColor: color + '22', color: color }}
+      >
+        {label}
+      </span>
+    );
+  }
   return (
     <span className={`inline-flex items-center border text-xs font-medium px-2 py-0.5 rounded-full ${skillBadgeClass(label)}`}>
       {label}

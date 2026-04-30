@@ -19,7 +19,7 @@ export interface ProcessingPanelProps {
   onClose: () => void;
   firms: Firm[];
   prompts: Prompt[];
-  onProcessed: (sessionId: string, firmId: string, tickets: Task[]) => void;
+  onProcessed: (sessionId: string, firmId: string, tasks: Task[]) => void;
 }
 
 export default function ProcessingPanel({
@@ -62,7 +62,7 @@ export default function ProcessingPanel({
         id: transcript.id,
         payload: { firm_id: firmId, prompt_id: primaryPromptId, text_notes: notes.trim() || undefined },
       });
-      onProcessed(result.session_id, result.firm_id, result.tickets);
+      onProcessed(result.session_id, result.firm_id, result.tasks);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Processing failed. Please try again.');
     }

@@ -9,6 +9,12 @@ import {
   X,
   Calendar,
   User01,
+  Phone01,
+  Mail01,
+  LinkExternal01,
+  Edit01,
+  Trash01,
+  Send01,
 } from '@untitled-ui/icons-react';
 import TabBar from '../components/ui/TabBar';
 
@@ -35,7 +41,8 @@ type TabId =
   | 'time-reports'
   | 'meetings'
   | 'notes-sops'
-  | 'activities';
+  | 'activities'
+  | 'firm-details';
 
 interface TabDef {
   id: TabId;
@@ -69,6 +76,7 @@ const TABS: TabDef[] = [
   { id: 'meetings',        label: 'Meetings' },
   { id: 'notes-sops',      label: 'Notes & SOPs' },
   { id: 'activities',      label: 'Activities' },
+  { id: 'firm-details',    label: 'Firm Details' },
 ];
 
 // ── Status dot SVG ────────────────────────────────────────────────────────────
@@ -947,6 +955,345 @@ function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
   );
 }
 
+// ── Firm Details tab ──────────────────────────────────────────────────────────
+
+interface FirmDetailsTabProps {
+  firm: Firm;
+  users: User[];
+}
+
+// Contact action buttons (phone / email / calendar)
+function ContactActions({ email, phone }: { email?: string | null; phone?: string | null }) {
+  return (
+    <div className="flex items-center gap-1.5 mt-2">
+      <a
+        href={phone ? `tel:${phone}` : undefined}
+        onClick={!phone ? (e) => e.preventDefault() : undefined}
+        className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${phone ? 'border-[#E9EAEB] text-[#717680] hover:bg-[#F9FAFB] hover:text-[#7F56D9]' : 'border-[#E9EAEB] text-[#D0D5DD] cursor-not-allowed'}`}
+        title={phone ?? 'No phone'}
+      >
+        <Phone01 width={14} height={14} />
+      </a>
+      <a
+        href={email ? `mailto:${email}` : undefined}
+        onClick={!email ? (e) => e.preventDefault() : undefined}
+        className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${email ? 'border-[#E9EAEB] text-[#717680] hover:bg-[#F9FAFB] hover:text-[#7F56D9]' : 'border-[#E9EAEB] text-[#D0D5DD] cursor-not-allowed'}`}
+        title={email ?? 'No email'}
+      >
+        <Mail01 width={14} height={14} />
+      </a>
+      <button
+        className="w-8 h-8 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#717680] hover:bg-[#F9FAFB] hover:text-[#7F56D9] transition-colors"
+        title="Schedule meeting"
+      >
+        <Calendar width={14} height={14} />
+      </button>
+    </div>
+  );
+}
+
+// Mock chat messages (grouped: before "Today" separator and after)
+const MESSAGES_BEFORE: { id: number; sender: string; time: string; text: string; isSelf: boolean }[] = [
+  { id: 1, sender: 'You',           time: 'Thursday 11:41am', text: 'Awesome! Thanks.',                                   isSelf: true  },
+  { id: 2, sender: 'Demi Wilkinson', time: 'Thursday 11:44am', text: 'Good timing—was just looking at this.',              isSelf: false },
+];
+const MESSAGES_TODAY: { id: number; sender: string; time: string; text: string; isSelf: boolean }[] = [
+  { id: 3, sender: 'Phoenix Baker',  time: 'Friday 2:20pm',    text: 'Hey Olivia, can you please review the latest design?', isSelf: false },
+  { id: 4, sender: 'You',            time: 'Friday 2:20pm',    text: "Sure thing, I'll have a look today.",                isSelf: true  },
+];
+
+// Double-check SVG
+function DoubleCheck() {
+  return (
+    <svg width="16" height="10" viewBox="0 0 16 10" fill="none" aria-hidden="true">
+      <path d="M1 5L4.5 8.5L10 2" stroke="#12B76A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M6 5L9.5 8.5L15 2" stroke="#12B76A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+type ChatMsg = { id: number; sender: string; time: string; text: string; isSelf: boolean };
+
+function ChatMessage({ msg }: { msg: ChatMsg }) {
+  if (msg.isSelf) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[12px] font-medium text-[#344054]">You</span>
+          <span className="text-[12px] text-[#A4A7AE]">{msg.time}</span>
+          <DoubleCheck />
+        </div>
+        <div className="bg-white border border-[#E9EAEB] rounded-2xl rounded-tr-sm px-4 py-2.5 text-[13px] text-[#181D27] max-w-[320px] shadow-sm">
+          {msg.text}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className="relative shrink-0">
+        <Avatar name={msg.sender} size="sm" />
+        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#12B76A] border-[1.5px] border-white" />
+      </div>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[12px] font-medium text-[#344054]">{msg.sender}</span>
+          <span className="text-[12px] text-[#A4A7AE]">{msg.time}</span>
+        </div>
+        <div className="bg-[#F9FAFB] border border-[#E9EAEB] rounded-2xl rounded-tl-sm px-4 py-2.5 text-[13px] text-[#181D27] max-w-[320px]">
+          {msg.text}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OverviewTab({ firm, users }: FirmDetailsTabProps) {
+  const [commTab,     setCommTab]     = useState<'communications' | 'requests'>('communications');
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [chatInput,   setChatInput]   = useState('');
+
+  const accountManager = users.find((u) => u.id === firm.account_manager_id) ?? null;
+  const firmHref = firm.website
+    ? (firm.website.startsWith('http') ? firm.website : `https://${firm.website}`)
+    : '#';
+
+  return (
+    <div className="flex flex-1 min-h-0 overflow-hidden bg-[#F9FAFB]">
+
+      {/* ── Left: main content ──────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4 min-w-0">
+
+        {/* Firm header row */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {firm.logo_url ? (
+              <img src={firm.logo_url} alt={firm.name} className="w-10 h-10 rounded-lg object-cover border border-[#E9EAEB] shrink-0" />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
+                <span className="text-[15px] font-bold text-[#3538CD]">{firm.name.charAt(0).toUpperCase()}</span>
+              </div>
+            )}
+            <span className="text-[20px] font-bold text-[#181D27]">{firm.name}</span>
+          </div>
+
+          {/* Actions dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setActionsOpen((v) => !v)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#D0D5DD] bg-white text-[13px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors shadow-sm"
+            >
+              Actions
+              <ChevronDown width={14} height={14} />
+            </button>
+            {actionsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setActionsOpen(false)} />
+                <div className="absolute right-0 top-full mt-1.5 z-50 w-44 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1.5 overflow-hidden">
+                  <button className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-[#344054] hover:bg-[#F9FAFB] transition-colors">
+                    <Edit01 width={15} height={15} className="text-[#717680]" />
+                    Edit
+                  </button>
+                  <button className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50 transition-colors">
+                    <Trash01 width={15} height={15} />
+                    Delete
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* About this firm */}
+        {firm.description && (
+          <div>
+            <p className="text-[12px] font-semibold text-[#717680] mb-1">About this firm</p>
+            <p className="text-[14px] text-[#344054] leading-relaxed">{firm.description}</p>
+          </div>
+        )}
+
+        {/* Communications / Requests pill-tabs */}
+        <div className="flex items-center gap-1 mt-1">
+          {(['communications', 'requests'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setCommTab(t)}
+              className={`px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${
+                commTab === t
+                  ? 'bg-white border border-[#E9EAEB] text-[#181D27] shadow-sm'
+                  : 'text-[#717680] hover:text-[#344054]'
+              }`}
+            >
+              {t === 'communications' ? 'Communications' : 'Requests'}
+            </button>
+          ))}
+        </div>
+
+        {/* Chat area */}
+        {commTab === 'communications' ? (
+          <div className="flex flex-col gap-4">
+            {/* Messages before today */}
+            {MESSAGES_BEFORE.map((msg) => <ChatMessage key={msg.id} msg={msg} />)}
+
+            {/* "Today" date separator */}
+            <div className="flex items-center gap-3 py-1">
+              <div className="flex-1 h-px bg-[#E9EAEB]" />
+              <span className="text-[12px] text-[#A4A7AE] font-medium">Today</span>
+              <div className="flex-1 h-px bg-[#E9EAEB]" />
+            </div>
+
+            {/* Messages today */}
+            {MESSAGES_TODAY.map((msg) => <ChatMessage key={msg.id} msg={msg} />)}
+
+            {/* Message input */}
+            <div className="flex items-center gap-2 border border-[#D0D5DD] rounded-xl px-4 py-2.5 bg-white mt-1">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Type a message…"
+                className="flex-1 text-[13px] text-[#181D27] placeholder:text-[#A4A7AE] outline-none bg-transparent"
+              />
+              <button className="shrink-0 w-7 h-7 rounded-lg bg-[#7F56D9] flex items-center justify-center hover:bg-[#6941C6] transition-colors">
+                <Send01 width={13} height={13} className="text-white" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[13px] text-[#A4A7AE]">No requests yet.</p>
+        )}
+      </div>
+
+      {/* ── Right sidebar ────────────────────────────────────────────────── */}
+      <aside className="w-[268px] shrink-0 overflow-y-auto overflow-x-hidden px-3 py-5 flex flex-col gap-3 bg-[#F9FAFB]">
+
+        {/* Card 1 — location / website / contacts */}
+        <div className="bg-white border border-[#E9EAEB] rounded-xl overflow-hidden">
+
+          {/* Location */}
+          {firm.location && (
+            <div className="px-4 pt-4 pb-3">
+              <p className="text-[10px] font-semibold text-[#A4A7AE] uppercase tracking-widest mb-1.5">Location</p>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[14px] shrink-0">🌏</span>
+                <span className="text-[13px] font-medium text-[#181D27] truncate">{firm.location}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Website */}
+          {firm.website && (
+            <div className="px-4 py-3">
+              <p className="text-[10px] font-semibold text-[#A4A7AE] uppercase tracking-widest mb-1.5">Website</p>
+              <a
+                href={firmHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#7F56D9] hover:underline max-w-full overflow-hidden"
+              >
+                <span className="truncate">{firm.website.replace(/^https?:\/\//, '')}</span>
+                <LinkExternal01 width={11} height={11} className="shrink-0" />
+              </a>
+            </div>
+          )}
+
+          {/* Point of Contact */}
+          <div className="px-4 py-3">
+            <p className="text-[10px] font-semibold text-[#A4A7AE] uppercase tracking-widest mb-2.5">Point of Contact</p>
+            {firm.contact_name ? (
+              <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                <Avatar name={firm.contact_name} size="sm" className="shrink-0" />
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className="text-[13px] font-semibold text-[#7F56D9] truncate leading-tight">{firm.contact_name}</p>
+                  {firm.contact_role && (
+                    <p className="text-[11px] text-[#717680] truncate">{firm.contact_role}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-0.5 shrink-0 ml-1">
+                  <a href={firm.contact_phone ? `tel:${firm.contact_phone}` : '#'}
+                    className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
+                    <Phone01 width={11} height={11} />
+                  </a>
+                  <a href={firm.contact_email ? `mailto:${firm.contact_email}` : '#'}
+                    className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
+                    <Mail01 width={11} height={11} />
+                  </a>
+                  <button className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
+                    <Calendar width={11} height={11} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[12px] text-[#A4A7AE]">Not set</p>
+            )}
+          </div>
+
+          {/* MW Accounts Manager */}
+          <div className="px-4 pb-4 pt-3">
+            <p className="text-[10px] font-semibold text-[#A4A7AE] uppercase tracking-widest mb-2.5">MW Accounts Manager</p>
+            {accountManager ? (
+              <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                <Avatar name={accountManager.name} src={accountManager.avatar_url ?? undefined} size="sm" className="shrink-0" />
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className="text-[13px] font-semibold text-[#7F56D9] truncate leading-tight">
+                    {accountManager.first_name && accountManager.last_name
+                      ? `${accountManager.first_name} ${accountManager.last_name}`
+                      : accountManager.name}
+                  </p>
+                  {accountManager.member_role && (
+                    <p className="text-[11px] text-[#717680] truncate">{accountManager.member_role}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-0.5 shrink-0 ml-1">
+                  <button className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
+                    <Phone01 width={11} height={11} />
+                  </button>
+                  <a href={`mailto:${accountManager.email}`}
+                    className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
+                    <Mail01 width={11} height={11} />
+                  </a>
+                  <button className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
+                    <Calendar width={11} height={11} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[12px] text-[#A4A7AE]">Not assigned</p>
+            )}
+          </div>
+        </div>
+
+        {/* Card 2 — Quick Links */}
+        <div className="bg-white border border-[#E9EAEB] rounded-xl overflow-hidden px-4 py-4">
+          <p className="text-[10px] font-semibold text-[#A4A7AE] uppercase tracking-widest mb-3">Quick Links</p>
+          <div className="flex flex-col gap-3">
+            {[
+              { label: 'DropBox', desc: 'Access files and assets', color: '#1D4ED8' },
+              { label: 'Reports', desc: 'View and Analyse',        color: '#F97316' },
+              { label: 'Hubspot', desc: 'Access Client hubspot',   color: '#EA4300' },
+            ].map((link) => (
+              <button key={link.label} className="flex items-center gap-2.5 text-left group min-w-0 overflow-hidden">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-[11px] font-bold"
+                  style={{ backgroundColor: link.color }}
+                >
+                  {link.label.charAt(0)}
+                </div>
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p className="text-[13px] font-semibold text-[#7F56D9] group-hover:underline leading-tight truncate">{link.label}</p>
+                  <p className="text-[11px] text-[#717680] truncate">{link.desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+      </aside>
+    </div>
+  );
+}
+
+
 // ── Coming soon placeholder ───────────────────────────────────────────────────
 
 function ComingSoon() {
@@ -1018,15 +1365,8 @@ export default function FirmDetailPage() {
             Firms
           </button>
           <ChevronRight width={14} height={14} className="text-[#A4A7AE]" aria-hidden="true" />
-          <button
-            onClick={() => setActiveTab('overview')}
-            className="text-[13px] text-[#717680] hover:text-[#414651] transition-colors"
-          >
+          <span className="text-[13px] text-[#7F56D9] font-medium" aria-current="page">
             {firm?.name ?? '…'}
-          </button>
-          <ChevronRight width={14} height={14} className="text-[#A4A7AE]" aria-hidden="true" />
-          <span className="text-[13px] text-[#181D27] font-medium" aria-current="page">
-            {TABS.find((t) => t.id === activeTab)?.label ?? 'Projects'}
           </span>
         </nav>
 
@@ -1057,11 +1397,9 @@ export default function FirmDetailPage() {
         id={`tabpanel-${activeTab}`}
         aria-labelledby={activeTab}
       >
-        {activeTab === 'projects' ? (
-          <ProjectsTab firm={firm} tasks={tasks} users={users} />
-        ) : (
-          <ComingSoon />
-        )}
+        {activeTab === 'firm-details' ? <OverviewTab firm={firm!} users={users} /> :
+         activeTab === 'projects'     ? <ProjectsTab firm={firm} tasks={tasks} users={users} /> :
+         <ComingSoon />}
       </div>
     </main>
   );

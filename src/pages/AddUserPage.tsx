@@ -84,7 +84,7 @@ export default function AddUserPage() {
             placeholder="Select role"
             options={ROLE_OPTIONS}
             value={roles}
-            onChange={(vals) => setRoles(vals as SystemRole[])}
+            onChange={(vals) => { if (vals.length > 0) setRoles([vals[vals.length - 1]] as SystemRole[]); }}
             columns={1}
           />
 

@@ -4,7 +4,6 @@ import {
   Trash01,
   Edit01,
   Plus,
-  X,
   HelpCircle,
 } from '@untitled-ui/icons-react';
 import Avatar from '../components/ui/Avatar';
@@ -14,10 +13,16 @@ import Toast from '../components/ui/Toast';
 import ImageCropModal from '../components/ui/ImageCropModal';
 import FileUpload from '../components/ui/FileUpload';
 import Checkbox from '../components/ui/Checkbox';
+import DeleteConfirmModal from '../components/ui/DeleteConfirmModal';
+import SettingsRow from '../components/ui/SettingsRow';
+import SlideOver from '../components/ui/SlideOver';
 import { useAuth } from '../context/AuthContext';
-import { skillsApi, profileApi } from '../lib/api';
-import { useSkills, useCreateSkill, useDeleteSkill } from '../hooks/useSkills';
-import type { User, Skill } from '../lib/api';
+import { profileApi } from '../lib/api';
+import { useSkills, useCreateSkill, useUpdateSkill, useDeleteSkill, useSetSkillMembers } from '../hooks/useSkills';
+import { useOrgSettings, useUploadOrgLogo } from '../hooks/useOrgSettings';
+import { useUsers } from '../hooks/useUsers';
+import { useTaskTypes, useCreateTaskType, useUpdateTaskType, useDeleteTaskType } from '../hooks/useTaskTypes';
+import type { User, Skill, TaskType } from '../lib/api';
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
@@ -31,7 +36,6 @@ const TWO_FA_METHODS: { id: 'app' | 'email'; label: string }[] = [
   { id: 'email', label: 'Email' },
 ];
 
-const EXPERIENCE_OPTIONS = ['0-2 Years', '2-5 Years', '5 Years', '5-10 Years', '10+ Years'];
 
 const TAG_COLORS = [
   '#9B5CFF', '#F04438', '#A3E635', '#22C55E', '#14B8A6', '#3B82F6', '#F97316', '#FB7185',
@@ -45,18 +49,6 @@ function SectionDivider({ title, sub }: { title: string; sub?: string }) {
     <div className="py-5 border-b border-[#E9EAEB]">
       <h3 className="text-sm font-semibold text-[#181D27]">{title}</h3>
       {sub && <p className="text-sm text-[#535862] mt-0.5">{sub}</p>}
-    </div>
-  );
-}
-
-function FormRow({ label, sub, children }: { label: string; sub?: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-start gap-8 py-5 border-b border-[#E9EAEB]">
-      <div className="w-[280px] shrink-0">
-        <p className="text-sm font-medium text-[#414651]">{label}</p>
-        {sub && <p className="text-sm text-[#717680] mt-0.5">{sub}</p>}
-      </div>
-      <div className="w-[512px] shrink-0">{children}</div>
     </div>
   );
 }
@@ -108,6 +100,29 @@ function OrgSubTabBar({ active, onChange }: { active: OrgSubTab; onChange: (t: O
   );
 }
 
+// ── Shared: skill/task-type panel body ───────────────────────────────────────
+
+function SkillPanelFooter({ onClose, onSubmit, loading, submitLabel }: {
+  onClose: () => void;
+  onSubmit: () => void;
+  loading: boolean;
+  submitLabel: string;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-3">
+      <button
+        onClick={onClose}
+        className="px-4 py-2.5 text-sm font-semibold text-[#414651] border border-[#D5D7DA] rounded-lg bg-white hover:bg-gray-50 transition-colors"
+      >
+        Cancel
+      </button>
+      <Button onClick={onSubmit} loading={loading} size="md">
+        {submitLabel}
+      </Button>
+    </div>
+  );
+}
+
 // ── Add Skill panel ───────────────────────────────────────────────────────────
 
 interface AddSkillPanelProps {
@@ -116,18 +131,34 @@ interface AddSkillPanelProps {
 }
 
 function AddSkillPanel({ onClose, onCreated }: AddSkillPanelProps) {
-  const createSkill = useCreateSkill();
+  const createSkill    = useCreateSkill();
+  const setSkillMembers = useSetSkillMembers();
+  const { data: allUsers = [] } = useUsers();
+
   const [skillType,   setSkillType]   = useState('');
   const [description, setDescription] = useState('');
   const [color,       setColor]       = useState(TAG_COLORS[0]);
+  const [memberIds,   setMemberIds]   = useState<string[]>([]);
+  const [showPicker,  setShowPicker]  = useState(false);
   const [error,       setError]       = useState('');
+
+  const isBusy = createSkill.isPending || setSkillMembers.isPending;
+  const selectedMembers  = allUsers.filter((u: User) => memberIds.includes(u.id));
+  const availableMembers = allUsers.filter((u: User) => !memberIds.includes(u.id));
+
+  function toggleMember(id: string) {
+    setMemberIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
 
   async function handleCreate() {
     const name = skillType.trim();
     if (!name) { setError('Skill type is required.'); return; }
     setError('');
     try {
-      await createSkill.mutateAsync({ name, category: color });
+      const created = await createSkill.mutateAsync({ name, description, color });
+      if (memberIds.length > 0) {
+        await setSkillMembers.mutateAsync({ id: created.id, user_ids: memberIds });
+      }
       onCreated();
       onClose();
     } catch (err) {
@@ -136,113 +167,628 @@ function AddSkillPanel({ onClose, onCreated }: AddSkillPanelProps) {
   }
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/20 z-40"
-        onClick={onClose}
-      />
-
-      {/* Panel */}
-      <div className="fixed right-0 top-0 h-full w-[480px] bg-white shadow-xl z-50 flex flex-col">
-        {/* Header */}
-        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-[#E9EAEB]">
-          <div>
-            <h2 className="text-lg font-semibold text-[#181D27]">Add a Skill</h2>
-            <p className="text-sm text-[#535862] mt-0.5">Organize work by creating and managing skills.</p>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-[#717680] transition-colors">
-            <X width={18} height={18} />
-          </button>
+    <SlideOver
+      open
+      onClose={onClose}
+      title="Add a Skill"
+      subtitle="Organize work by creating and managing skills."
+      width="max-w-lg"
+      footer={<SkillPanelFooter onClose={onClose} onSubmit={handleCreate} loading={isBusy} submitLabel="Create" />}
+    >
+      <div className="flex flex-col gap-5">
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-1.5">Skill Type</label>
+          <Input
+            value={skillType}
+            onChange={(e) => { setSkillType(e.target.value); if (error) setError(''); }}
+            placeholder="e.g. Website Design"
+            error={error || undefined}
+          />
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-1.5">Description</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+            rows={5}
+            className="w-full px-3.5 py-2.5 text-sm border border-[#D5D7DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9E77ED] resize-none placeholder:text-[#9DA4AE]"
+          />
+        </div>
 
-          {/* Skill Type */}
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-3">Select Tag Color</label>
+          <ColorPicker selected={color} onChange={setColor} />
+        </div>
+
+        {skillType && (
           <div>
-            <label className="block text-sm font-medium text-[#414651] mb-1.5">Skill Type</label>
-            <Input
-              value={skillType}
-              onChange={(e) => setSkillType(e.target.value)}
-              placeholder="e.g. Website Design"
-              error={error || undefined}
-            />
+            <label className="block text-sm font-medium text-[#414651] mb-1.5">Preview</label>
+            <TagPreview name={skillType} color={color} />
           </div>
+        )}
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-[#414651] mb-1.5">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Lorem ipsum dolor sit amet, consectetur adipiscing elit."
-              rows={5}
-              className="w-full px-3.5 py-2.5 text-sm border border-[#D5D7DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9E77ED] resize-none placeholder:text-[#9DA4AE]"
-            />
-          </div>
-
-          {/* Tag Color */}
-          <div>
-            <label className="block text-sm font-medium text-[#414651] mb-3">Select Tag Color</label>
-            <div className="flex flex-wrap gap-2">
-              {TAG_COLORS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setColor(c)}
-                  className={`w-8 h-8 rounded-full transition-all ${
-                    color === c ? 'ring-2 ring-offset-2 ring-[#7F56D9] scale-110' : 'hover:scale-105'
-                  }`}
-                  style={{ backgroundColor: c }}
-                  aria-label={`Select color ${c}`}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Preview */}
-          {skillType && (
-            <div>
-              <label className="block text-sm font-medium text-[#414651] mb-1.5">Preview</label>
-              <span
-                className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold"
-                style={{ backgroundColor: color + '22', color: color }}
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-3">Team with Skill</label>
+          <div className="flex items-center gap-2 flex-wrap">
+            <MemberAvatarStack members={selectedMembers} />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowPicker((p) => !p)}
+                className="w-8 h-8 rounded-full border border-[#D5D7DA] flex items-center justify-center text-[#717680] hover:bg-gray-50 transition-colors"
               >
-                {skillType}
-              </span>
-            </div>
-          )}
-
-          {/* Team with Skill */}
-          <div>
-            <label className="block text-sm font-medium text-[#414651] mb-3">Team with Skill</label>
-            <div className="flex items-center gap-2">
-              <div className="flex -space-x-2">
-                {[0,1,2,3,4].map((i) => (
-                  <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gray-200" />
-                ))}
-              </div>
-              <button className="w-8 h-8 rounded-full border border-[#D5D7DA] flex items-center justify-center text-[#717680] hover:bg-gray-50 transition-colors">
                 <Plus width={14} height={14} />
               </button>
+              {showPicker && (
+                <div className="absolute left-0 top-10 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg w-56 max-h-52 overflow-y-auto">
+                  {availableMembers.length === 0 ? (
+                    <p className="text-xs text-[#717680] px-3 py-2">All members added</p>
+                  ) : (
+                    availableMembers.map((u: User) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => { toggleMember(u.id); setShowPicker(false); }}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#181D27] hover:bg-gray-50 transition-colors"
+                      >
+                        <Avatar src={u.avatar_url ?? undefined} name={u.name} size="xs" />
+                        <span className="truncate">{u.name}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
+            {selectedMembers.map((u: User) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => toggleMember(u.id)}
+                className="flex items-center gap-1 text-xs text-[#535862] bg-gray-100 hover:bg-red-50 hover:text-red-600 rounded-full px-2 py-1 transition-colors"
+                title={`Remove ${u.name}`}
+              >
+                {u.name} ×
+              </button>
+            ))}
           </div>
         </div>
+      </div>
+    </SlideOver>
+  );
+}
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-[#E9EAEB] flex items-center justify-end gap-3">
+// ── Edit Skill panel ──────────────────────────────────────────────────────────
+
+interface EditSkillPanelProps {
+  skill: Skill;
+  onClose: () => void;
+}
+
+function EditSkillPanel({ skill, onClose }: EditSkillPanelProps) {
+  const updateSkill     = useUpdateSkill();
+  const setSkillMembers = useSetSkillMembers();
+  const { data: allUsers = [] } = useUsers();
+
+  const [name,        setName]        = useState(skill.name);
+  const [description, setDescription] = useState(skill.description ?? '');
+  const [color,       setColor]       = useState(skill.color ?? TAG_COLORS[0]);
+  const [memberIds,   setMemberIds]   = useState<string[]>((skill.members ?? []).map((m) => m.id));
+  const [showPicker,  setShowPicker]  = useState(false);
+  const [error,       setError]       = useState('');
+
+  const isBusy = updateSkill.isPending || setSkillMembers.isPending;
+  const selectedMembers  = allUsers.filter((u: User) => memberIds.includes(u.id));
+  const availableMembers = allUsers.filter((u: User) => !memberIds.includes(u.id));
+
+  function toggleMember(id: string) {
+    setMemberIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
+
+  async function handleSave() {
+    if (!name.trim()) { setError('Skill name is required.'); return; }
+    setError('');
+    try {
+      await updateSkill.mutateAsync({
+        id: skill.id,
+        payload: { name: name.trim(), description: description.trim() || undefined, color },
+      });
+      await setSkillMembers.mutateAsync({ id: skill.id, user_ids: memberIds });
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <SlideOver
+      open
+      onClose={onClose}
+      title="Edit Skill"
+      subtitle="Update the skill name, description or colour."
+      width="max-w-lg"
+      footer={<SkillPanelFooter onClose={onClose} onSubmit={handleSave} loading={isBusy} submitLabel="Save changes" />}
+    >
+      <div className="flex flex-col gap-5">
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-1.5">Skill Type</label>
+          <Input
+            value={name}
+            onChange={(e) => { setName(e.target.value); if (error) setError(''); }}
+            placeholder="e.g. Website Design"
+            error={error || undefined}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-1.5">Description</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe what this skill covers…"
+            rows={5}
+            className="w-full px-3.5 py-2.5 text-sm border border-[#D5D7DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9E77ED] resize-none placeholder:text-[#9DA4AE]"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-3">Select Tag Color</label>
+          <ColorPicker selected={color} onChange={setColor} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-1.5">Preview</label>
+          <TagPreview name={name || skill.name} color={color} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-3">Team with Skill</label>
+          <div className="flex items-center gap-2 flex-wrap">
+            <MemberAvatarStack members={selectedMembers} />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowPicker((p) => !p)}
+                className="w-8 h-8 rounded-full border border-[#D5D7DA] flex items-center justify-center text-[#717680] hover:bg-gray-50 transition-colors"
+              >
+                <Plus width={14} height={14} />
+              </button>
+              {showPicker && (
+                <div className="absolute left-0 top-10 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg w-56 max-h-52 overflow-y-auto">
+                  {availableMembers.length === 0 ? (
+                    <p className="text-xs text-[#717680] px-3 py-2">All members added</p>
+                  ) : (
+                    availableMembers.map((u: User) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => { toggleMember(u.id); setShowPicker(false); }}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#181D27] hover:bg-gray-50 transition-colors"
+                      >
+                        <Avatar src={u.avatar_url ?? undefined} name={u.name} size="xs" />
+                        <span className="truncate">{u.name}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+            {selectedMembers.map((u: User) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => toggleMember(u.id)}
+                className="flex items-center gap-1 text-xs text-[#535862] bg-gray-100 hover:bg-red-50 hover:text-red-600 rounded-full px-2 py-1 transition-colors"
+                title={`Remove ${u.name}`}
+              >
+                {u.name} ×
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </SlideOver>
+  );
+}
+
+// ── Shared: color picker ──────────────────────────────────────────────────────
+
+function ColorPicker({ selected, onChange }: { selected: string; onChange: (c: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {TAG_COLORS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => onChange(c)}
+          className={`w-8 h-8 rounded-full transition-all ${
+            selected === c ? 'ring-2 ring-offset-2 ring-[#7F56D9] scale-110' : 'hover:scale-105'
+          }`}
+          style={{ backgroundColor: c }}
+          aria-label={`Select color ${c}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Shared: tag badge preview ─────────────────────────────────────────────────
+
+function TagPreview({ name, color }: { name: string; color: string }) {
+  return (
+    <span
+      className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold"
+      style={{ backgroundColor: color + '22', color }}
+    >
+      {name}
+    </span>
+  );
+}
+
+// ── Shared: member avatar stack ───────────────────────────────────────────────
+
+function MemberAvatarStack({ members, max = 5 }: { members: { id: string; name: string; avatar_url: string | null }[]; max?: number }) {
+  const visible = members.slice(0, max);
+  const extra   = members.length - visible.length;
+  return (
+    <div className="flex items-center gap-1">
+      <div className="flex -space-x-2">
+        {visible.length > 0
+          ? visible.map((m) => (
+              <div key={m.id} className="w-7 h-7 rounded-full border-2 border-white overflow-hidden shrink-0">
+                <Avatar src={m.avatar_url ?? undefined} name={m.name} size="xs" />
+              </div>
+            ))
+          : [0, 1, 2].map((i) => (
+              <div key={i} className="w-7 h-7 rounded-full border-2 border-white bg-gray-200 shrink-0" />
+            ))
+        }
+      </div>
+      {extra > 0 && <span className="text-xs text-[#535862] ml-1">+{extra}</span>}
+    </div>
+  );
+}
+
+// ── Shared: pagination ────────────────────────────────────────────────────────
+
+function pageNumbers(page: number, totalPages: number): (number | '...')[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const arr: (number | '...')[] = [1, 2, 3, '...'];
+  for (let i = Math.max(4, totalPages - 2); i <= totalPages; i++) arr.push(i);
+  return arr;
+}
+
+function Pagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-[#E9EAEB]">
+      <button
+        onClick={() => onPage(Math.max(1, page - 1))}
+        disabled={page === 1}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#414651] border border-[#D5D7DA] rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
+      >
+        ← Previous
+      </button>
+      <div className="flex items-center gap-1">
+        {pageNumbers(page, totalPages).map((n, i) =>
+          n === '...' ? (
+            <span key={`e-${i}`} className="px-2 text-sm text-[#717680]">…</span>
+          ) : (
+            <button
+              key={n}
+              onClick={() => onPage(n as number)}
+              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                page === n ? 'bg-[#F9F5FF] text-[#7F56D9]' : 'text-[#535862] hover:bg-gray-100'
+              }`}
+            >
+              {n}
+            </button>
+          ),
+        )}
+      </div>
+      <button
+        onClick={() => onPage(Math.min(totalPages, page + 1))}
+        disabled={page === totalPages}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#414651] border border-[#D5D7DA] rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
+      >
+        Next →
+      </button>
+    </div>
+  );
+}
+
+// ── Task Type Management ──────────────────────────────────────────────────────
+
+const TASK_TYPES_PER_PAGE = 6;
+
+interface TaskTypePanelProps {
+  taskType?: TaskType;
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function TaskTypePanel({ taskType, open, onClose, onSaved }: TaskTypePanelProps) {
+  const isEdit = !!taskType;
+  const createTaskType = useCreateTaskType();
+  const updateTaskType = useUpdateTaskType();
+  const { data: allUsers = [] } = useUsers();
+
+  const [name,        setName]        = useState(taskType?.name ?? '');
+  const [description, setDescription] = useState(taskType?.description ?? '');
+  const [color,       setColor]       = useState(taskType?.color ?? TAG_COLORS[0]);
+  const [memberIds,   setMemberIds]   = useState<string[]>(taskType?.members.map((m) => m.id) ?? []);
+  const [showPicker,  setShowPicker]  = useState(false);
+  const [error,       setError]       = useState('');
+
+  const isBusy = createTaskType.isPending || updateTaskType.isPending;
+
+  async function handleSubmit() {
+    const trimmed = name.trim();
+    if (!trimmed) { setError('Task type name is required.'); return; }
+    setError('');
+    try {
+      if (isEdit) {
+        await updateTaskType.mutateAsync({
+          id: taskType.id,
+          payload: { name: trimmed, description: description.trim() || undefined, color, member_ids: memberIds },
+        });
+      } else {
+        await createTaskType.mutateAsync({
+          name: trimmed,
+          description: description.trim() || undefined,
+          color,
+          member_ids: memberIds,
+        });
+      }
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  const selectedMembers = allUsers.filter((u: User) => memberIds.includes(u.id));
+  const availableMembers = allUsers.filter((u: User) => !memberIds.includes(u.id));
+
+  function toggleMember(id: string) {
+    setMemberIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  return (
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      title={isEdit ? 'Edit Task Type' : 'Create A Task Type'}
+      subtitle={isEdit ? 'Update the task type name, description or colour.' : 'Redesign of untitledui.com'}
+      width="max-w-lg"
+      footer={
+        <div className="flex items-center justify-end gap-3">
           <button
             onClick={onClose}
             className="px-4 py-2.5 text-sm font-semibold text-[#414651] border border-[#D5D7DA] rounded-lg bg-white hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
-          <Button onClick={handleCreate} loading={createSkill.isPending} size="md">
-            Create
+          <Button onClick={handleSubmit} loading={isBusy} size="md">
+            {isEdit ? 'Save changes' : 'Create'}
           </Button>
         </div>
+      }
+    >
+      <div className="flex flex-col gap-5">
+        {/* Name */}
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-1.5">Task Type Name</label>
+          <Input
+            value={name}
+            onChange={(e) => { setName(e.target.value); if (error) setError(''); }}
+            placeholder="e.g. Website Design"
+            error={error || undefined}
+          />
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-1.5">Description</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+            rows={5}
+            className="w-full px-3.5 py-2.5 text-sm border border-[#D5D7DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9E77ED] resize-none placeholder:text-[#9DA4AE]"
+          />
+        </div>
+
+        {/* Color picker */}
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-3">Select Tag Color</label>
+          <ColorPicker selected={color} onChange={setColor} />
+        </div>
+
+        {/* Preview */}
+        {name && (
+          <div>
+            <label className="block text-sm font-medium text-[#414651] mb-1.5">Preview</label>
+            <TagPreview name={name} color={color} />
+          </div>
+        )}
+
+        {/* Default Team */}
+        <div>
+          <label className="block text-sm font-medium text-[#414651] mb-3">Default Team</label>
+          <div className="flex items-center gap-2 flex-wrap">
+            <MemberAvatarStack members={selectedMembers} />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowPicker((p) => !p)}
+                className="w-8 h-8 rounded-full border border-[#D5D7DA] flex items-center justify-center text-[#717680] hover:bg-gray-50 transition-colors"
+              >
+                <Plus width={14} height={14} />
+              </button>
+              {showPicker && (
+                <div className="absolute left-0 top-10 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg w-56 max-h-52 overflow-y-auto">
+                  {availableMembers.length === 0 ? (
+                    <p className="text-xs text-[#717680] px-3 py-2">All members added</p>
+                  ) : (
+                    availableMembers.map((u: User) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => { toggleMember(u.id); setShowPicker(false); }}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#181D27] hover:bg-gray-50 transition-colors"
+                      >
+                        <Avatar src={u.avatar_url ?? undefined} name={u.name} size="xs" />
+                        <span className="truncate">{u.name}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+            {selectedMembers.map((u: User) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => toggleMember(u.id)}
+                className="flex items-center gap-1 text-xs text-[#535862] bg-gray-100 hover:bg-red-50 hover:text-red-600 rounded-full px-2 py-1 transition-colors"
+                title={`Remove ${u.name}`}
+              >
+                {u.name} ×
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-    </>
+    </SlideOver>
+  );
+}
+
+function TaskTypeManagement() {
+  const { data: taskTypes = [], isLoading, refetch } = useTaskTypes();
+  const deleteTaskType = useDeleteTaskType();
+
+  const [panelOpen,     setPanelOpen]     = useState(false);
+  const [editingType,   setEditingType]   = useState<TaskType | null>(null);
+  const [page,          setPage]          = useState(1);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+
+  const totalPages = Math.max(1, Math.ceil(taskTypes.length / TASK_TYPES_PER_PAGE));
+  const paginated  = taskTypes.slice((page - 1) * TASK_TYPES_PER_PAGE, page * TASK_TYPES_PER_PAGE);
+
+  function openCreate() { setEditingType(null); setPanelOpen(true); }
+  function openEdit(tt: TaskType) { setEditingType(tt); setPanelOpen(true); }
+  function closePanel() { setPanelOpen(false); setEditingType(null); }
+
+  async function handleDeleteConfirm() {
+    if (!pendingDelete) return;
+    await deleteTaskType.mutateAsync(pendingDelete.id).catch(() => {});
+    setPendingDelete(null);
+  }
+
+  return (
+    <div className="relative">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-lg font-semibold text-[#181D27]">Task Type Management</h2>
+        <button
+          onClick={openCreate}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#7F56D9] text-white text-sm font-semibold hover:bg-[#6941C6] transition-colors"
+        >
+          <Plus width={16} height={16} />
+          Create A Task Type
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="border border-[#E9EAEB] rounded-xl overflow-hidden">
+        <div className="grid grid-cols-[200px_1fr_180px_160px_72px] items-center px-4 py-3 bg-gray-50 border-b border-[#E9EAEB]">
+          <span className="text-xs font-semibold text-[#535862] uppercase tracking-wider">Task Type</span>
+          <span className="flex items-center gap-1 text-xs font-semibold text-[#535862] uppercase tracking-wider">
+            Description <HelpCircle width={14} height={14} className="text-[#9DA4AE]" />
+          </span>
+          <span className="text-xs font-semibold text-[#535862] uppercase tracking-wider">Default Team</span>
+          <span className="text-xs font-semibold text-[#535862] uppercase tracking-wider">Usage</span>
+          <span />
+        </div>
+
+        {isLoading ? (
+          <div className="px-4 py-8 text-sm text-[#717680] text-center">Loading…</div>
+        ) : taskTypes.length === 0 ? (
+          <div className="px-4 py-8 text-sm text-[#717680] text-center">
+            No task types yet. Click "Create A Task Type" to get started.
+          </div>
+        ) : (
+          paginated.map((tt) => {
+            const color = tt.color ?? TAG_COLORS[0];
+            return (
+              <div
+                key={tt.id}
+                className="grid grid-cols-[200px_1fr_180px_160px_72px] items-center px-4 py-4 border-b border-[#E9EAEB] last:border-b-0 bg-white hover:bg-gray-50/50 transition-colors"
+              >
+                <div>
+                  <TagPreview name={tt.name} color={color} />
+                </div>
+                <p className="text-sm text-[#535862] pr-4 line-clamp-1">
+                  {tt.description || 'No description available.'}
+                </p>
+                <MemberAvatarStack members={tt.members} max={3} />
+                <span className="text-sm font-semibold text-[#6941C6]">
+                  {String(tt.task_count).padStart(2, '0')} Tasks
+                </span>
+                <div className="flex items-center gap-1 justify-end">
+                  <button
+                    onClick={() => setPendingDelete({ id: tt.id, name: tt.name })}
+                    disabled={deleteTaskType.isPending}
+                    className="p-1.5 rounded-lg text-[#717680] hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+                    aria-label={`Delete ${tt.name}`}
+                  >
+                    <Trash01 width={16} height={16} />
+                  </button>
+                  <button
+                    onClick={() => openEdit(tt)}
+                    className="p-1.5 rounded-lg text-[#717680] hover:text-[#7F56D9] hover:bg-[#F9F5FF] transition-colors"
+                    aria-label={`Edit ${tt.name}`}
+                  >
+                    <Edit01 width={16} height={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        <Pagination page={page} totalPages={totalPages} onPage={setPage} />
+      </div>
+
+      {/* Add / Edit panel — key forces remount so useState initialises fresh */}
+      <TaskTypePanel
+        key={editingType?.id ?? 'new'}
+        open={panelOpen}
+        taskType={editingType ?? undefined}
+        onClose={closePanel}
+        onSaved={() => { refetch(); if (!editingType) setPage(1); }}
+      />
+
+      {/* Delete confirmation */}
+      <DeleteConfirmModal
+        open={!!pendingDelete}
+        title="Delete task type?"
+        description={
+          <>
+            <span className="font-medium text-[#181D27]">{pendingDelete?.name}</span>
+            {' '}will be removed. Existing tickets linked to this type will have their type cleared. This action cannot be undone.
+          </>
+        }
+        deleting={deleteTaskType.isPending}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={handleDeleteConfirm}
+      />
+    </div>
   );
 }
 
@@ -253,23 +799,18 @@ const SKILLS_PER_PAGE = 6;
 function SkillManagement() {
   const { data: skills = [], isLoading, refetch } = useSkills();
   const deleteSkill = useDeleteSkill();
-  const [showAdd,  setShowAdd]  = useState(false);
-  const [page,     setPage]     = useState(1);
+  const [showAdd,          setShowAdd]          = useState(false);
+  const [editingSkill,     setEditingSkill]     = useState<Skill | null>(null);
+  const [page,             setPage]             = useState(1);
+  const [pendingDelete,    setPendingDelete]    = useState<{ id: string; name: string } | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(skills.length / SKILLS_PER_PAGE));
   const paginated  = skills.slice((page - 1) * SKILLS_PER_PAGE, page * SKILLS_PER_PAGE);
 
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this skill? This cannot be undone.')) return;
-    await deleteSkill.mutateAsync(id).catch(() => {});
-  }
-
-  // Pagination numbers (e.g. 1 2 3 ... 8 9 10)
-  function pageNumbers(): (number | '...')[] {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const arr: (number | '...')[] = [1, 2, 3, '...'];
-    for (let i = Math.max(4, totalPages - 2); i <= totalPages; i++) arr.push(i);
-    return arr;
+  async function handleDeleteConfirm() {
+    if (!pendingDelete) return;
+    await deleteSkill.mutateAsync(pendingDelete.id).catch(() => {});
+    setPendingDelete(null);
   }
 
   return (
@@ -308,8 +849,7 @@ function SkillManagement() {
           </div>
         ) : (
           paginated.map((skill: Skill) => {
-            const color = skill.category ?? TAG_COLORS[0];
-            const isHex = color.startsWith('#');
+            const color = skill.color ?? TAG_COLORS[0];
             return (
               <div
                 key={skill.id}
@@ -317,31 +857,17 @@ function SkillManagement() {
               >
                 {/* Skill badge */}
                 <div>
-                  <span
-                    className="inline-block px-2.5 py-1 rounded-full text-xs font-semibold"
-                    style={
-                      isHex
-                        ? { backgroundColor: color + '22', color }
-                        : {}
-                    }
-                  >
-                    {skill.name}
-                  </span>
+                  <TagPreview name={skill.name} color={color} />
                 </div>
 
                 {/* Description */}
                 <p className="text-sm text-[#535862] pr-4 line-clamp-1">
-                  Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                  {skill.description || 'No description available.'}
                 </p>
 
-                {/* Members with skill — placeholder avatars */}
-                <div className="flex items-center gap-1">
-                  <div className="flex -space-x-2">
-                    {[0,1,2].map((i) => (
-                      <div key={i} className="w-7 h-7 rounded-full border-2 border-white bg-gray-200 shrink-0" />
-                    ))}
-                  </div>
-                  <span className="text-xs text-[#535862] ml-1">+5</span>
+                {/* Members with skill */}
+                <div>
+                  <MemberAvatarStack members={skill.members ?? []} max={3} />
                 </div>
 
                 {/* On going usage */}
@@ -352,7 +878,7 @@ function SkillManagement() {
                 {/* Actions */}
                 <div className="flex items-center gap-1 justify-end">
                   <button
-                    onClick={() => handleDelete(skill.id)}
+                    onClick={() => setPendingDelete({ id: skill.id, name: skill.name })}
                     disabled={deleteSkill.isPending}
                     className="p-1.5 rounded-lg text-[#717680] hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
                     aria-label={`Delete ${skill.name}`}
@@ -360,6 +886,7 @@ function SkillManagement() {
                     <Trash01 width={16} height={16} />
                   </button>
                   <button
+                    onClick={() => setEditingSkill(skill)}
                     className="p-1.5 rounded-lg text-[#717680] hover:text-[#7F56D9] hover:bg-[#F9F5FF] transition-colors"
                     aria-label={`Edit ${skill.name}`}
                   >
@@ -371,46 +898,7 @@ function SkillManagement() {
           })
         )}
 
-        {/* Pagination */}
-        {skills.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-[#E9EAEB]">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#414651] border border-[#D5D7DA] rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
-            >
-              ← Previous
-            </button>
-
-            <div className="flex items-center gap-1">
-              {pageNumbers().map((n, i) =>
-                n === '...' ? (
-                  <span key={`ellipsis-${i}`} className="px-2 text-sm text-[#717680]">…</span>
-                ) : (
-                  <button
-                    key={n}
-                    onClick={() => setPage(n as number)}
-                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                      page === n
-                        ? 'bg-[#F9F5FF] text-[#7F56D9]'
-                        : 'text-[#535862] hover:bg-gray-100'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ),
-              )}
-            </div>
-
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#414651] border border-[#D5D7DA] rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
-            >
-              Next →
-            </button>
-          </div>
-        )}
+        <Pagination page={page} totalPages={totalPages} onPage={setPage} />
       </div>
 
       {/* Add skill drawer */}
@@ -420,6 +908,28 @@ function SkillManagement() {
           onCreated={() => { refetch(); setPage(1); }}
         />
       )}
+
+      {/* Edit skill drawer */}
+      {editingSkill && (
+        <EditSkillPanel
+          skill={editingSkill}
+          onClose={() => setEditingSkill(null)}
+        />
+      )}
+
+      <DeleteConfirmModal
+        open={!!pendingDelete}
+        title="Delete skill?"
+        description={
+          <>
+            <span className="font-medium text-[#181D27]">{pendingDelete?.name}</span>
+            {' '}will be removed from the catalog and unassigned from all team members. This action cannot be undone.
+          </>
+        }
+        deleting={deleteSkill.isPending}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 }
@@ -436,7 +946,14 @@ export default function SettingsPage() {
   const [saving,     setSaving]     = useState(false);
   const [showToast,  setShowToast]  = useState(false);
   const [toastMsg,   setToastMsg]   = useState('');
-  const [allSkills,  setAllSkills]  = useState<Skill[]>([]);
+  const [toastType,  setToastType]  = useState<'success' | 'error'>('success');
+
+  function notify(msg: string, type: 'success' | 'error' = 'success') {
+    setToastMsg(msg);
+    setToastType(type);
+    setShowToast(true);
+  }
+  const { data: allSkills = [] } = useSkills();
 
   // Personal form state
   const [firstName,      setFirstName]      = useState('');
@@ -449,6 +966,13 @@ export default function SettingsPage() {
   const [cropSrc,         setCropSrc]         = useState<string | null>(null);
   const [avatarUrl,       setAvatarUrl]       = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // Org logo
+  const { data: orgSettings } = useOrgSettings();
+  const uploadOrgLogo = useUploadOrgLogo();
+  const [orgLogoCropSrc,    setOrgLogoCropSrc]    = useState<string | null>(null);
+  const [orgLogoUrl,        setOrgLogoUrl]        = useState<string | null>(null);
+  const [uploadingOrgLogo,  setUploadingOrgLogo]  = useState(false);
 
   // 2FA
   const [twoFAMethod, setTwoFAMethod] = useState<'app' | 'email' | null>(null);
@@ -467,11 +991,50 @@ export default function SettingsPage() {
         experience: (s as Skill & { experience?: string | null }).experience ?? null,
       })),
     );
-    skillsApi.list()
-      .then(setAllSkills)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    setLoading(false);
   }, [authUser]);
+
+  // ── Sync org logo from query data (initial load only) ───────────────────────
+
+  useEffect(() => {
+    if (orgSettings?.logo_url && !orgLogoUrl) {
+      setOrgLogoUrl(orgSettings.logo_url);
+    }
+  }, [orgSettings]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Org logo handlers ────────────────────────────────────────────────────────
+
+  function handleOrgLogoFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      setUploadingOrgLogo(true);
+      try {
+        const result = await uploadOrgLogo.mutateAsync(dataUrl);
+        setOrgLogoUrl(result.logo_url);
+        notify('Logo updated successfully');
+      } catch (err) {
+        notify((err as Error).message, 'error');
+      } finally {
+        setUploadingOrgLogo(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleOrgLogoCropComplete(dataUrl: string) {
+    setOrgLogoCropSrc(null);
+    setUploadingOrgLogo(true);
+    try {
+      const result = await uploadOrgLogo.mutateAsync(dataUrl);
+      setOrgLogoUrl(result.logo_url);
+      notify('Logo updated successfully');
+    } catch (err) {
+      notify((err as Error).message, 'error');
+    } finally {
+      setUploadingOrgLogo(false);
+    }
+  }
 
   // ── Avatar ───────────────────────────────────────────────────────────────────
 
@@ -513,12 +1076,10 @@ export default function SettingsPage() {
         })),
       });
       setProfile(updated);
-      setToastMsg('Profile updated successfully');
-      setShowToast(true);
+      notify('Profile updated successfully');
       refreshUser().catch(() => {});
     } catch (err) {
-      setToastMsg((err as Error).message);
-      setShowToast(true);
+      notify((err as Error).message, 'error');
     } finally {
       setSaving(false);
     }
@@ -568,25 +1129,25 @@ export default function SettingsPage() {
           />
 
           {/* Name */}
-          <FormRow label="Name">
+          <SettingsRow label="Name">
             <div className="flex gap-4">
               <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" className="flex-1" />
               <Input value={lastName}  onChange={(e) => setLastName(e.target.value)}  placeholder="Last name"  className="flex-1" />
             </div>
-          </FormRow>
+          </SettingsRow>
 
           {/* Email */}
-          <FormRow label="Email address" sub="This is your current email address.">
+          <SettingsRow label="Email address" sub="This is your current email address.">
             <Input
               value={profile?.email ?? authUser?.email ?? ''}
               readOnly
               leftIcon={<Mail01 width={16} height={16} />}
               className="bg-gray-50 text-[#717680] cursor-not-allowed"
             />
-          </FormRow>
+          </SettingsRow>
 
           {/* Photo */}
-          <FormRow label="Your photo" sub="This will be displayed on your profile.">
+          <SettingsRow label="Your photo" sub="This will be displayed on your profile.">
             <div className="flex items-start gap-5">
               <div className="relative shrink-0">
                 <Avatar src={avatarUrl ?? undefined} name={displayName} size="lg" className="w-16 h-16" />
@@ -600,10 +1161,10 @@ export default function SettingsPage() {
                 <FileUpload accept="image/png,image/jpeg,image/gif,image/webp" maxSizeMB={2} onFile={handleAvatarFile} />
               </div>
             </div>
-          </FormRow>
+          </SettingsRow>
 
           {/* System role */}
-          <FormRow label="System role" sub="Your access level in the platform.">
+          <SettingsRow label="System role" sub="Your access level in the platform.">
             <div className="flex items-center gap-2 px-3 py-2.5 border border-[#D5D7DA] rounded-lg bg-gray-50">
               <span className="text-sm text-[#717680] capitalize">
                 {(profile?.role ?? authUser?.role ?? '').replace('_', ' ')}
@@ -612,7 +1173,7 @@ export default function SettingsPage() {
                 {(profile?.role ?? authUser?.role ?? '').replace('_', ' ')}
               </span>
             </div>
-          </FormRow>
+          </SettingsRow>
 
           {/* Save */}
           <div className="flex gap-3 pt-5 pl-[312px]">
@@ -635,7 +1196,7 @@ export default function SettingsPage() {
           </div>
 
           {/* 2FA */}
-          <FormRow
+          <SettingsRow
             label="Two-factor authentication"
             sub="Keep your account secure by enabling 2FA via email or authenticator app."
           >
@@ -683,10 +1244,10 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-          </FormRow>
+          </SettingsRow>
 
           {/* My skills */}
-          <FormRow label="Skills" sub="Add skills to help your team understand your expertise.">
+          <SettingsRow label="Skills" sub="Add skills to help your team understand your expertise.">
             {selectedSkills.length > 0 && (
               <div className="flex flex-wrap gap-3 mb-4">
                 {selectedSkills.map(({ id, experience }) => {
@@ -704,16 +1265,13 @@ export default function SettingsPage() {
                         <p className="text-sm font-medium text-[#181D27]">{skill.name}</p>
                         {editingSkillId === id ? (
                           <div className="flex items-center gap-1 mt-0.5">
-                            <select
+                            <input
+                              type="text"
                               value={editExp}
                               onChange={(e) => setEditExp(e.target.value)}
-                              className="text-xs border border-[#D5D7DA] rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#9E77ED]"
-                            >
-                              <option value="">No experience</option>
-                              {EXPERIENCE_OPTIONS.map((o) => (
-                                <option key={o} value={o}>{o}</option>
-                              ))}
-                            </select>
+                              placeholder="e.g. 2-5 years"
+                              className="text-xs border border-[#D5D7DA] rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#9E77ED] w-28"
+                            />
                             <button
                               onClick={() => {
                                 setSelectedSkills((prev) =>
@@ -765,7 +1323,7 @@ export default function SettingsPage() {
                 <p className="text-sm text-[#717680]">No skills available.</p>
               )}
             </div>
-          </FormRow>
+          </SettingsRow>
 
         </div>
       )}
@@ -781,17 +1339,42 @@ export default function SettingsPage() {
           <OrgSubTabBar active={orgSubTab} onChange={setOrgSubTab} />
 
           {orgSubTab === 'details' && (
-            <div className="py-12 flex flex-col items-center gap-3 text-center">
-              <div className="w-12 h-12 rounded-xl bg-[#F4EBFF] flex items-center justify-center">
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                  <path d="M11 2L13.5 7H19L14.7 10.5 16.4 16 11 13 5.6 16 7.3 10.5 3 7H8.5L11 2Z"
-                    fill="#7F56D9" fillOpacity="0.2" stroke="#7F56D9" strokeWidth="1.5" strokeLinejoin="round"/>
-                </svg>
+            <div className="py-5 border-b border-[#E9EAEB]">
+              {/* Label row */}
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="text-sm font-semibold text-[#181D27]">Upload logo</span>
+                <span className="text-red-500 text-sm">*</span>
+                <HelpCircle width={14} height={14} className="text-[#9DA4AE]" />
               </div>
-              <p className="text-sm font-semibold text-[#181D27]">Coming soon</p>
-              <p className="text-sm text-[#717680] max-w-sm">
-                Organisation details configuration will be available in a future update.
-              </p>
+              <p className="text-sm text-[#535862] mb-4">This will be displayed on your profile.</p>
+
+              <div className="flex items-start gap-5 max-w-lg">
+                {/* Current logo preview */}
+                {orgLogoUrl && (
+                  <div className="relative w-16 h-16 shrink-0">
+                    <div className="w-16 h-16 rounded-xl border border-[#E9EAEB] bg-white overflow-hidden flex items-center justify-center">
+                      <img
+                        src={orgLogoUrl}
+                        alt="Organisation logo"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    {uploadingOrgLogo && (
+                      <div className="absolute inset-0 bg-white/70 rounded-xl flex items-center justify-center">
+                        <div className="w-4 h-4 border-2 border-[#7F56D9] border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Upload zone */}
+                <div className="flex-1">
+                  <FileUpload
+                    accept="image/svg+xml,image/png,image/jpeg,image/gif"
+                    maxSizeMB={0.8}
+                    onFile={handleOrgLogoFile}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
@@ -801,28 +1384,36 @@ export default function SettingsPage() {
 
       {/* ── Project Settings ──────────────────────────────────────────────────── */}
       {mainTab === 'projects' && (
-        <div className="px-8 py-12 flex flex-col items-center gap-3 text-center">
-          <div className="w-12 h-12 rounded-xl bg-[#F4EBFF] flex items-center justify-center">
-            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-              <rect x="3" y="3" width="16" height="16" rx="3" fill="#7F56D9" fillOpacity="0.15" stroke="#7F56D9" strokeWidth="1.5"/>
-              <path d="M7 11h8M7 7h8M7 15h5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
+        <div className="px-8 pb-12">
+          <div className="py-5 border-b border-[#E9EAEB]">
+            <h2 className="text-lg font-semibold text-[#181D27]">Project settings</h2>
+            <p className="text-sm text-[#535862] mt-0.5">Update your project and task settings here.</p>
           </div>
-          <p className="text-sm font-semibold text-[#181D27]">Coming soon</p>
-          <p className="text-sm text-[#717680] max-w-sm">
-            Project settings configuration will be available in a future update.
-          </p>
+
+          {/* Sub-tab — same pill style as OrgSubTabBar */}
+          <div className="flex gap-2 mt-6 mb-6">
+            <button className="px-4 py-2 text-sm font-medium rounded-lg border border-[#7F56D9] text-[#7F56D9] bg-white">
+              Task types
+            </button>
+          </div>
+
+          <TaskTypeManagement />
         </div>
       )}
 
       {/* Toast */}
       {showToast && (
-        <Toast message={toastMsg} subtitle="" onClose={() => setShowToast(false)} />
+        <Toast message={toastMsg} type={toastType} onClose={() => setShowToast(false)} />
       )}
 
       {/* Avatar crop modal */}
       {cropSrc && (
         <ImageCropModal src={cropSrc} onSave={handleCropComplete} onCancel={() => setCropSrc(null)} />
+      )}
+
+      {/* Org logo crop modal */}
+      {orgLogoCropSrc && (
+        <ImageCropModal src={orgLogoCropSrc} onSave={handleOrgLogoCropComplete} onCancel={() => setOrgLogoCropSrc(null)} transparent />
       )}
     </main>
   );

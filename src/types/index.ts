@@ -15,15 +15,6 @@ export interface TeamMember {
   skills: string[];
 }
 
-// ── Tasks ─────────────────────────────────────────────────────────────────────
-
-export interface Task {
-  id: string;
-  title: string;
-  isParent?: boolean;
-  children?: Task[];
-}
-
 // ── Forms ─────────────────────────────────────────────────────────────────────
 
 export type SystemRole = 'admin' | 'member';

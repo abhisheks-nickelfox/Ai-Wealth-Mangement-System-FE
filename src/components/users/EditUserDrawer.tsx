@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Save01, Plus } from '@untitled-ui/icons-react';
+import { Save01, Plus, Trash01 } from '@untitled-ui/icons-react';
 import SlideOver from '../ui/SlideOver';
 import MultiSelect from '../ui/MultiSelect';
 import Avatar from '../ui/Avatar';
@@ -13,9 +13,14 @@ import { useMemberRoles, useCreateMemberRole } from '../../hooks/useMemberRoles'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface SkillEntry {
+  id:         string;
+  experience: string;
+}
+
 interface EditUserDrawerProps {
-  user: User | null;
-  open: boolean;
+  user:    User | null;
+  open:    boolean;
   onClose: () => void;
   onSaved: (updated: User) => void;
 }
@@ -28,8 +33,9 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
   const [roles,           setRoles]           = useState<string[]>([]);
   const [status,          setStatus]          = useState<string[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
-  const [selectedSkillIds,setSelectedSkillIds]= useState<string[]>([]);
+  const [selectedSkills,  setSelectedSkills]  = useState<SkillEntry[]>([]);
   const [error,           setError]           = useState('');
+  const [skillErrors,     setSkillErrors]     = useState<Record<string, boolean>>({});
 
   // Inline add panels
   const [showRoleForm,  setShowRoleForm]  = useState(false);
@@ -38,7 +44,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
   const [skillAddError, setSkillAddError] = useState('');
 
   // TanStack Query hooks
-  const { data: liveUser } = useUser(user?.id ?? '');
+  const { data: liveUser }                                   = useUser(user?.id ?? '');
   const { data: memberRoles = [], isLoading: memberRolesLoading } = useMemberRoles();
   const { data: skills = [],      isLoading: skillsLoading }      = useSkills();
   const updateUser       = useUpdateUser();
@@ -53,10 +59,16 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
     const u = liveUser ?? user;
     if (!u) return;
     setName(u.name);
-    setRoles([u.role === 'super_admin' ? 'admin' : u.role]);
+    setRoles([u.role]);
     setStatus([u.status]);
-    setSelectedSkillIds(u.skills.map((s) => s.id));
+    setSelectedSkills(
+      u.skills.map((s) => ({
+        id:         s.id,
+        experience: (s as typeof s & { experience?: string | null }).experience ?? '',
+      })),
+    );
     setError('');
+    setSkillErrors({});
     setShowRoleForm(false);
     setShowSkillForm(false);
   }, [open, liveUser]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -72,6 +84,38 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
       setSelectedRoleIds([]);
     }
   }, [liveUser, memberRoles, memberRolesLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Skill helpers ───────────────────────────────────────────────────────────
+
+  // Called by MultiSelect when the set of selected skill IDs changes
+  function handleSkillIdsChange(ids: string[]) {
+    setSelectedSkills((prev) => {
+      // Keep existing entries (preserve experience already set)
+      const kept   = prev.filter((e) => ids.includes(e.id));
+      const keptIds = new Set(kept.map((e) => e.id));
+      // Add entries for newly added skill IDs with blank experience
+      const added  = ids.filter((id) => !keptIds.has(id)).map((id) => ({ id, experience: '' }));
+      return [...kept, ...added];
+    });
+    // Clear errors for deselected skills
+    setSkillErrors((prev) => {
+      const next = { ...prev };
+      Object.keys(prev).forEach((id) => { if (!ids.includes(id)) delete next[id]; });
+      return next;
+    });
+  }
+
+  function setExperience(skillId: string, exp: string) {
+    setSelectedSkills((prev) =>
+      prev.map((e) => (e.id === skillId ? { ...e, experience: exp } : e)),
+    );
+    if (exp) setSkillErrors((prev) => { const n = { ...prev }; delete n[skillId]; return n; });
+  }
+
+  function removeSkill(skillId: string) {
+    setSelectedSkills((prev) => prev.filter((e) => e.id !== skillId));
+    setSkillErrors((prev) => { const n = { ...prev }; delete n[skillId]; return n; });
+  }
 
   // ── Catalog add handlers ────────────────────────────────────────────────────
 
@@ -90,7 +134,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
     setSkillAddError('');
     try {
       const created = await createSkill.mutateAsync({ name: vals.name.trim(), category: vals.category?.trim() || undefined });
-      setSelectedSkillIds((p) => [...p, created.id]);
+      setSelectedSkills((p) => [...p, { id: created.id, experience: '' }]);
       setShowSkillForm(false);
     } catch (e) { setSkillAddError((e as Error).message); }
   }
@@ -105,11 +149,21 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
       return;
     }
 
+    // Validate that every selected skill has an experience level
+    const missing: Record<string, boolean> = {};
+    selectedSkills.forEach((e) => { if (!e.experience) missing[e.id] = true; });
+    if (Object.keys(missing).length > 0) {
+      setSkillErrors(missing);
+      setError('Please enter an experience level for each skill.');
+      return;
+    }
+
     const memberRoleName = isMember && selectedRoleIds.length > 0
       ? memberRoles.find((r) => r.id === selectedRoleIds[0])?.name
       : undefined;
 
     setError('');
+    setSkillErrors({});
     try {
       const updated = await updateUser.mutateAsync({
         id: u.id,
@@ -118,7 +172,10 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
           role:        roles[0] as 'admin' | 'member',
           member_role: memberRoleName ?? (isMember ? undefined : ''),
           status:      status[0] as User['status'],
-          skill_ids:   selectedSkillIds,
+          skills_with_experience: selectedSkills.map((e) => ({
+            skill_id:   e.id,
+            experience: e.experience || null,
+          })),
         },
       });
       onSaved(updated);
@@ -132,17 +189,18 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
 
   const memberRoleOptions = useMemo(
     () => memberRoles.map((r) => ({ value: r.id, label: r.name })),
-    [memberRoles]
+    [memberRoles],
   );
   const skillOptions = useMemo(
     () => skills.map((s) => ({
       value: s.id,
       label: s.category ? `${s.name} (${s.category})` : s.name,
     })),
-    [skills]
+    [skills],
   );
 
-  const displayUser = liveUser ?? user;
+  const selectedSkillIds = selectedSkills.map((e) => e.id);
+  const displayUser      = liveUser ?? user;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -165,7 +223,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
             </div>
           </div>
 
-          {/* Error */}
+          {/* Error banner */}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
               {error}
@@ -186,7 +244,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
             label="Status"
             options={STATUS_OPTIONS}
             value={status}
-            onChange={setStatus}
+            onChange={(vals) => { if (vals.length > 0) setStatus(vals.slice(-1)); }}
             columns={1}
           />
 
@@ -195,7 +253,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
             label="Role"
             options={ROLE_OPTIONS}
             value={roles}
-            onChange={setRoles}
+            onChange={(vals) => { if (vals.length > 0) setRoles(vals.slice(-1)); }}
             columns={1}
           />
 
@@ -246,13 +304,65 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
                 placeholder="Select skills"
                 options={skillOptions}
                 value={selectedSkillIds}
-                onChange={setSelectedSkillIds}
+                onChange={handleSkillIdsChange}
                 columns={2}
                 showBadges
                 searchable
                 searchPlaceholder="Search skills…"
               />
             )}
+
+            {/* Per-skill experience rows */}
+            {selectedSkills.length > 0 && (
+              <div className="mt-2 flex flex-col gap-2">
+                {selectedSkills.map((entry) => {
+                  const skill   = skills.find((s) => s.id === entry.id);
+                  const hasError = skillErrors[entry.id];
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors ${
+                        hasError ? 'border-red-300 bg-red-50' : 'border-[#E9EAEB] bg-[#FAFAFA]'
+                      }`}
+                    >
+                      {/* Skill name */}
+                      <span className="text-sm font-medium text-[#181D27] flex-1 truncate">
+                        {skill?.name ?? entry.id}
+                      </span>
+
+                      {/* Experience input */}
+                      <input
+                        type="text"
+                        value={entry.experience}
+                        onChange={(e) => setExperience(entry.id, e.target.value)}
+                        placeholder="e.g. 2-5 years"
+                        className={`text-sm border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] bg-white transition-colors w-32 ${
+                          hasError
+                            ? 'border-red-300 text-red-600'
+                            : 'border-[#D5D7DA] text-[#414651]'
+                        }`}
+                      />
+
+                      {/* Remove */}
+                      <button
+                        type="button"
+                        onClick={() => removeSkill(entry.id)}
+                        className="p-1 rounded hover:bg-red-100 text-[#717680] hover:text-red-600 transition-colors shrink-0"
+                        aria-label={`Remove ${skill?.name}`}
+                      >
+                        <Trash01 width={14} height={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {Object.keys(skillErrors).length > 0 && (
+                  <p className="text-xs text-red-600">
+                    Experience level is required for all selected skills.
+                  </p>
+                )}
+              </div>
+            )}
+
             {!showSkillForm ? (
               <button type="button" onClick={() => setShowSkillForm(true)}
                 className="mt-1 inline-flex items-center gap-1.5 text-sm text-[#6941C6] hover:text-[#53389E] font-medium">

@@ -15,9 +15,9 @@ type TaskTab = 'all' | 'pending' | 'approved' | 'needs-review' | 'ignored' | 'ar
 
 function getTaskTab(task: Task): TaskTab {
   if (task.archived) return 'archived';
-  if (task.status === 'draft') return 'needs-review';
-  if (task.status === 'discarded') return 'ignored';
-  if (['approved', 'closed'].includes(task.status)) return 'approved';
+  if (task.status === 'to_do') return 'needs-review';
+  if (task.status === 'completed') return 'approved';
+  if (['assigned', 'in_progress'].includes(task.status)) return 'approved';
   return 'pending';
 }
 

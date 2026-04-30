@@ -1,27 +1,77 @@
 import { useState } from 'react';
 import { ChevronDown } from '@untitled-ui/icons-react';
 
-// ── Country list (common codes) ───────────────────────────────────────────────
+// ── Country list ──────────────────────────────────────────────────────────────
 
 export interface Country {
-  code: string;   // ISO 2-letter code
-  dial: string;   // e.g. "+1"
-  flag: string;   // emoji flag
+  code: string;
+  dial: string;
+  flag: string;
   name: string;
+  /** Expected local digit count (after stripping country code) */
+  localDigits: { min: number; max: number };
 }
 
 export const COUNTRIES: Country[] = [
-  { code: 'US', dial: '+1',   flag: '🇺🇸', name: 'United States'  },
-  { code: 'GB', dial: '+44',  flag: '🇬🇧', name: 'United Kingdom'  },
-  { code: 'CA', dial: '+1',   flag: '🇨🇦', name: 'Canada'          },
-  { code: 'AU', dial: '+61',  flag: '🇦🇺', name: 'Australia'       },
-  { code: 'IN', dial: '+91',  flag: '🇮🇳', name: 'India'           },
-  { code: 'DE', dial: '+49',  flag: '🇩🇪', name: 'Germany'         },
-  { code: 'FR', dial: '+33',  flag: '🇫🇷', name: 'France'          },
-  { code: 'AE', dial: '+971', flag: '🇦🇪', name: 'UAE'             },
-  { code: 'SG', dial: '+65',  flag: '🇸🇬', name: 'Singapore'       },
-  { code: 'NZ', dial: '+64',  flag: '🇳🇿', name: 'New Zealand'     },
+  { code: 'US', dial: '+1',   flag: '🇺🇸', name: 'United States', localDigits: { min: 10, max: 10 } },
+  { code: 'GB', dial: '+44',  flag: '🇬🇧', name: 'United Kingdom', localDigits: { min: 10, max: 10 } },
+  { code: 'CA', dial: '+1',   flag: '🇨🇦', name: 'Canada',          localDigits: { min: 10, max: 10 } },
+  { code: 'AU', dial: '+61',  flag: '🇦🇺', name: 'Australia',       localDigits: { min: 9,  max: 9  } },
+  { code: 'IN', dial: '+91',  flag: '🇮🇳', name: 'India',           localDigits: { min: 10, max: 10 } },
+  { code: 'DE', dial: '+49',  flag: '🇩🇪', name: 'Germany',         localDigits: { min: 10, max: 11 } },
+  { code: 'FR', dial: '+33',  flag: '🇫🇷', name: 'France',          localDigits: { min: 9,  max: 9  } },
+  { code: 'AE', dial: '+971', flag: '🇦🇪', name: 'UAE',             localDigits: { min: 9,  max: 9  } },
+  { code: 'SG', dial: '+65',  flag: '🇸🇬', name: 'Singapore',       localDigits: { min: 8,  max: 8  } },
+  { code: 'NZ', dial: '+64',  flag: '🇳🇿', name: 'New Zealand',     localDigits: { min: 8,  max: 9  } },
 ];
+
+// ── Exported helpers ──────────────────────────────────────────────────────────
+
+/** Strips non-digits from raw input and prepends the country dial code → E.164 */
+export function buildE164Phone(raw: string, countryCode: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('+')) {
+    return `+${trimmed.slice(1).replace(/\D/g, '')}`;
+  }
+  const country = COUNTRIES.find((c) => c.code === countryCode) ?? COUNTRIES[0];
+  return `${country.dial}${trimmed.replace(/\D/g, '')}`;
+}
+
+/** Returns an error string or '' if valid. Validates per-country digit count. */
+export function getPhoneValidationError(raw: string, countryCode: string): string {
+  if (!raw.trim()) return 'Phone number is required';
+
+  if (/[^\d\s\-().+]/.test(raw)) return 'Phone number contains invalid characters';
+
+  const country = COUNTRIES.find((c) => c.code === countryCode) ?? COUNTRIES[0];
+  const localDigits = raw.trim().replace(/\D/g, '');
+
+  // If user typed the full E.164 (starts with +), strip the dial code first
+  let digits = localDigits;
+  if (raw.trim().startsWith('+')) {
+    const dialDigits = country.dial.replace(/\D/g, '');
+    if (digits.startsWith(dialDigits)) {
+      digits = digits.slice(dialDigits.length);
+    }
+  }
+
+  const { min, max } = country.localDigits;
+
+  if (digits.length < min) {
+    return min === max
+      ? `${country.name} phone numbers must be ${min} digits (you entered ${digits.length})`
+      : `${country.name} phone numbers must be ${min}–${max} digits (you entered ${digits.length})`;
+  }
+
+  if (digits.length > max) {
+    return min === max
+      ? `${country.name} phone numbers must be ${min} digits (you entered ${digits.length})`
+      : `${country.name} phone numbers must be ${min}–${max} digits (you entered ${digits.length})`;
+  }
+
+  return '';
+}
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -29,6 +79,7 @@ interface PhoneInputProps {
   label?: string;
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
   countryCode?: string;
   onCountryChange?: (code: string) => void;
   error?: string;
@@ -42,15 +93,20 @@ export default function PhoneInput({
   label,
   value,
   onChange,
+  onBlur,
   countryCode = 'US',
   onCountryChange,
   error,
-  placeholder = 'Phone number',
+  placeholder,
   required,
 }: PhoneInputProps) {
   const [open, setOpen] = useState(false);
 
   const selected = COUNTRIES.find((c) => c.code === countryCode) ?? COUNTRIES[0];
+
+  // Dynamic placeholder shows expected format for the selected country
+  const { min, max } = selected.localDigits;
+  const defaultPlaceholder = min === max ? `${min}-digit number` : `${min}–${max}-digit number`;
 
   function selectCountry(code: string) {
     onCountryChange?.(code);
@@ -77,6 +133,7 @@ export default function PhoneInput({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
+            aria-label={`Select country, currently ${selected.name}`}
             className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-[#414651] bg-white hover:bg-gray-50 border-r border-[#D5D7DA] shrink-0 transition-colors"
           >
             <span className="text-base leading-none">{selected.flag}</span>
@@ -84,13 +141,20 @@ export default function PhoneInput({
             <ChevronDown width={14} height={14} className="text-gray-400" />
           </button>
 
+          {/* Dial code prefix */}
+          <span className="flex items-center pl-3 text-sm text-[#717680] shrink-0 select-none">
+            {selected.dial}
+          </span>
+
           {/* Number input */}
           <input
             type="tel"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className="flex-1 min-w-0 px-3 py-2.5 text-base text-[#181D27] placeholder-[#717680] bg-white focus:outline-none"
+            onBlur={onBlur}
+            placeholder={placeholder ?? defaultPlaceholder}
+            maxLength={max + 5}
+            className="flex-1 min-w-0 px-2 py-2.5 text-base text-[#181D27] placeholder-[#717680] bg-white focus:outline-none"
           />
 
           {/* Error icon */}
@@ -109,7 +173,6 @@ export default function PhoneInput({
         {/* Dropdown */}
         {open && (
           <>
-            {/* Click-away overlay */}
             <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
             <ul className="absolute left-0 top-full mt-1 z-20 w-56 bg-white border border-[#E9EAEB] rounded-lg shadow-lg overflow-hidden py-1 max-h-52 overflow-y-auto">
               {COUNTRIES.map((c) => (

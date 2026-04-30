@@ -14,7 +14,7 @@ export interface TaskCardProps {
 export default function TaskCard({ task, users, onClick }: TaskCardProps) {
   const [sourceOpen, setSourceOpen] = useState(false);
   const assignee = users.find((u) => u.id === task.assignee_id);
-  const isDiscarded = task.status === 'discarded';
+  const isBlocked  = task.status === 'blocked';
   const isArchived = task.archived;
 
   return (
@@ -22,7 +22,7 @@ export default function TaskCard({ task, users, onClick }: TaskCardProps) {
       className={`mb-3 rounded-xl border overflow-hidden cursor-pointer transition-shadow hover:shadow-md ${
         isArchived
           ? 'border-[#D5D7DA] bg-[#F9FAFB] opacity-75'
-          : isDiscarded
+          : isBlocked
           ? 'border-red-300 bg-[#FFF8F8]'
           : 'border-[#E9EAEB] bg-white'
       }`}

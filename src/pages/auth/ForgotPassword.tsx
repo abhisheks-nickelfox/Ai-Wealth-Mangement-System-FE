@@ -27,7 +27,6 @@ export default function ForgotPassword() {
 
   return (
     <AuthLayout hidePanel>
-      <div className="max-w-sm mx-auto w-full">
       {/* Key icon */}
       <div className="flex justify-center mb-6">
         <div className="w-12 h-12 rounded-xl border border-gray-200 bg-white shadow-sm flex items-center justify-center">
@@ -36,7 +35,7 @@ export default function ForgotPassword() {
       </div>
 
       {/* Heading */}
-      <h1 className="text-[27px] font-semibold text-gray-900 mb-2 text-center">Forgot password?</h1>
+      <h1 className="text-2xl font-semibold text-gray-900 mb-2 text-center">Forgot password?</h1>
       <p className="text-sm text-gray-500 mb-7 text-center">
         No worries, we'll send you reset instructions.
       </p>
@@ -70,7 +69,6 @@ export default function ForgotPassword() {
         <ArrowLeft width={16} height={16} />
         Back to log in
       </Link>
-      </div>
     </AuthLayout>
   );
 }

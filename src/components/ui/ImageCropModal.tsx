@@ -26,15 +26,19 @@ function centerAspectCrop(w: number, h: number): Crop {
   );
 }
 
-/** Draws the crop area on a canvas and returns a base64 data URL. */
+/** Draws the crop area on a canvas and returns a base64 data URL.
+ *  transparent=true → PNG, no bg fill, logo drawn at logoScale (0–1) centered with padding.
+ *  transparent=false → JPEG, white fill, full canvas (avatars). */
 function getCroppedDataUrl(
   image: HTMLImageElement,
   crop: Crop,
+  transparent = false,
+  logoScale = 1,
 ): string {
   const canvas  = document.createElement('canvas');
   const scaleX  = image.naturalWidth  / image.width;
   const scaleY  = image.naturalHeight / image.height;
-  const size    = 400; // output at 400×400
+  const size    = 400;
 
   canvas.width  = size;
   canvas.height = size;
@@ -42,30 +46,43 @@ function getCroppedDataUrl(
   const ctx = canvas.getContext('2d')!;
   ctx.imageSmoothingQuality = 'high';
 
+  if (!transparent) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+  }
+
   const cropX = (crop.x  / 100) * image.width  * scaleX;
   const cropY = (crop.y  / 100) * image.height * scaleY;
   const cropW = (crop.width  / 100) * image.width  * scaleX;
   const cropH = (crop.height / 100) * image.height * scaleY;
 
-  ctx.drawImage(image, cropX, cropY, cropW, cropH, 0, 0, size, size);
-  return canvas.toDataURL('image/jpeg', 0.9);
+  // logoScale < 1 → draws logo smaller, centred, leaving transparent padding around it
+  const drawSize = size * logoScale;
+  const offset   = (size - drawSize) / 2;
+  ctx.drawImage(image, cropX, cropY, cropW, cropH, offset, offset, drawSize, drawSize);
+
+  return transparent
+    ? canvas.toDataURL('image/png')
+    : canvas.toDataURL('image/jpeg', 0.9);
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface ImageCropModalProps {
-  src: string;                         // object URL of selected file
-  onSave: (dataUrl: string) => void;   // cropped JPEG data URL
+  src: string;
+  onSave: (dataUrl: string) => void;
   onCancel: () => void;
+  transparent?: boolean; // preserve alpha — use for logos; default false (JPEG + white bg for avatars)
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function ImageCropModal({ src, onSave, onCancel }: ImageCropModalProps) {
+export default function ImageCropModal({ src, onSave, onCancel, transparent = false }: ImageCropModalProps) {
   const imgRef                    = useRef<HTMLImageElement>(null);
   const [crop, setCrop]           = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<Crop>();
   const [selectedGradient, setSelectedGradient] = useState(0);
+  const [logoScale, setLogoScale] = useState(0.8); // default 80% — gives natural padding for logos
 
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const { width, height } = e.currentTarget;
@@ -74,7 +91,7 @@ export default function ImageCropModal({ src, onSave, onCancel }: ImageCropModal
 
   function handleSave() {
     if (!imgRef.current || !completedCrop) return;
-    const dataUrl = getCroppedDataUrl(imgRef.current, completedCrop);
+    const dataUrl = getCroppedDataUrl(imgRef.current, completedCrop, transparent, transparent ? logoScale : 1);
     onSave(dataUrl);
   }
 
@@ -123,6 +140,29 @@ export default function ImageCropModal({ src, onSave, onCancel }: ImageCropModal
             />
           </ReactCrop>
         </div>
+
+        {/* Logo zoom slider — only shown for transparent/logo mode */}
+        {transparent && (
+          <div className="px-5 py-3 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-medium text-gray-600">Logo size</span>
+              <span className="text-xs text-gray-400">{Math.round(logoScale * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0.4}
+              max={1}
+              step={0.05}
+              value={logoScale}
+              onChange={(e) => setLogoScale(parseFloat(e.target.value))}
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-[#7F56D9]"
+            />
+            <div className="flex justify-between mt-1">
+              <span className="text-[10px] text-gray-400">Smaller</span>
+              <span className="text-[10px] text-gray-400">Larger</span>
+            </div>
+          </div>
+        )}
 
         {/* Gradient palette */}
         <div className="flex items-center gap-2 px-5 py-3 overflow-x-auto">

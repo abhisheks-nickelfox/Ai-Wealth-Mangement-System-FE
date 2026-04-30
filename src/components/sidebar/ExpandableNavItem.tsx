@@ -13,6 +13,7 @@ interface ExpandableNavItemProps {
   defaultOpen?: boolean;
   activeItemId?: string;
   onItemClick?: (id: string) => void;
+  addAction?: { label: string; onClick: () => void };
 }
 
 export default function ExpandableNavItem({
@@ -22,6 +23,7 @@ export default function ExpandableNavItem({
   defaultOpen = false,
   activeItemId,
   onItemClick,
+  addAction,
 }: ExpandableNavItemProps) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -49,6 +51,14 @@ export default function ExpandableNavItem({
       {/* Children */}
       {open && (
         <div className="mt-0.5 ml-2 flex flex-col">
+          {addAction && (
+            <button
+              onClick={addAction.onClick}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-[#7F56D9] hover:text-[#6941C6] hover:bg-[#F9F5FF] rounded-md transition-colors text-left"
+            >
+              + {addAction.label}
+            </button>
+          )}
           {items.map((item) => (
             <NavItem
               key={item.id}
