@@ -9,14 +9,21 @@ import {
   X,
   Calendar,
   User01,
-  Phone01,
-  Mail01,
-  LinkExternal01,
   Edit01,
   Trash01,
-  Send01,
 } from '@untitled-ui/icons-react';
+import Toast from '../components/ui/Toast';
+import ConfirmDeleteModal from '../components/ui/ConfirmDeleteModal';
+import DropdownMenu from '../components/ui/DropdownMenu';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
+import { useDeleteFirm } from '../hooks/useFirms';
 import TabBar from '../components/ui/TabBar';
+import iconDropbox  from '../assets/quick-links/icon-dropbox.svg';
+import iconReports  from '../assets/quick-links/icon-reports.svg';
+import iconHubspot  from '../assets/quick-links/icon-hubspot.svg';
+import iconPhone    from '../assets/contact-icons/icon-phone.svg';
+import iconMail     from '../assets/contact-icons/icon-mail.svg';
+import iconCalendar from '../assets/contact-icons/icon-calendar.svg';
 
 import type { Firm, Task, User } from '../lib/api';
 import { useFirmDetail } from '../hooks/useFirms';
@@ -962,36 +969,6 @@ interface FirmDetailsTabProps {
   users: User[];
 }
 
-// Contact action buttons (phone / email / calendar)
-function ContactActions({ email, phone }: { email?: string | null; phone?: string | null }) {
-  return (
-    <div className="flex items-center gap-1.5 mt-2">
-      <a
-        href={phone ? `tel:${phone}` : undefined}
-        onClick={!phone ? (e) => e.preventDefault() : undefined}
-        className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${phone ? 'border-[#E9EAEB] text-[#717680] hover:bg-[#F9FAFB] hover:text-[#7F56D9]' : 'border-[#E9EAEB] text-[#D0D5DD] cursor-not-allowed'}`}
-        title={phone ?? 'No phone'}
-      >
-        <Phone01 width={14} height={14} />
-      </a>
-      <a
-        href={email ? `mailto:${email}` : undefined}
-        onClick={!email ? (e) => e.preventDefault() : undefined}
-        className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${email ? 'border-[#E9EAEB] text-[#717680] hover:bg-[#F9FAFB] hover:text-[#7F56D9]' : 'border-[#E9EAEB] text-[#D0D5DD] cursor-not-allowed'}`}
-        title={email ?? 'No email'}
-      >
-        <Mail01 width={14} height={14} />
-      </a>
-      <button
-        className="w-8 h-8 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#717680] hover:bg-[#F9FAFB] hover:text-[#7F56D9] transition-colors"
-        title="Schedule meeting"
-      >
-        <Calendar width={14} height={14} />
-      </button>
-    </div>
-  );
-}
-
 // Mock chat messages (grouped: before "Today" separator and after)
 const MESSAGES_BEFORE: { id: number; sender: string; time: string; text: string; isSelf: boolean }[] = [
   { id: 1, sender: 'You',           time: 'Thursday 11:41am', text: 'Awesome! Thanks.',                                   isSelf: true  },
@@ -1002,7 +979,54 @@ const MESSAGES_TODAY: { id: number; sender: string; time: string; text: string; 
   { id: 4, sender: 'You',            time: 'Friday 2:20pm',    text: "Sure thing, I'll have a look today.",                isSelf: true  },
 ];
 
-// Double-check SVG
+// ── Reusable contact row (avatar + name/role + phone/mail/calendar) ───────────
+
+interface ContactRowProps {
+  name: string;
+  role?: string | null;
+  avatarSrc?: string;
+  phone?: string | null;
+  email?: string | null;
+}
+
+function ContactRow({ name, role, avatarSrc, phone, email }: ContactRowProps) {
+  return (
+    <div className="flex items-center gap-3 mt-2.5">
+      <Avatar name={name} src={avatarSrc} size="sm" className="shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-semibold text-[#7c3aed] truncate">{name}</p>
+        {role && <p className="text-[12px] text-[#6b7280] truncate mt-0.5">{role}</p>}
+      </div>
+      <div className="flex gap-1.5 shrink-0">
+        <a
+          href={phone ? `tel:${phone}` : '#'}
+          onClick={!phone ? (e) => e.preventDefault() : undefined}
+          className="w-7 h-7 rounded-full border border-[#e5e7eb] bg-white flex items-center justify-center hover:border-[#d4d6db] transition-colors"
+          aria-label="Call"
+        >
+          <img src={iconPhone} alt="" width={13} height={13} />
+        </a>
+        <a
+          href={email ? `mailto:${email}` : '#'}
+          onClick={!email ? (e) => e.preventDefault() : undefined}
+          className="w-7 h-7 rounded-full border border-[#e5e7eb] bg-white flex items-center justify-center hover:border-[#d4d6db] transition-colors"
+          aria-label="Email"
+        >
+          <img src={iconMail} alt="" width={13} height={13} />
+        </a>
+        <button
+          className="w-7 h-7 rounded-full border border-[#e5e7eb] bg-white flex items-center justify-center hover:border-[#d4d6db] transition-colors"
+          aria-label="Schedule meeting"
+        >
+          <img src={iconCalendar} alt="" width={13} height={13} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Double-check SVG ──────────────────────────────────────────────────────────
+
 function DoubleCheck() {
   return (
     <svg width="16" height="10" viewBox="0 0 16 10" fill="none" aria-hidden="true">
@@ -1012,46 +1036,9 @@ function DoubleCheck() {
   );
 }
 
-type ChatMsg = { id: number; sender: string; time: string; text: string; isSelf: boolean };
-
-function ChatMessage({ msg }: { msg: ChatMsg }) {
-  if (msg.isSelf) {
-    return (
-      <div className="flex flex-col items-end gap-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[12px] font-medium text-[#344054]">You</span>
-          <span className="text-[12px] text-[#A4A7AE]">{msg.time}</span>
-          <DoubleCheck />
-        </div>
-        <div className="bg-white border border-[#E9EAEB] rounded-2xl rounded-tr-sm px-4 py-2.5 text-[13px] text-[#181D27] max-w-[320px] shadow-sm">
-          {msg.text}
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="flex items-start gap-2.5">
-      <div className="relative shrink-0">
-        <Avatar name={msg.sender} size="sm" />
-        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-[#12B76A] border-[1.5px] border-white" />
-      </div>
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[12px] font-medium text-[#344054]">{msg.sender}</span>
-          <span className="text-[12px] text-[#A4A7AE]">{msg.time}</span>
-        </div>
-        <div className="bg-[#F9FAFB] border border-[#E9EAEB] rounded-2xl rounded-tl-sm px-4 py-2.5 text-[13px] text-[#181D27] max-w-[320px]">
-          {msg.text}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function OverviewTab({ firm, users }: FirmDetailsTabProps) {
+function OverviewTab({ firm, users, onEditFirm, onDeleteFirm }: FirmDetailsTabProps & { onEditFirm: () => void; onDeleteFirm: () => void }) {
   const [commTab,     setCommTab]     = useState<'communications' | 'requests'>('communications');
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [chatInput,   setChatInput]   = useState('');
 
   const accountManager = users.find((u) => u.id === firm.account_manager_id) ?? null;
   const firmHref = firm.website
@@ -1059,69 +1046,80 @@ function OverviewTab({ firm, users }: FirmDetailsTabProps) {
     : '#';
 
   return (
-    <div className="flex flex-1 min-h-0 overflow-hidden bg-[#F9FAFB]">
+    <div className="flex flex-1 min-h-0 overflow-hidden bg-white">
 
       {/* ── Left: main content ──────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4 min-w-0">
+      <div className="flex-1 overflow-y-auto px-10 py-6 min-w-0">
 
         {/* Firm header row */}
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
+            {/* Logo / Initials — 36×36 */}
             {firm.logo_url ? (
-              <img src={firm.logo_url} alt={firm.name} className="w-10 h-10 rounded-lg object-cover border border-[#E9EAEB] shrink-0" />
+              <img
+                src={firm.logo_url}
+                alt={firm.name}
+                className="w-9 h-9 rounded-lg object-cover border border-[#e5e7eb] shrink-0"
+              />
             ) : (
-              <div className="w-10 h-10 rounded-xl bg-[#EEF4FF] flex items-center justify-center shrink-0">
-                <span className="text-[15px] font-bold text-[#3538CD]">{firm.name.charAt(0).toUpperCase()}</span>
+              <div className="w-9 h-9 rounded-lg bg-[#EEF4FF] flex items-center justify-center shrink-0">
+                <span className="text-[14px] font-bold text-[#3538CD]">{firm.name.charAt(0).toUpperCase()}</span>
               </div>
             )}
-            <span className="text-[20px] font-bold text-[#181D27]">{firm.name}</span>
+            <span
+              className="font-bold text-[#0f172a]"
+              style={{ fontSize: '22px', letterSpacing: '-0.01em' }}
+            >
+              {firm.name}
+            </span>
           </div>
 
           {/* Actions dropdown */}
           <div className="relative">
             <button
               onClick={() => setActionsOpen((v) => !v)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#D0D5DD] bg-white text-[13px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors shadow-sm"
+              className="border border-[#e5e7eb] rounded-lg px-3.5 py-[7px] text-[13px] font-medium text-[#0f172a] bg-white flex items-center gap-2"
             >
               Actions
-              <ChevronDown width={14} height={14} />
+              <ChevronDown width={14} height={14} aria-hidden="true" />
             </button>
-            {actionsOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setActionsOpen(false)} />
-                <div className="absolute right-0 top-full mt-1.5 z-50 w-44 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1.5 overflow-hidden">
-                  <button className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-[#344054] hover:bg-[#F9FAFB] transition-colors">
-                    <Edit01 width={15} height={15} className="text-[#717680]" />
-                    Edit
-                  </button>
-                  <button className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50 transition-colors">
-                    <Trash01 width={15} height={15} />
-                    Delete
-                  </button>
-                </div>
-              </>
-            )}
+            <DropdownMenu
+              open={actionsOpen}
+              onClose={() => setActionsOpen(false)}
+              align="right"
+              items={[
+                {
+                  label: 'Edit firm',
+                  icon: <Edit01 width={14} height={14} className="text-[#6b7280]" aria-hidden="true" />,
+                  onClick: () => { setActionsOpen(false); onEditFirm(); },
+                },
+                {
+                  label: 'Delete firm',
+                  icon: <Trash01 width={14} height={14} aria-hidden="true" />,
+                  onClick: () => { setActionsOpen(false); onDeleteFirm(); },
+                  variant: 'danger',
+                },
+              ]}
+            />
           </div>
         </div>
 
         {/* About this firm */}
-        {firm.description && (
-          <div>
-            <p className="text-[12px] font-semibold text-[#717680] mb-1">About this firm</p>
-            <p className="text-[14px] text-[#344054] leading-relaxed">{firm.description}</p>
-          </div>
-        )}
+        <p className="text-[12.5px] font-semibold text-[#0f172a] mt-3.5 mb-1.5">About this firm</p>
+        <p className="text-[13px] leading-[1.55] text-[#6b7280] max-w-[540px]">
+          {firm.description || 'No description provided.'}
+        </p>
 
-        {/* Communications / Requests pill-tabs */}
-        <div className="flex items-center gap-1 mt-1">
+        {/* Sub-tabs */}
+        <div className="flex items-center gap-1 mt-[30px] mb-[18px]">
           {(['communications', 'requests'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setCommTab(t)}
-              className={`px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${
+              className={`px-3.5 py-1.5 text-[13px] font-medium rounded-lg cursor-pointer transition-colors ${
                 commTab === t
-                  ? 'bg-white border border-[#E9EAEB] text-[#181D27] shadow-sm'
-                  : 'text-[#717680] hover:text-[#344054]'
+                  ? 'bg-[#f3f4f6] text-[#0f172a]'
+                  : 'text-[#6b7280] hover:text-[#0f172a]'
               }`}
             >
               {t === 'communications' ? 'Communications' : 'Requests'}
@@ -1131,161 +1129,194 @@ function OverviewTab({ firm, users }: FirmDetailsTabProps) {
 
         {/* Chat area */}
         {commTab === 'communications' ? (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-[22px]">
             {/* Messages before today */}
-            {MESSAGES_BEFORE.map((msg) => <ChatMessage key={msg.id} msg={msg} />)}
+            {MESSAGES_BEFORE.map((msg) => (
+              msg.isSelf ? (
+                /* "me" message — right-aligned */
+                <div key={msg.id} className="flex flex-col items-end gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[12.5px] font-medium text-[#6b7280]">{msg.sender}</span>
+                    <span className="text-[12px] text-[#9ca3af]">{msg.time}</span>
+                    <DoubleCheck />
+                  </div>
+                  <div className="bg-white border border-[#e5e7eb] rounded-[10px] px-3.5 py-2.5 text-[13.5px] leading-[1.5] text-[#0f172a]">
+                    {msg.text}
+                  </div>
+                </div>
+              ) : (
+                /* "them" message — left-aligned */
+                <div key={msg.id} className="flex items-start gap-3">
+                  <div className="relative shrink-0">
+                    <Avatar name={msg.sender} size="sm" />
+                    <span
+                      className="absolute bottom-0 right-0 rounded-full border-2 border-white bg-[#22c55e]"
+                      style={{ width: 10, height: 10 }}
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="bg-[#f4f5f7] rounded-[10px] px-3.5 py-2.5 text-[13.5px] leading-[1.5] text-[#0f172a]">
+                      {msg.text}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-[13px] text-[#0f172a]">{msg.sender}</span>
+                      <span className="text-[12px] text-[#9ca3af]">{msg.time}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            ))}
 
-            {/* "Today" date separator */}
-            <div className="flex items-center gap-3 py-1">
-              <div className="flex-1 h-px bg-[#E9EAEB]" />
-              <span className="text-[12px] text-[#A4A7AE] font-medium">Today</span>
-              <div className="flex-1 h-px bg-[#E9EAEB]" />
+            {/* "Today" day separator */}
+            <div className="flex items-center gap-3 my-2">
+              <div className="flex-1 h-px bg-[#eef0f3]" />
+              <span className="text-[12.5px] text-[#6b7280] font-medium">Today</span>
+              <div className="flex-1 h-px bg-[#eef0f3]" />
             </div>
 
             {/* Messages today */}
-            {MESSAGES_TODAY.map((msg) => <ChatMessage key={msg.id} msg={msg} />)}
-
-            {/* Message input */}
-            <div className="flex items-center gap-2 border border-[#D0D5DD] rounded-xl px-4 py-2.5 bg-white mt-1">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Type a message…"
-                className="flex-1 text-[13px] text-[#181D27] placeholder:text-[#A4A7AE] outline-none bg-transparent"
-              />
-              <button className="shrink-0 w-7 h-7 rounded-lg bg-[#7F56D9] flex items-center justify-center hover:bg-[#6941C6] transition-colors">
-                <Send01 width={13} height={13} className="text-white" />
-              </button>
-            </div>
+            {MESSAGES_TODAY.map((msg) => (
+              msg.isSelf ? (
+                <div key={msg.id} className="flex flex-col items-end gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[12.5px] font-medium text-[#6b7280]">{msg.sender}</span>
+                    <span className="text-[12px] text-[#9ca3af]">{msg.time}</span>
+                    <DoubleCheck />
+                  </div>
+                  <div className="bg-white border border-[#e5e7eb] rounded-[10px] px-3.5 py-2.5 text-[13.5px] leading-[1.5] text-[#0f172a]">
+                    {msg.text}
+                  </div>
+                </div>
+              ) : (
+                <div key={msg.id} className="flex items-start gap-3">
+                  <div className="relative shrink-0">
+                    <Avatar name={msg.sender} size="sm" />
+                    <span
+                      className="absolute bottom-0 right-0 rounded-full border-2 border-white bg-[#22c55e]"
+                      style={{ width: 10, height: 10 }}
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="bg-[#f4f5f7] rounded-[10px] px-3.5 py-2.5 text-[13.5px] leading-[1.5] text-[#0f172a]">
+                      {msg.text}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-[13px] text-[#0f172a]">{msg.sender}</span>
+                      <span className="text-[12px] text-[#9ca3af]">{msg.time}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            ))}
           </div>
         ) : (
-          <p className="text-[13px] text-[#A4A7AE]">No requests yet.</p>
+          <p className="text-[13px] text-[#9ca3af]">No requests yet.</p>
         )}
       </div>
 
-      {/* ── Right sidebar ────────────────────────────────────────────────── */}
-      <aside className="w-[268px] shrink-0 overflow-y-auto overflow-x-hidden px-3 py-5 flex flex-col gap-3 bg-[#F9FAFB]">
+      {/* ── Right sidebar — exactly 320px ────────────────────────────────── */}
+      <aside className="w-[420px] shrink-0 overflow-y-auto overflow-x-hidden px-8 py-6">
 
-        {/* Card 1 — location / website / contacts */}
-        <div className="bg-white border border-[#E9EAEB] rounded-xl overflow-hidden">
+        {/* Card 1 — firm details */}
+        <div className="border border-[#e5e7eb] rounded-[12px] bg-white" style={{ padding: '18px 18px 20px' }}>
 
           {/* Location */}
           {firm.location && (
-            <div className="px-4 pt-4 pb-3">
-              <p className="text-[10px] font-semibold text-[#A4A7AE] uppercase tracking-widest mb-1.5">Location</p>
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[14px] shrink-0">🌏</span>
-                <span className="text-[13px] font-medium text-[#181D27] truncate">{firm.location}</span>
+            <div style={{ marginBottom: 14 }}>
+              <p className="text-[12px] font-semibold text-[#0f172a] mb-1.5">Location</p>
+              <div className="flex items-center gap-2 text-[13px] text-[#0f172a]">
+                <span aria-hidden="true">🌏</span>
+                <span>{firm.location}</span>
               </div>
             </div>
           )}
 
           {/* Website */}
           {firm.website && (
-            <div className="px-4 py-3">
-              <p className="text-[10px] font-semibold text-[#A4A7AE] uppercase tracking-widest mb-1.5">Website</p>
+            <div style={{ marginBottom: 14 }}>
+              <p className="text-[12px] font-semibold text-[#0f172a] mb-1.5">Website</p>
               <a
                 href={firmHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#7F56D9] hover:underline max-w-full overflow-hidden"
+                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#7c3aed] hover:underline max-w-full overflow-hidden"
               >
                 <span className="truncate">{firm.website.replace(/^https?:\/\//, '')}</span>
-                <LinkExternal01 width={11} height={11} className="shrink-0" />
+                {/* External link arrow (12px) */}
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true" className="shrink-0">
+                  <path d="M2.5 9.5L9.5 2.5M9.5 2.5H4.5M9.5 2.5V7.5" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </a>
             </div>
           )}
 
           {/* Point of Contact */}
-          <div className="px-4 py-3">
-            <p className="text-[10px] font-semibold text-[#A4A7AE] uppercase tracking-widest mb-2.5">Point of Contact</p>
+          <div style={{ marginBottom: 14 }}>
+            <p className="text-[12px] font-semibold text-[#0f172a] mb-1.5">Point of Contact</p>
             {firm.contact_name ? (
-              <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-                <Avatar name={firm.contact_name} size="sm" className="shrink-0" />
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <p className="text-[13px] font-semibold text-[#7F56D9] truncate leading-tight">{firm.contact_name}</p>
-                  {firm.contact_role && (
-                    <p className="text-[11px] text-[#717680] truncate">{firm.contact_role}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-0.5 shrink-0 ml-1">
-                  <a href={firm.contact_phone ? `tel:${firm.contact_phone}` : '#'}
-                    className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
-                    <Phone01 width={11} height={11} />
-                  </a>
-                  <a href={firm.contact_email ? `mailto:${firm.contact_email}` : '#'}
-                    className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
-                    <Mail01 width={11} height={11} />
-                  </a>
-                  <button className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
-                    <Calendar width={11} height={11} />
-                  </button>
-                </div>
-              </div>
+              <ContactRow
+                name={firm.contact_name}
+                role={firm.contact_role}
+                phone={firm.contact_phone}
+                email={firm.contact_email}
+              />
             ) : (
-              <p className="text-[12px] text-[#A4A7AE]">Not set</p>
+              <p className="text-[12px] text-[#9ca3af] mt-1">Not set</p>
             )}
           </div>
 
-          {/* MW Accounts Manager */}
-          <div className="px-4 pb-4 pt-3">
-            <p className="text-[10px] font-semibold text-[#A4A7AE] uppercase tracking-widest mb-2.5">MW Accounts Manager</p>
+          {/* MW Accounts Manager — last field, no bottom margin */}
+          <div>
+            <p className="text-[12px] font-semibold text-[#0f172a] mb-1.5">MW Accounts Manager</p>
             {accountManager ? (
-              <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-                <Avatar name={accountManager.name} src={accountManager.avatar_url ?? undefined} size="sm" className="shrink-0" />
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <p className="text-[13px] font-semibold text-[#7F56D9] truncate leading-tight">
-                    {accountManager.first_name && accountManager.last_name
-                      ? `${accountManager.first_name} ${accountManager.last_name}`
-                      : accountManager.name}
-                  </p>
-                  {accountManager.member_role && (
-                    <p className="text-[11px] text-[#717680] truncate">{accountManager.member_role}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-0.5 shrink-0 ml-1">
-                  <button className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
-                    <Phone01 width={11} height={11} />
-                  </button>
-                  <a href={`mailto:${accountManager.email}`}
-                    className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
-                    <Mail01 width={11} height={11} />
-                  </a>
-                  <button className="w-6 h-6 rounded-full border border-[#E9EAEB] flex items-center justify-center text-[#A4A7AE] hover:text-[#7F56D9] hover:border-[#7F56D9] transition-colors">
-                    <Calendar width={11} height={11} />
-                  </button>
-                </div>
-              </div>
+              <ContactRow
+                name={
+                  accountManager.first_name && accountManager.last_name
+                    ? `${accountManager.first_name} ${accountManager.last_name}`
+                    : accountManager.name
+                }
+                role={accountManager.member_role}
+                avatarSrc={accountManager.avatar_url ?? undefined}
+                email={accountManager.email}
+              />
             ) : (
-              <p className="text-[12px] text-[#A4A7AE]">Not assigned</p>
+              <p className="text-[12px] text-[#9ca3af] mt-1">Not assigned</p>
             )}
           </div>
         </div>
 
         {/* Card 2 — Quick Links */}
-        <div className="bg-white border border-[#E9EAEB] rounded-xl overflow-hidden px-4 py-4">
-          <p className="text-[10px] font-semibold text-[#A4A7AE] uppercase tracking-widest mb-3">Quick Links</p>
-          <div className="flex flex-col gap-3">
-            {[
-              { label: 'DropBox', desc: 'Access files and assets', color: '#1D4ED8' },
-              { label: 'Reports', desc: 'View and Analyse',        color: '#F97316' },
-              { label: 'Hubspot', desc: 'Access Client hubspot',   color: '#EA4300' },
-            ].map((link) => (
-              <button key={link.label} className="flex items-center gap-2.5 text-left group min-w-0 overflow-hidden">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-[11px] font-bold"
-                  style={{ backgroundColor: link.color }}
-                >
-                  {link.label.charAt(0)}
-                </div>
-                <div className="min-w-0 flex-1 overflow-hidden">
-                  <p className="text-[13px] font-semibold text-[#7F56D9] group-hover:underline leading-tight truncate">{link.label}</p>
-                  <p className="text-[11px] text-[#717680] truncate">{link.desc}</p>
-                </div>
-              </button>
-            ))}
-          </div>
+        <div className="border border-[#e5e7eb] rounded-[12px] bg-white mt-4" style={{ padding: '18px 18px 20px' }}>
+          <p className="text-[13px] font-semibold text-[#0f172a] mb-3.5">Quick Links</p>
+
+          {/* DropBox */}
+          <button className="w-full flex items-center gap-3 text-left group">
+            <img src={iconDropbox} alt="Dropbox" className="w-9 h-9 rounded-full object-contain shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-[#7c3aed] group-hover:underline truncate">DropBox</p>
+              <p className="text-[12px] text-[#6b7280] mt-0.5 truncate">Access files and assets</p>
+            </div>
+          </button>
+
+          {/* Reports */}
+          <button className="w-full flex items-center gap-3 text-left group mt-3.5">
+            <img src={iconReports} alt="Reports" className="w-9 h-9 rounded-full object-contain shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-[#7c3aed] group-hover:underline truncate">Reports</p>
+              <p className="text-[12px] text-[#6b7280] mt-0.5 truncate">View and Analyse</p>
+            </div>
+          </button>
+
+          {/* Hubspot */}
+          <button className="w-full flex items-center gap-3 text-left group mt-3.5">
+            <img src={iconHubspot} alt="HubSpot" className="w-9 h-9 rounded-full object-contain shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-[#7c3aed] group-hover:underline truncate">Hubspot</p>
+              <p className="text-[12px] text-[#6b7280] mt-0.5 truncate">Access Client hubspot</p>
+            </div>
+          </button>
         </div>
 
       </aside>
@@ -1310,7 +1341,11 @@ export default function FirmDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<TabId>('projects');
+  const [activeTab, setActiveTab]       = useState<TabId>('projects');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showToast, setShowToast]       = useState(false);
+
+  const deleteFirm = useDeleteFirm();
 
   const { data: firm = null, isLoading: firmLoading, error: firmError } = useFirmDetail(id!);
   const { data: tasks = [],  isLoading: tasksLoading }                  = useTasksByFirm(id!);
@@ -1319,15 +1354,23 @@ export default function FirmDetailPage() {
   const loading = firmLoading || tasksLoading;
   const error   = firmError ? (firmError as Error).message : null;
 
+  async function handleDeleteConfirm() {
+    try {
+      await deleteFirm.mutateAsync(id!);
+      setShowDeleteModal(false);
+      setShowToast(true);
+      setTimeout(() => navigate('/firms'), 1500);
+    } catch {
+      setShowDeleteModal(false);
+    }
+  }
+
   // ── Loading state ──────────────────────────────────────────────────────────
 
   if (loading) {
     return (
       <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
-        <div className="flex flex-col flex-1 items-center justify-center">
-          <div className="w-6 h-6 border-2 border-[#7F56D9] border-t-transparent rounded-full animate-spin" aria-label="Loading" />
-          <p className="text-[13px] text-[#717680] mt-3">Loading firm details…</p>
-        </div>
+        <LoadingSpinner fullPage message="Loading firm details…" />
       </main>
     );
   }
@@ -1351,10 +1394,31 @@ export default function FirmDetailPage() {
   }
 
   return (
+    <>
+      {showToast && (
+        <Toast
+          message="Firm deleted successfully"
+          onClose={() => setShowToast(false)}
+        />
+      )}
+      <ConfirmDeleteModal
+        open={showDeleteModal}
+        isDeleting={deleteFirm.isPending}
+        title="Delete Firm"
+        description={
+          <>
+            Are you sure you want to delete{' '}
+            <span className="font-bold text-[#0f172a]">{firm?.name ?? ''}</span>?{' '}
+            This action cannot be undone and will permanently remove all associated data.
+          </>
+        }
+        onConfirm={handleDeleteConfirm}
+        onClose={() => setShowDeleteModal(false)}
+      />
     <main className="flex flex-col flex-1 min-h-0 overflow-hidden" role="main">
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
-      <header className="shrink-0 px-6 pt-5 pb-0 bg-white border-b border-[#E9EAEB]">
+      <header className="shrink-0 px-6 pt-5 pb-0 bg-white">
 
         {/* Breadcrumb */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 mb-2">
@@ -1397,10 +1461,20 @@ export default function FirmDetailPage() {
         id={`tabpanel-${activeTab}`}
         aria-labelledby={activeTab}
       >
-        {activeTab === 'firm-details' ? <OverviewTab firm={firm!} users={users} /> :
-         activeTab === 'projects'     ? <ProjectsTab firm={firm} tasks={tasks} users={users} /> :
-         <ComingSoon />}
+        {activeTab === 'firm-details' ? (
+          <OverviewTab
+            firm={firm!}
+            users={users}
+            onEditFirm={() => navigate(`/firms/${id}/edit`)}
+            onDeleteFirm={() => setShowDeleteModal(true)}
+          />
+        ) : activeTab === 'projects' ? (
+          <ProjectsTab firm={firm} tasks={tasks} users={users} />
+        ) : (
+          <ComingSoon />
+        )}
       </div>
     </main>
+    </>
   );
 }

@@ -28,16 +28,22 @@ export default function StepIcon({ state, size = 24 }: StepIconProps) {
   }
 
   if (state === 'current') {
+    const ringSize = size + 10;
     return (
       <div
         key="current"
-        style={{ width: size, height: size }}
-        className="rounded-xl bg-[#7F56D9] flex items-center justify-center shrink-0 step-icon-pop-delayed step-icon-current"
+        style={{ width: ringSize, height: ringSize }}
+        className="rounded-full border-2 border-[#7F56D9] flex items-center justify-center shrink-0 step-icon-pop-delayed step-icon-current"
       >
         <div
-          style={{ width: dotSize, height: dotSize }}
-          className="rounded-full bg-white"
-        />
+          style={{ width: size, height: size }}
+          className="rounded-full bg-[#7F56D9] flex items-center justify-center"
+        >
+          <div
+            style={{ width: dotSize, height: dotSize }}
+            className="rounded-full bg-white"
+          />
+        </div>
       </div>
     );
   }

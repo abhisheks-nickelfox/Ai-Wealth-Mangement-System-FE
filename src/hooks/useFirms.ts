@@ -37,3 +37,11 @@ export function useUpdateFirm() {
     },
   });
 }
+
+export function useDeleteFirm() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => firmsApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.firms.all }),
+  });
+}

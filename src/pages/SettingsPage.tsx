@@ -5,6 +5,8 @@ import {
   Edit01,
   Plus,
   HelpCircle,
+  Eye,
+  EyeOff,
 } from '@untitled-ui/icons-react';
 import Avatar from '../components/ui/Avatar';
 import Input from '../components/ui/Input';
@@ -17,7 +19,7 @@ import DeleteConfirmModal from '../components/ui/DeleteConfirmModal';
 import SettingsRow from '../components/ui/SettingsRow';
 import SlideOver from '../components/ui/SlideOver';
 import { useAuth } from '../context/AuthContext';
-import { profileApi } from '../lib/api';
+import { profileApi, authApi } from '../lib/api';
 import { useSkills, useCreateSkill, useUpdateSkill, useDeleteSkill, useSetSkillMembers } from '../hooks/useSkills';
 import { useOrgSettings, useUploadOrgLogo } from '../hooks/useOrgSettings';
 import { useUsers } from '../hooks/useUsers';
@@ -41,17 +43,6 @@ const TAG_COLORS = [
   '#9B5CFF', '#F04438', '#A3E635', '#22C55E', '#14B8A6', '#3B82F6', '#F97316', '#FB7185',
   '#EC4899', '#1E293B', '#0F766E', '#1D4ED8', '#7C3AED', '#38BDF8', '#84CC16', '#EAB308',
 ];
-
-// ── Shared layout helpers ─────────────────────────────────────────────────────
-
-function SectionDivider({ title, sub }: { title: string; sub?: string }) {
-  return (
-    <div className="py-5 border-b border-[#E9EAEB]">
-      <h3 className="text-sm font-semibold text-[#181D27]">{title}</h3>
-      {sub && <p className="text-sm text-[#535862] mt-0.5">{sub}</p>}
-    </div>
-  );
-}
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
@@ -452,7 +443,7 @@ function MemberAvatarStack({ members, max = 5 }: { members: { id: string; name: 
 
 // ── Shared: pagination ────────────────────────────────────────────────────────
 
-function pageNumbers(page: number, totalPages: number): (number | '...')[] {
+function pageNumbers(_page: number, totalPages: number): (number | '...')[] {
   if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
   const arr: (number | '...')[] = [1, 2, 3, '...'];
   for (let i = Math.max(4, totalPages - 2); i <= totalPages; i++) arr.push(i);
@@ -977,6 +968,20 @@ export default function SettingsPage() {
   // 2FA
   const [twoFAMethod, setTwoFAMethod] = useState<'app' | 'email' | null>(null);
 
+  // Change password
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPwd,         setCurrentPwd]         = useState('');
+  const [newPwd,             setNewPwd]             = useState('');
+  const [confirmPwd,         setConfirmPwd]         = useState('');
+  const [changingPwd,        setChangingPwd]        = useState(false);
+  const [pwdError,           setPwdError]           = useState('');
+  const [showCurrentPwd,     setShowCurrentPwd]     = useState(false);
+  const [showNewPwd,         setShowNewPwd]         = useState(false);
+  const [showConfirmPwd,     setShowConfirmPwd]     = useState(false);
+
+  // Add-skills picker
+  const [showSkillsPicker, setShowSkillsPicker] = useState(false);
+
   // ── Load profile ─────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -1093,6 +1098,24 @@ export default function SettingsPage() {
     );
   }
 
+  async function handleChangePassword() {
+    setPwdError('');
+    if (!newPwd || !currentPwd) { setPwdError('All fields are required.'); return; }
+    if (newPwd.length < 8) { setPwdError('New password must be at least 8 characters.'); return; }
+    if (newPwd !== confirmPwd) { setPwdError('Passwords do not match.'); return; }
+    setChangingPwd(true);
+    try {
+      await authApi.changePassword(currentPwd, newPwd);
+      setShowChangePassword(false);
+      setCurrentPwd(''); setNewPwd(''); setConfirmPwd('');
+      notify('Password changed successfully');
+    } catch (err) {
+      setPwdError((err as Error).message);
+    } finally {
+      setChangingPwd(false);
+    }
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -1121,23 +1144,32 @@ export default function SettingsPage() {
 
       {/* ── Personal Info ──────────────────────────────────────────────────────── */}
       {mainTab === 'personal' && (
-        <div className="px-8 pb-12">
+        <div className="px-16 pt-6 pb-6">
 
-          <SectionDivider
-            title="Personal info"
-            sub="Update your photo and personal details here."
-          />
+          {/* Section header with Change Password button */}
+          <div className="flex items-start justify-between py-3 border-b border-[#E9EAEB]">
+            <div>
+              <h3 className="text-sm font-semibold text-[#181D27]">Personal info</h3>
+              <p className="text-sm text-[#535862] mt-0.5">Update your photo and personal details here.</p>
+            </div>
+            <button
+              onClick={() => { setShowChangePassword(true); setPwdError(''); setCurrentPwd(''); setNewPwd(''); setConfirmPwd(''); }}
+              className="px-4 py-2 text-sm font-semibold text-[#414651] border border-[#D5D7DA] rounded-lg bg-white hover:bg-gray-50 transition-colors shrink-0"
+            >
+              Change Password
+            </button>
+          </div>
 
           {/* Name */}
-          <SettingsRow label="Name">
-            <div className="flex gap-4">
-              <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" className="flex-1" />
-              <Input value={lastName}  onChange={(e) => setLastName(e.target.value)}  placeholder="Last name"  className="flex-1" />
+          <SettingsRow label="Name" required>
+            <div className="flex gap-6 w-full">
+              <div className="flex-1"><Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" /></div>
+              <div className="flex-1"><Input value={lastName}  onChange={(e) => setLastName(e.target.value)}  placeholder="Last name"  /></div>
             </div>
           </SettingsRow>
 
           {/* Email */}
-          <SettingsRow label="Email address" sub="This is your current email address.">
+          <SettingsRow label="Email address" sub="This is your current email address." required>
             <Input
               value={profile?.email ?? authUser?.email ?? ''}
               readOnly
@@ -1147,7 +1179,7 @@ export default function SettingsPage() {
           </SettingsRow>
 
           {/* Photo */}
-          <SettingsRow label="Your photo" sub="This will be displayed on your profile.">
+          <SettingsRow label="Your photo" sub="This will be displayed on your profile." required helpText="SVG, PNG, JPG or GIF (max. 2MB)">
             <div className="flex items-start gap-5">
               <div className="relative shrink-0">
                 <Avatar src={avatarUrl ?? undefined} name={displayName} size="lg" className="w-16 h-16" />
@@ -1163,20 +1195,166 @@ export default function SettingsPage() {
             </div>
           </SettingsRow>
 
-          {/* System role */}
-          <SettingsRow label="System role" sub="Your access level in the platform.">
-            <div className="flex items-center gap-2 px-3 py-2.5 border border-[#D5D7DA] rounded-lg bg-gray-50">
-              <span className="text-sm text-[#717680] capitalize">
-                {(profile?.role ?? authUser?.role ?? '').replace('_', ' ')}
-              </span>
-              <span className="ml-auto text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#F4EBFF] text-[#6941C6] capitalize">
-                {(profile?.role ?? authUser?.role ?? '').replace('_', ' ')}
+          {/* Role */}
+          <SettingsRow label="Role" sub="Your access level in the platform.">
+            <div className="flex items-center px-3 py-2.5 border border-[#D5D7DA] rounded-lg bg-gray-50">
+              <span className="text-sm text-[#414651] capitalize">
+                {(profile?.role ?? authUser?.role ?? '').replace(/_/g, ' ')}
               </span>
             </div>
           </SettingsRow>
 
-          {/* Save */}
-          <div className="flex gap-3 pt-5 pl-[312px]">
+          {/* 2FA */}
+          <SettingsRow label="Two-factor authentication" sub="Keep your account secure by enabling 2FA via email or authenticator app." wideContent>
+            <div className="border border-[#E9EAEB] rounded-xl overflow-hidden max-w-[720px]">
+              <div className="flex">
+                {/* Left stepper */}
+                <div className="w-44 shrink-0 px-5 py-6 flex flex-col justify-center gap-5">
+                  {/* Step 1 — active */}
+                  <div className="flex gap-3 items-center">
+                    <div className="w-6 h-6 rounded-full bg-[#7F56D9] shadow-[0_0_0_2px_white,0_0_0_4px_#9E77ED] flex items-center justify-center shrink-0">
+                      <div className="w-2 h-2 rounded-full bg-white" />
+                    </div>
+                    <p className="text-sm font-semibold text-[#6941C6]">Choose method</p>
+                  </div>
+                  {/* Step 2 — inactive */}
+                  <div className="flex gap-3 items-center">
+                    <div className="w-6 h-6 rounded-full bg-white border-[1.5px] border-[#E9EAEB] flex items-center justify-center shrink-0">
+                      <div className="w-2 h-2 rounded-full bg-[#D5D7DA]" />
+                    </div>
+                    <p className="text-sm font-semibold text-[#414651]">Verify code</p>
+                  </div>
+                </div>
+
+                {/* Right method selection */}
+                <div className="flex-1 px-6 py-6">
+                  <p className="text-base font-semibold text-[#181D27] mb-4">Choose an authentication method</p>
+                  <div className="flex flex-col gap-2">
+                    {TWO_FA_METHODS.map((m) => {
+                      const checked = twoFAMethod === m.id;
+                      return (
+                        <div
+                          key={m.id}
+                          onClick={() => setTwoFAMethod(checked ? null : m.id)}
+                          className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                            checked ? 'border-[#D5D7DA] bg-white' : 'border-[#D5D7DA] bg-white hover:border-[#9E77ED]'
+                          }`}
+                        >
+                          <Checkbox checked={checked} onChange={() => setTwoFAMethod(checked ? null : m.id)} />
+                          <span className="text-base text-[#181D27]">{m.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4"><Button size="md">Next</Button></div>
+                </div>
+              </div>
+            </div>
+          </SettingsRow>
+
+          {/* Skills */}
+          <SettingsRow label="Skills" sub="Add skills to help your team understand your expertise.">
+            <div className="flex flex-col gap-3">
+              {/* Skill cards — horizontal wrap */}
+              {selectedSkills.length > 0 && (
+                <div className="grid grid-cols-3 gap-3">
+                  {selectedSkills.map(({ id, experience }) => {
+                    const skill = allSkills.find((s) => s.id === id);
+                    if (!skill) return null;
+                    return (
+                      <div key={id} className="flex items-start gap-3 px-4 py-3 bg-white border border-[#E9EAEB] rounded-xl drop-shadow-[0px_1px_1px_rgba(10,13,18,0.05)]">
+                        <div className="min-w-0">
+                          {editingSkillId === id ? (
+                            <>
+                              <p className="text-base font-semibold text-[#414651]">{skill.name}</p>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <input
+                                  type="text"
+                                  value={editExp}
+                                  onChange={(e) => setEditExp(e.target.value)}
+                                  placeholder="e.g. 2-5 years"
+                                  autoFocus
+                                  className="text-xs border border-[#D5D7DA] rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#9E77ED] w-28"
+                                />
+                                <button
+                                  onClick={() => {
+                                    setSelectedSkills((prev) =>
+                                      prev.map((s) => s.id === id ? { ...s, experience: editExp || null } : s),
+                                    );
+                                    setEditingSkillId(null);
+                                  }}
+                                  className="text-xs text-[#7F56D9] font-medium hover:underline"
+                                >
+                                  Save
+                                </button>
+                                <button onClick={() => setEditingSkillId(null)} className="text-xs text-[#717680] hover:underline">
+                                  Cancel
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-base font-semibold text-[#414651] whitespace-nowrap">{skill.name}</p>
+                              <p className="text-sm text-[#535862] whitespace-nowrap">
+                                {experience ? `${experience} experience` : 'Add experience'}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-0.5 shrink-0 ml-1">
+                          <button
+                            onClick={() => { setEditingSkillId(id); setEditExp(experience ?? ''); }}
+                            className="p-1.5 rounded hover:bg-gray-100 text-[#717680] transition-colors"
+                          >
+                            <Edit01 width={14} height={14} />
+                          </button>
+                          <button
+                            onClick={() => { toggleSkill(id); if (editingSkillId === id) setEditingSkillId(null); }}
+                            className="p-1.5 rounded hover:bg-red-50 text-[#717680] hover:text-red-600 transition-colors"
+                          >
+                            <Trash01 width={14} height={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Add more skills — bordered button */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowSkillsPicker((p) => !p)}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-[#414651] bg-white border border-[#D5D7DA] rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
+                >
+                  <Plus width={16} height={16} />
+                  Add more skills
+                </button>
+                {showSkillsPicker && (
+                  <div className="absolute left-0 top-[calc(100%+4px)] z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg w-56 max-h-60 overflow-y-auto">
+                    {allSkills.filter((s) => !selectedSkills.find((x) => x.id === s.id)).length === 0 ? (
+                      <p className="text-xs text-[#717680] px-4 py-3">All skills already added</p>
+                    ) : (
+                      allSkills
+                        .filter((s) => !selectedSkills.find((x) => x.id === s.id))
+                        .map((s) => (
+                          <button
+                            key={s.id}
+                            onClick={() => { toggleSkill(s.id); setShowSkillsPicker(false); }}
+                            className="w-full px-4 py-2.5 text-sm text-left text-[#181D27] hover:bg-gray-50 transition-colors"
+                          >
+                            {s.name}
+                          </button>
+                        ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </SettingsRow>
+
+          {/* Save / Cancel */}
+          <div className="flex justify-end gap-3 pt-5">
             <button
               onClick={() => {
                 if (!profile) return;
@@ -1195,142 +1373,96 @@ export default function SettingsPage() {
             <Button onClick={handleSave} loading={saving} size="md">Save changes</Button>
           </div>
 
-          {/* 2FA */}
-          <SettingsRow
-            label="Two-factor authentication"
-            sub="Keep your account secure by enabling 2FA via email or authenticator app."
-          >
-            <div className="border border-[#E9EAEB] rounded-xl overflow-hidden">
-              <div className="flex">
-                {/* Left stepper */}
-                <div className="w-44 shrink-0 px-5 py-6 border-r border-[#E9EAEB] flex flex-col gap-0">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#7F56D9] flex items-center justify-center shrink-0">
-                      <div className="w-3 h-3 rounded-full bg-white" />
-                    </div>
-                    <span className="text-sm font-semibold text-[#7F56D9]">Choose method</span>
-                  </div>
-                  <div className="ml-4 w-px h-8 bg-[#E9EAEB]" />
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full border-2 border-[#D5D7DA] flex items-center justify-center shrink-0 bg-white">
-                      <div className="w-2.5 h-2.5 rounded-full bg-[#D5D7DA]" />
-                    </div>
-                    <span className="text-sm font-medium text-[#717680]">Verify code</span>
-                  </div>
-                </div>
-
-                {/* Right method selection */}
-                <div className="flex-1 px-6 py-6">
-                  <p className="text-sm font-semibold text-[#181D27] mb-4">Choose an authentication method</p>
-                  <div className="flex flex-col gap-3">
-                    {TWO_FA_METHODS.map((m) => {
-                      const checked = twoFAMethod === m.id;
-                      return (
-                        <div
-                          key={m.id}
-                          className={`flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors ${
-                            checked ? 'border-[#7F56D9] bg-[#F9F5FF]' : 'border-[#E9EAEB] bg-white hover:border-[#9E77ED]'
-                          }`}
-                        >
-                          <Checkbox checked={checked} onChange={() => setTwoFAMethod(checked ? null : m.id)} />
-                          <span className="text-sm font-medium text-[#414651]">{m.label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {twoFAMethod && (
-                    <div className="mt-5"><Button size="md">Next</Button></div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </SettingsRow>
-
-          {/* My skills */}
-          <SettingsRow label="Skills" sub="Add skills to help your team understand your expertise.">
-            {selectedSkills.length > 0 && (
-              <div className="flex flex-wrap gap-3 mb-4">
-                {selectedSkills.map(({ id, experience }) => {
-                  const skill = allSkills.find((s) => s.id === id);
-                  if (!skill) return null;
-                  return (
-                    <div key={id} className="flex items-center gap-3 px-4 py-3 bg-white border border-[#E9EAEB] rounded-xl shadow-sm">
-                      <div className="w-9 h-9 rounded-lg bg-[#F9F5FF] flex items-center justify-center shrink-0">
-                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                          <path d="M9 1.5l2.472 4.5H16.5l-3.986 3.375 1.514 5.25L9 12l-5.028 2.625 1.514-5.25L1.5 6h5.028L9 1.5z"
-                            fill="#7F56D9" fillOpacity="0.15" stroke="#7F56D9" strokeWidth="1.25" strokeLinejoin="round"/>
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-[#181D27]">{skill.name}</p>
-                        {editingSkillId === id ? (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <input
-                              type="text"
-                              value={editExp}
-                              onChange={(e) => setEditExp(e.target.value)}
-                              placeholder="e.g. 2-5 years"
-                              className="text-xs border border-[#D5D7DA] rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#9E77ED] w-28"
-                            />
-                            <button
-                              onClick={() => {
-                                setSelectedSkills((prev) =>
-                                  prev.map((s) => s.id === id ? { ...s, experience: editExp || null } : s),
-                                );
-                                setEditingSkillId(null);
-                              }}
-                              className="text-xs text-[#7F56D9] font-medium hover:underline"
-                            >
-                              Save
-                            </button>
-                          </div>
-                        ) : (
-                          <p className="text-xs text-[#717680]">{experience ?? 'Add experience'}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 ml-3">
-                        <button
-                          onClick={() => { setEditingSkillId(id); setEditExp(experience ?? ''); }}
-                          className="p-1 rounded hover:bg-gray-100 text-[#717680] transition-colors"
-                        >
-                          <Edit01 width={14} height={14} />
-                        </button>
-                        <button
-                          onClick={() => toggleSkill(id)}
-                          className="p-1 rounded hover:bg-red-50 text-[#717680] hover:text-red-600 transition-colors"
-                        >
-                          <Trash01 width={14} height={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {allSkills
-                .filter((s) => !selectedSkills.find((x) => x.id === s.id))
-                .map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => toggleSkill(s.id)}
-                    className="px-3 py-1.5 text-sm font-medium text-[#414651] bg-white border border-[#E9EAEB] rounded-full hover:border-[#7F56D9] hover:text-[#7F56D9] hover:bg-[#F9F5FF] transition-colors"
-                  >
-                    + {s.name}
-                  </button>
-                ))}
-              {allSkills.length === 0 && (
-                <p className="text-sm text-[#717680]">No skills available.</p>
-              )}
-            </div>
-          </SettingsRow>
-
         </div>
+      )}
+
+      {/* ── Change Password Slide-Over ─────────────────────────────────────────── */}
+      {showChangePassword && (
+        <SlideOver
+          open
+          onClose={() => setShowChangePassword(false)}
+          title="Change Password"
+          subtitle="Choose a new password for your account."
+          width="max-w-md"
+          footer={
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowChangePassword(false)}
+                className="px-4 py-2.5 text-sm font-semibold text-[#414651] border border-[#D5D7DA] rounded-lg bg-white hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <Button onClick={handleChangePassword} loading={changingPwd} size="md">
+                Update password
+              </Button>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-5">
+            <div>
+              <label className="block text-sm font-medium text-[#414651] mb-1.5">Current password</label>
+              <div className="relative">
+                <Input
+                  type={showCurrentPwd ? 'text' : 'password'}
+                  value={currentPwd}
+                  onChange={(e) => { setCurrentPwd(e.target.value); if (pwdError) setPwdError(''); }}
+                  placeholder="Enter current password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPwd((p) => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors"
+                >
+                  {showCurrentPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#414651] mb-1.5">New password</label>
+              <div className="relative">
+                <Input
+                  type={showNewPwd ? 'text' : 'password'}
+                  value={newPwd}
+                  onChange={(e) => { setNewPwd(e.target.value); if (pwdError) setPwdError(''); }}
+                  placeholder="Min. 8 characters"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPwd((p) => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors"
+                >
+                  {showNewPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#414651] mb-1.5">Confirm new password</label>
+              <div className="relative">
+                <Input
+                  type={showConfirmPwd ? 'text' : 'password'}
+                  value={confirmPwd}
+                  onChange={(e) => { setConfirmPwd(e.target.value); if (pwdError) setPwdError(''); }}
+                  placeholder="Re-enter new password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPwd((p) => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors"
+                >
+                  {showConfirmPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
+                </button>
+              </div>
+            </div>
+            {pwdError && (
+              <p className="text-sm text-red-600">{pwdError}</p>
+            )}
+          </div>
+        </SlideOver>
       )}
 
       {/* ── Organization Info ─────────────────────────────────────────────────── */}
       {mainTab === 'organization' && (
-        <div className="px-8 pb-12">
+        <div className="px-8 pb-6">
           <div className="py-5 border-b border-[#E9EAEB]">
             <h2 className="text-lg font-semibold text-[#181D27]">Organisation info</h2>
             <p className="text-sm text-[#535862] mt-0.5">Update your organisation details here.</p>
@@ -1384,7 +1516,7 @@ export default function SettingsPage() {
 
       {/* ── Project Settings ──────────────────────────────────────────────────── */}
       {mainTab === 'projects' && (
-        <div className="px-8 pb-12">
+        <div className="px-8 pb-6">
           <div className="py-5 border-b border-[#E9EAEB]">
             <h2 className="text-lg font-semibold text-[#181D27]">Project settings</h2>
             <p className="text-sm text-[#535862] mt-0.5">Update your project and task settings here.</p>

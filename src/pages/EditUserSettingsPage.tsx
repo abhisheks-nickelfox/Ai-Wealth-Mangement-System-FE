@@ -318,7 +318,7 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
 
   return (
     <>
-      <div className="px-8 py-8 flex flex-col gap-6">
+      <div className="px-16 pt-6 pb-6 flex flex-col gap-6">
 
         {/* ── Header: name left, status right, border-b acts as section divider ── */}
         <div className="flex items-start justify-between pb-6 border-b border-gray-100">

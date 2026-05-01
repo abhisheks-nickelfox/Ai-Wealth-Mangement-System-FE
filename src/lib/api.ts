@@ -77,6 +77,9 @@ export const authApi = {
 
   resetPassword: (token: string, password: string) =>
     request<{ message: string }>('POST', '/auth/reset-password', { token, password }),
+
+  changePassword: (current_password: string, new_password: string) =>
+    request<{ message: string }>('POST', '/auth/change-password', { current_password, new_password }),
 };
 
 // ── Shared types ─────────────────────────────────────────────────────────────
@@ -350,6 +353,7 @@ export const firmsApi = {
     request<{ data: Firm }>('POST', '/firms', payload).then((r) => r.data),
   update: (id: string, payload: Partial<Firm>) =>
     request<{ data: Firm }>('PATCH', `/firms/${id}`, payload).then((r) => r.data),
+  delete: (id: string) => request<void>('DELETE', `/firms/${id}`),
 };
 
 export const promptsApi = {

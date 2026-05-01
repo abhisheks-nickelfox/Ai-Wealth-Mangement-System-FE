@@ -34,7 +34,7 @@ export default function OnboardingStepper({
             className="flex gap-3 items-start"
           >
             {/* Icon + connector */}
-            <div className="flex flex-col items-center gap-1 self-stretch shrink-0">
+            <div className="flex flex-col items-center gap-0 self-stretch shrink-0" style={{ width: 34 }}>
               <button
                 type="button"
                 disabled={!isClickable}

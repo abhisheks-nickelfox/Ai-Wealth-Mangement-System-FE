@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import OnboardingStepper from '../components/onboarding/OnboardingStepper';
 import Toast from '../components/ui/Toast';
 import {
@@ -10,19 +10,22 @@ import {
   buildE164Phone,
 } from '../components/firms/FirmStepForms';
 import type { Step1State, Step2State } from '../components/firms/FirmStepForms';
-import { useCreateFirm } from '../hooks/useFirms';
+import { useFirmDetail, useUpdateFirm } from '../hooks/useFirms';
 import { useUsers } from '../hooks/useUsers';
 
 type StepId = 1 | 2 | 3;
 
-export default function AddFirmPage() {
+export default function EditFirmPage() {
+  const { id }       = useParams<{ id: string }>();
   const navigate     = useNavigate();
-  const createFirm   = useCreateFirm();
-  const { data: users = [] } = useUsers();
+  const updateFirm   = useUpdateFirm();
+  const { data: users = [] }             = useUsers();
+  const { data: firm, isLoading, error } = useFirmDetail(id!);
 
-  const [step, setStep]         = useState<StepId>(1);
-  const [apiError, setApiError] = useState('');
+  const [step, setStep]           = useState<StepId>(1);
+  const [apiError, setApiError]   = useState('');
   const [showToast, setShowToast] = useState(false);
+  const [hydrated, setHydrated]   = useState(false);
 
   const [step1, setStep1] = useState<Step1State>({
     name:        '',
@@ -43,6 +46,28 @@ export default function AddFirmPage() {
 
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (firm && !hydrated) {
+      setStep1({
+        name:        firm.name ?? '',
+        location:    firm.location ?? '',
+        website:     firm.website ?? '',
+        logoFile:    null,
+        logoPreview: firm.logo_url ?? null,
+        description: firm.description ?? '',
+      });
+      setStep2({
+        contactName:    firm.contact_name  ?? '',
+        contactRole:    firm.contact_role  ?? '',
+        contactEmail:   firm.contact_email ?? '',
+        contactPhone:   firm.contact_phone ?? '',
+        contactCountry: 'US',
+      });
+      setSelectedManagerId(firm.account_manager_id ?? null);
+      setHydrated(true);
+    }
+  }, [firm, hydrated]);
+
   function handleStep1Submit() {
     setApiError('');
     setStep(2);
@@ -60,33 +85,52 @@ export default function AddFirmPage() {
         ? buildE164Phone(step2.contactPhone, step2.contactCountry)
         : null;
 
-      const firm = await createFirm.mutateAsync({
-        name:               step1.name.trim(),
-        location:           step1.location.trim()    || null,
-        website:            step1.website.trim()     || null,
-        description:        step1.description.trim() || null,
-        logo_url:           step1.logoPreview        ?? null,
-        contact_name:       step2.contactName.trim()  || null,
-        contact_role:       step2.contactRole.trim()  || null,
-        contact_email:      step2.contactEmail.trim() || null,
-        contact_phone:      e164                      || null,
-        account_manager_id: selectedManagerId         || null,
+      await updateFirm.mutateAsync({
+        id: id!,
+        payload: {
+          name:               step1.name.trim(),
+          location:           step1.location.trim()    || null,
+          website:            step1.website.trim()     || null,
+          description:        step1.description.trim() || null,
+          logo_url:           step1.logoPreview        ?? null,
+          contact_name:       step2.contactName.trim()  || null,
+          contact_role:       step2.contactRole.trim()  || null,
+          contact_email:      step2.contactEmail.trim() || null,
+          contact_phone:      e164                      || null,
+          account_manager_id: selectedManagerId         || null,
+        },
       });
 
       setShowToast(true);
-      setTimeout(() => navigate(`/firms/${firm.id}`), 1500);
+      setTimeout(() => navigate(`/firms/${id}`), 1500);
     } catch (err) {
       setApiError((err as Error).message);
     }
   }
 
-  const isPending = createFirm.isPending;
+  const isPending = updateFirm.isPending;
+
+  if (isLoading) {
+    return (
+      <main className="flex-1 min-w-0 overflow-y-auto bg-gray-50 flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-[#7F56D9] border-t-transparent rounded-full animate-spin" aria-label="Loading" />
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="flex-1 min-w-0 overflow-y-auto bg-gray-50 flex items-center justify-center">
+        <p className="text-sm text-red-500">{(error as Error).message}</p>
+      </main>
+    );
+  }
 
   return (
     <>
       {showToast && (
         <Toast
-          message="Firm created successfully"
+          message="Firm updated successfully"
           onClose={() => setShowToast(false)}
         />
       )}
@@ -94,9 +138,9 @@ export default function AddFirmPage() {
         <div className="py-10 px-24">
 
           <div className="mb-10">
-            <h1 className="text-2xl font-bold text-[#181D27]">Add a Firm</h1>
+            <h1 className="text-2xl font-bold text-[#181D27]">Edit Firm</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Create a new firm profile to start managing your partnership.
+              Update the firm profile and relationship details.
             </p>
           </div>
 
@@ -148,6 +192,7 @@ export default function AddFirmPage() {
                   onSubmit={handleStep3Submit}
                   isPending={isPending}
                   error={apiError}
+                  submitLabel="Save Changes"
                 />
               )}
             </section>
