@@ -5,7 +5,7 @@ import type { User } from '../lib/api';
 
 const TOKEN_KEY = 'mw_token';
 
-function saveToken(token: string, remember: boolean) {
+export function saveToken(token: string, remember: boolean) {
   if (remember) {
     localStorage.setItem(TOKEN_KEY, token);
     sessionStorage.removeItem(TOKEN_KEY);

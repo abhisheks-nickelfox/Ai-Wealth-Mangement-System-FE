@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
 import {
   Mail01,
   Trash01,
@@ -8,6 +10,7 @@ import {
   Eye,
   EyeOff,
 } from '@untitled-ui/icons-react';
+import { changePasswordSchema } from '../lib/validation/auth.schemas';
 import Avatar from '../components/ui/Avatar';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
@@ -970,14 +973,28 @@ export default function SettingsPage() {
 
   // Change password
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [currentPwd,         setCurrentPwd]         = useState('');
-  const [newPwd,             setNewPwd]             = useState('');
-  const [confirmPwd,         setConfirmPwd]         = useState('');
-  const [changingPwd,        setChangingPwd]        = useState(false);
-  const [pwdError,           setPwdError]           = useState('');
   const [showCurrentPwd,     setShowCurrentPwd]     = useState(false);
   const [showNewPwd,         setShowNewPwd]         = useState(false);
   const [showConfirmPwd,     setShowConfirmPwd]     = useState(false);
+
+  const {
+    register:     registerPwd,
+    handleSubmit: handlePwdSubmit,
+    reset:        resetPwd,
+    setError:     setPwdError,
+    formState:    { errors: pwdErrors, isSubmitting: changingPwd },
+  } = useForm({ resolver: yupResolver(changePasswordSchema) });
+
+  const onChangePwd = async (data: { currentPassword: string; newPassword: string; confirmPassword: string }) => {
+    try {
+      await authApi.changePassword(data.currentPassword, data.newPassword);
+      setShowChangePassword(false);
+      resetPwd();
+      notify('Password changed successfully');
+    } catch (err) {
+      setPwdError('root', { message: (err as Error).message });
+    }
+  };
 
   // Add-skills picker
   const [showSkillsPicker, setShowSkillsPicker] = useState(false);
@@ -1098,23 +1115,6 @@ export default function SettingsPage() {
     );
   }
 
-  async function handleChangePassword() {
-    setPwdError('');
-    if (!newPwd || !currentPwd) { setPwdError('All fields are required.'); return; }
-    if (newPwd.length < 8) { setPwdError('New password must be at least 8 characters.'); return; }
-    if (newPwd !== confirmPwd) { setPwdError('Passwords do not match.'); return; }
-    setChangingPwd(true);
-    try {
-      await authApi.changePassword(currentPwd, newPwd);
-      setShowChangePassword(false);
-      setCurrentPwd(''); setNewPwd(''); setConfirmPwd('');
-      notify('Password changed successfully');
-    } catch (err) {
-      setPwdError((err as Error).message);
-    } finally {
-      setChangingPwd(false);
-    }
-  }
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -1153,7 +1153,7 @@ export default function SettingsPage() {
               <p className="text-sm text-[#535862] mt-0.5">Update your photo and personal details here.</p>
             </div>
             <button
-              onClick={() => { setShowChangePassword(true); setPwdError(''); setCurrentPwd(''); setNewPwd(''); setConfirmPwd(''); }}
+              onClick={() => { setShowChangePassword(true); resetPwd(); }}
               className="px-4 py-2 text-sm font-semibold text-[#414651] border border-[#D5D7DA] rounded-lg bg-white hover:bg-gray-50 transition-colors shrink-0"
             >
               Change Password
@@ -1392,27 +1392,24 @@ export default function SettingsPage() {
               >
                 Cancel
               </button>
-              <Button onClick={handleChangePassword} loading={changingPwd} size="md">
+              <Button onClick={() => handlePwdSubmit(onChangePwd)()} loading={changingPwd} size="md">
                 Update password
               </Button>
             </div>
           }
         >
-          <div className="flex flex-col gap-5">
+          <form onSubmit={handlePwdSubmit(onChangePwd)} className="flex flex-col gap-5">
             <div>
               <label className="block text-sm font-medium text-[#414651] mb-1.5">Current password</label>
               <div className="relative">
                 <Input
                   type={showCurrentPwd ? 'text' : 'password'}
-                  value={currentPwd}
-                  onChange={(e) => { setCurrentPwd(e.target.value); if (pwdError) setPwdError(''); }}
                   placeholder="Enter current password"
+                  error={pwdErrors.currentPassword?.message}
+                  {...registerPwd('currentPassword')}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrentPwd((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors"
-                >
+                <button type="button" onClick={() => setShowCurrentPwd((p) => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors">
                   {showCurrentPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
                 </button>
               </div>
@@ -1422,15 +1419,12 @@ export default function SettingsPage() {
               <div className="relative">
                 <Input
                   type={showNewPwd ? 'text' : 'password'}
-                  value={newPwd}
-                  onChange={(e) => { setNewPwd(e.target.value); if (pwdError) setPwdError(''); }}
                   placeholder="Min. 8 characters"
+                  error={pwdErrors.newPassword?.message}
+                  {...registerPwd('newPassword')}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPwd((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors"
-                >
+                <button type="button" onClick={() => setShowNewPwd((p) => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors">
                   {showNewPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
                 </button>
               </div>
@@ -1440,23 +1434,20 @@ export default function SettingsPage() {
               <div className="relative">
                 <Input
                   type={showConfirmPwd ? 'text' : 'password'}
-                  value={confirmPwd}
-                  onChange={(e) => { setConfirmPwd(e.target.value); if (pwdError) setPwdError(''); }}
                   placeholder="Re-enter new password"
+                  error={pwdErrors.confirmPassword?.message}
+                  {...registerPwd('confirmPassword')}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPwd((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors"
-                >
+                <button type="button" onClick={() => setShowConfirmPwd((p) => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors">
                   {showConfirmPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
                 </button>
               </div>
             </div>
-            {pwdError && (
-              <p className="text-sm text-red-600">{pwdError}</p>
+            {pwdErrors.root && (
+              <p className="text-sm text-red-600">{pwdErrors.root.message}</p>
             )}
-          </div>
+          </form>
         </SlideOver>
       )}
 

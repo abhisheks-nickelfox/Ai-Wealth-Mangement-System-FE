@@ -10,7 +10,7 @@ import FileUpload from '../../components/ui/FileUpload';
 import ImageCropModal from '../../components/ui/ImageCropModal';
 import { onboardingApi, skillsApi } from '../../lib/api';
 import type { Skill } from '../../lib/api';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, saveToken } from '../../context/AuthContext';
 
 // ── Steps config ──────────────────────────────────────────────────────────────
 
@@ -238,7 +238,7 @@ export default function OnboardingPage() {
       });
 
       if (result?.token) {
-        localStorage.setItem('mw_token', result.token);
+        saveToken(result.token, true);
         await refreshUser();
         setDone(true);
       } else {

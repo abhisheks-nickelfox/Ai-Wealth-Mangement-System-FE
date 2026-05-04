@@ -1,54 +1,17 @@
 // ── API client for frontend-new ───────────────────────────────────────────────
 // All requests go through this module. Never use fetch() directly in components.
+// Token injection and error normalisation are handled by axios interceptors in
+// src/lib/network/interceptors.ts
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000/api';
-console.log('API base URL:', BASE_URL);
-console.log('Running in production: meta.env.VITE_API_URL', import.meta.env.VITE_API_URL);
-function getToken(): string | null {
-  return localStorage.getItem('mw_token') ?? sessionStorage.getItem('mw_token');
-}
+import axiosInstance from './network/axiosInstance';
 
-async function request<T>(
-  method: string,
-  path: string,
-  body?: unknown,
-): Promise<T> {
-  const token = getToken();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-  try {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      method,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-
-    let json: unknown;
-    try {
-      json = await res.json();
-    } catch {
-      throw new Error(`Server error (${res.status}). Please try again.`);
-    }
-
-    if (!res.ok) {
-      const err = json as { error?: string };
-      throw new Error(err.error ?? `Request failed with status ${res.status}`);
-    }
-
-    return json as T;
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error('Request timed out. Please try again.');
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const response = await axiosInstance.request<T>({
+    method,
+    url: path,
+    data: body,
+  });
+  return response.data;
 }
 
 // ── Auth API ──────────────────────────────────────────────────────────────────

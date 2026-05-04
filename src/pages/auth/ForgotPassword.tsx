@@ -1,67 +1,62 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
 import { ArrowLeft, Key01 } from '@untitled-ui/icons-react';
 import AuthLayout from '../../components/layout/AuthLayout';
 import Input from '../../components/ui/Input';
 import { authApi } from '../../lib/api';
+import { forgotPasswordSchema } from '../../lib/validation/auth.schemas';
 
 export default function ForgotPassword() {
-  const [email, setEmail]     = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm({ resolver: yupResolver(forgotPasswordSchema) });
+
+  const onSubmit = async (data: { email: string }) => {
     try {
-      await authApi.forgotPassword(email);
+      await authApi.forgotPassword(data.email);
       navigate('/reset-link-sent');
     } catch (err) {
-      setError((err as Error).message ?? 'Something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
+      setError('email', { message: (err as Error).message ?? 'Something went wrong. Please try again.' });
     }
   };
 
   return (
     <AuthLayout hidePanel>
-      {/* Key icon */}
       <div className="flex justify-center mb-6">
         <div className="w-12 h-12 rounded-xl border border-gray-200 bg-white shadow-sm flex items-center justify-center">
           <Key01 width={22} height={22} className="text-gray-600" />
         </div>
       </div>
 
-      {/* Heading */}
       <h1 className="text-2xl font-semibold text-gray-900 mb-2 text-center">Forgot password?</h1>
       <p className="text-sm text-gray-500 mb-7 text-center">
         No worries, we'll send you reset instructions.
       </p>
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
         <Input
           label="Email"
           type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
           placeholder="Enter your email"
-          required
-          error={error || undefined}
+          error={errors.email?.message}
+          {...register('email')}
         />
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={isSubmitting}
           className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-60 text-white font-semibold text-sm rounded-lg py-2.5 transition-colors"
         >
-          {loading ? 'Sending…' : 'Reset password'}
+          {isSubmitting ? 'Sending…' : 'Reset password'}
         </button>
       </form>
 
-      {/* Back to login */}
       <Link
         to="/login"
         className="flex items-center justify-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-gray-700 transition-colors mt-6"
