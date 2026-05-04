@@ -28,6 +28,8 @@ import { useOrgSettings, useUploadOrgLogo } from '../hooks/useOrgSettings';
 import { useUsers } from '../hooks/useUsers';
 import { useTaskTypes, useCreateTaskType, useUpdateTaskType, useDeleteTaskType } from '../hooks/useTaskTypes';
 import type { User, Skill, TaskType } from '../lib/api';
+import AddSkillsModal from '../components/users/AddSkillsModal';
+import type { LocalSkill } from '../components/users/AddSkillsModal';
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
@@ -952,9 +954,10 @@ export default function SettingsPage() {
   // Personal form state
   const [firstName,      setFirstName]      = useState('');
   const [lastName,       setLastName]       = useState('');
-  const [selectedSkills, setSelectedSkills] = useState<{ id: string; experience: string | null }[]>([]);
+  const [selectedSkills, setSelectedSkills] = useState<LocalSkill[]>([]);
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [editExp,        setEditExp]        = useState('');
+  const [showAddSkillsModal, setShowAddSkillsModal] = useState(false);
 
   // Avatar
   const [cropSrc,         setCropSrc]         = useState<string | null>(null);
@@ -996,8 +999,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Add-skills picker
-  const [showSkillsPicker, setShowSkillsPicker] = useState(false);
 
   // ── Load profile ─────────────────────────────────────────────────────────────
 
@@ -1009,7 +1010,8 @@ export default function SettingsPage() {
     setAvatarUrl(authUser.avatar_url ?? null);
     setSelectedSkills(
       (authUser.skills ?? []).map((s: Skill) => ({
-        id: s.id,
+        id:         s.id,
+        name:       s.name,
         experience: (s as Skill & { experience?: string | null }).experience ?? null,
       })),
     );
@@ -1107,14 +1109,10 @@ export default function SettingsPage() {
     }
   }
 
-  function toggleSkill(id: string) {
-    setSelectedSkills((prev) =>
-      prev.find((s) => s.id === id)
-        ? prev.filter((s) => s.id !== id)
-        : [...prev, { id, experience: null }],
-    );
+  function removeSkill(id: string) {
+    setSelectedSkills((prev) => prev.filter((s) => s.id !== id));
+    if (editingSkillId === id) setEditingSkillId(null);
   }
-
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -1255,101 +1253,78 @@ export default function SettingsPage() {
           {/* Skills */}
           <SettingsRow label="Skills" sub="Add skills to help your team understand your expertise.">
             <div className="flex flex-col gap-3">
-              {/* Skill cards — horizontal wrap */}
+              {/* Skill cards */}
               {selectedSkills.length > 0 && (
                 <div className="grid grid-cols-3 gap-3">
-                  {selectedSkills.map(({ id, experience }) => {
-                    const skill = allSkills.find((s) => s.id === id);
-                    if (!skill) return null;
-                    return (
-                      <div key={id} className="flex items-start gap-3 px-4 py-3 bg-white border border-[#E9EAEB] rounded-xl drop-shadow-[0px_1px_1px_rgba(10,13,18,0.05)]">
-                        <div className="min-w-0">
-                          {editingSkillId === id ? (
-                            <>
-                              <p className="text-base font-semibold text-[#414651]">{skill.name}</p>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <input
-                                  type="text"
-                                  value={editExp}
-                                  onChange={(e) => setEditExp(e.target.value)}
-                                  placeholder="e.g. 2-5 years"
-                                  autoFocus
-                                  className="text-xs border border-[#D5D7DA] rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#9E77ED] w-28"
-                                />
-                                <button
-                                  onClick={() => {
-                                    setSelectedSkills((prev) =>
-                                      prev.map((s) => s.id === id ? { ...s, experience: editExp || null } : s),
-                                    );
-                                    setEditingSkillId(null);
-                                  }}
-                                  className="text-xs text-[#7F56D9] font-medium hover:underline"
-                                >
-                                  Save
-                                </button>
-                                <button onClick={() => setEditingSkillId(null)} className="text-xs text-[#717680] hover:underline">
-                                  Cancel
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-base font-semibold text-[#414651] whitespace-nowrap">{skill.name}</p>
-                              <p className="text-sm text-[#535862] whitespace-nowrap">
-                                {experience ? `${experience} experience` : 'Add experience'}
-                              </p>
-                            </>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-0.5 shrink-0 ml-1">
-                          <button
-                            onClick={() => { setEditingSkillId(id); setEditExp(experience ?? ''); }}
-                            className="p-1.5 rounded hover:bg-gray-100 text-[#717680] transition-colors"
-                          >
-                            <Edit01 width={14} height={14} />
-                          </button>
-                          <button
-                            onClick={() => { toggleSkill(id); if (editingSkillId === id) setEditingSkillId(null); }}
-                            className="p-1.5 rounded hover:bg-red-50 text-[#717680] hover:text-red-600 transition-colors"
-                          >
-                            <Trash01 width={14} height={14} />
-                          </button>
-                        </div>
+                  {selectedSkills.map(({ id, name, experience }) => (
+                    <div key={id} className="flex items-start gap-3 px-4 py-3 bg-white border border-[#E9EAEB] rounded-xl drop-shadow-[0px_1px_1px_rgba(10,13,18,0.05)]">
+                      <div className="min-w-0 flex-1">
+                        {editingSkillId === id ? (
+                          <>
+                            <p className="text-base font-semibold text-[#414651]">{name}</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <input
+                                type="text"
+                                value={editExp}
+                                onChange={(e) => setEditExp(e.target.value.slice(0, 70))}
+                                placeholder="e.g. 2-5 years"
+                                autoFocus
+                                maxLength={70}
+                                className="text-xs border border-[#D5D7DA] rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#9E77ED] w-28"
+                              />
+                              <button
+                                onClick={() => {
+                                  setSelectedSkills((prev) =>
+                                    prev.map((s) => s.id === id ? { ...s, experience: editExp || null } : s),
+                                  );
+                                  setEditingSkillId(null);
+                                }}
+                                className="text-xs text-[#7F56D9] font-medium hover:underline"
+                              >
+                                Save
+                              </button>
+                              <button onClick={() => setEditingSkillId(null)} className="text-xs text-[#717680] hover:underline">
+                                Cancel
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-base font-semibold text-[#414651] whitespace-nowrap">{name}</p>
+                            <p className="text-sm text-[#535862] whitespace-nowrap">
+                              {experience ? `${experience} experience` : 'Add experience'}
+                            </p>
+                          </>
+                        )}
                       </div>
-                    );
-                  })}
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          onClick={() => { setEditingSkillId(id); setEditExp(experience ?? ''); }}
+                          className="p-1.5 rounded hover:bg-gray-100 text-[#717680] transition-colors"
+                        >
+                          <Edit01 width={14} height={14} />
+                        </button>
+                        <button
+                          onClick={() => removeSkill(id)}
+                          className="p-1.5 rounded hover:bg-red-50 text-[#717680] hover:text-red-600 transition-colors"
+                        >
+                          <Trash01 width={14} height={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
-              {/* Add more skills — bordered button */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowSkillsPicker((p) => !p)}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-[#414651] bg-white border border-[#D5D7DA] rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
-                >
-                  <Plus width={16} height={16} />
-                  Add more skills
-                </button>
-                {showSkillsPicker && (
-                  <div className="absolute left-0 top-[calc(100%+4px)] z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg w-56 max-h-60 overflow-y-auto">
-                    {allSkills.filter((s) => !selectedSkills.find((x) => x.id === s.id)).length === 0 ? (
-                      <p className="text-xs text-[#717680] px-4 py-3">All skills already added</p>
-                    ) : (
-                      allSkills
-                        .filter((s) => !selectedSkills.find((x) => x.id === s.id))
-                        .map((s) => (
-                          <button
-                            key={s.id}
-                            onClick={() => { toggleSkill(s.id); setShowSkillsPicker(false); }}
-                            className="w-full px-4 py-2.5 text-sm text-left text-[#181D27] hover:bg-gray-50 transition-colors"
-                          >
-                            {s.name}
-                          </button>
-                        ))
-                    )}
-                  </div>
-                )}
-              </div>
+              {/* Add more skills button → opens modal */}
+              <button
+                type="button"
+                onClick={() => setShowAddSkillsModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-[#414651] bg-white border border-[#D5D7DA] rounded-lg shadow-sm hover:bg-gray-50 transition-colors w-fit"
+              >
+                <Plus width={16} height={16} />
+                Add more skills
+              </button>
             </div>
           </SettingsRow>
 
@@ -1360,10 +1335,13 @@ export default function SettingsPage() {
                 if (!profile) return;
                 setFirstName(profile.first_name ?? profile.name.split(' ')[0] ?? '');
                 setLastName(profile.last_name ?? profile.name.split(' ').slice(1).join(' ') ?? '');
-                setSelectedSkills(profile.skills.map((s) => ({
-                  id: s.id,
-                  experience: (s as Skill & { experience?: string | null }).experience ?? null,
-                })));
+                setSelectedSkills(
+                  (profile.skills ?? []).map((s: Skill) => ({
+                    id:         s.id,
+                    name:       s.name,
+                    experience: (s as Skill & { experience?: string | null }).experience ?? null,
+                  })),
+                );
                 setEditingSkillId(null);
               }}
               className="px-4 py-2.5 text-sm font-semibold text-[#414651] border border-[#D5D7DA] rounded-lg bg-white hover:bg-gray-50 transition-colors"
@@ -1374,6 +1352,19 @@ export default function SettingsPage() {
           </div>
 
         </div>
+      )}
+
+      {/* ── Add Skills Modal ─────────────────────────────────────────────────── */}
+      {showAddSkillsModal && (
+        <AddSkillsModal
+          skillCatalog={allSkills}
+          initialSkills={selectedSkills}
+          onClose={() => setShowAddSkillsModal(false)}
+          onSave={(skills) => {
+            setSelectedSkills(skills);
+            setShowAddSkillsModal(false);
+          }}
+        />
       )}
 
       {/* ── Change Password Slide-Over ─────────────────────────────────────────── */}
