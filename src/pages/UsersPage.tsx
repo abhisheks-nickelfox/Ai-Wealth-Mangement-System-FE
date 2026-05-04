@@ -10,6 +10,7 @@ import {
 } from '@untitled-ui/icons-react';
 import SearchInput from '../components/ui/SearchInput';
 import Toast from '../components/ui/Toast';
+import AccessDenied from '../components/ui/AccessDenied';
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal';
 import StatusBadge from '../components/users/StatusBadge';
 import SkillBadge from '../components/users/SkillBadge';
@@ -285,7 +286,7 @@ export default function UsersPage() {
         {loading ? (
           <div className="px-6 py-12 text-center text-sm text-[#717680]">Loading…</div>
         ) : fetchError ? (
-          <div className="px-6 py-12 text-center text-sm text-red-600">{fetchError}</div>
+          <AccessDenied message={fetchError} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[800px]">

@@ -106,10 +106,11 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
   }
 
   function setExperience(skillId: string, exp: string) {
+    const capped = exp.slice(0, 70);
     setSelectedSkills((prev) =>
-      prev.map((e) => (e.id === skillId ? { ...e, experience: exp } : e)),
+      prev.map((e) => (e.id === skillId ? { ...e, experience: capped } : e)),
     );
-    if (exp) setSkillErrors((prev) => { const n = { ...prev }; delete n[skillId]; return n; });
+    if (capped) setSkillErrors((prev) => { const n = { ...prev }; delete n[skillId]; return n; });
   }
 
   function removeSkill(skillId: string) {
@@ -155,6 +156,14 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
     if (Object.keys(missing).length > 0) {
       setSkillErrors(missing);
       setError('Please enter an experience level for each skill.');
+      return;
+    }
+
+    const tooLong: Record<string, boolean> = {};
+    selectedSkills.forEach((e) => { if (e.experience && e.experience.trim().length > 70) tooLong[e.id] = true; });
+    if (Object.keys(tooLong).length > 0) {
+      setSkillErrors(tooLong);
+      setError('Experience must be 70 characters or fewer.');
       return;
     }
 
@@ -331,17 +340,25 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
                       </span>
 
                       {/* Experience input */}
-                      <input
-                        type="text"
-                        value={entry.experience}
-                        onChange={(e) => setExperience(entry.id, e.target.value)}
-                        placeholder="e.g. 2-5 years"
-                        className={`text-sm border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] bg-white transition-colors w-32 ${
-                          hasError
-                            ? 'border-red-300 text-red-600'
-                            : 'border-[#D5D7DA] text-[#414651]'
-                        }`}
-                      />
+                      <div className="flex flex-col gap-0.5">
+                        <input
+                          type="text"
+                          value={entry.experience}
+                          onChange={(e) => setExperience(entry.id, e.target.value)}
+                          placeholder="e.g. 2-5 years"
+                          maxLength={70}
+                          className={`text-sm border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] bg-white transition-colors w-32 ${
+                            hasError || entry.experience.length >= 70
+                              ? 'border-red-300 text-red-600'
+                              : 'border-[#D5D7DA] text-[#414651]'
+                          }`}
+                        />
+                        {entry.experience.length > 0 && (
+                          <p className={`text-[10px] text-right w-32 ${entry.experience.length >= 70 ? 'text-red-500' : 'text-gray-400'}`}>
+                            {entry.experience.length}/70
+                          </p>
+                        )}
+                      </div>
 
                       {/* Remove */}
                       <button

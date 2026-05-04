@@ -31,6 +31,21 @@ export interface Step2State {
   contactCountry: string;
 }
 
+const ALLOWED_IMAGE_TYPES = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/gif'];
+const MAX_DESCRIPTION_CHARS = 500;
+
+function isValidUrl(raw: string): boolean {
+  try {
+    const prefixed = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    new URL(prefixed);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ─── Step 1 ──────────────────────────────────────────────────────────────────
+
 interface Step1Props {
   state: Step1State;
   onChange: (patch: Partial<Step1State>) => void;
@@ -40,9 +55,22 @@ interface Step1Props {
 }
 
 export function Step1Form({ state, onChange, onSubmit, isPending, error }: Step1Props) {
-  const [nameError, setNameError] = useState('');
+  const [nameError,        setNameError]        = useState('');
+  const [locationError,    setLocationError]    = useState('');
+  const [websiteError,     setWebsiteError]      = useState('');
+  const [logoError,        setLogoError]         = useState('');
+  const [descriptionError, setDescriptionError]  = useState('');
 
   function handleLogoFile(file: File) {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setLogoError('Only SVG, PNG, JPG, or GIF files are allowed.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoError('Logo must be under 2 MB.');
+      return;
+    }
+    setLogoError('');
     const reader = new FileReader();
     reader.onload = (e) => {
       onChange({ logoFile: file, logoPreview: e.target?.result as string });
@@ -50,14 +78,54 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error }: Step1
     reader.readAsDataURL(file);
   }
 
-  function handleSubmit() {
-    if (!state.name.trim()) {
-      setNameError('Firm name is required.');
-      return;
+  function validate(): boolean {
+    const errors = { name: '', location: '', website: '', logo: '', description: '' };
+
+    const name = state.name.trim();
+    if (!name) {
+      errors.name = 'Firm name is required.';
+    } else if (name.length < 2) {
+      errors.name = 'Firm name must be at least 2 characters.';
+    } else if (name.length > 100) {
+      errors.name = 'Firm name must be 100 characters or fewer.';
     }
-    setNameError('');
+
+    if (!state.location.trim()) {
+      errors.location = 'Location is required.';
+    }
+
+    const website = state.website.trim();
+    if (!website) {
+      errors.website = 'Firm website is required.';
+    } else if (!isValidUrl(website)) {
+      errors.website = 'Please enter a valid website URL (e.g. www.example.com).';
+    }
+
+    if (!state.logoPreview) {
+      errors.logo = 'Please upload a firm logo.';
+    }
+
+    if (!state.description.trim()) {
+      errors.description = 'Description is required.';
+    } else if (state.description.length > MAX_DESCRIPTION_CHARS) {
+      errors.description = `Description must be ${MAX_DESCRIPTION_CHARS} characters or fewer.`;
+    }
+
+    setNameError(errors.name);
+    setLocationError(errors.location);
+    setWebsiteError(errors.website);
+    setLogoError(errors.logo);
+    setDescriptionError(errors.description);
+
+    return !errors.name && !errors.location && !errors.website && !errors.logo && !errors.description;
+  }
+
+  function handleSubmit() {
+    if (!validate()) return;
     onSubmit();
   }
+
+  const descCount = state.description.length;
 
   return (
     <div className="flex flex-col gap-5">
@@ -79,19 +147,25 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error }: Step1
       <Input
         label="Location"
         value={state.location}
-        onChange={(e) => onChange({ location: e.target.value })}
+        onChange={(e) => { onChange({ location: e.target.value }); setLocationError(''); }}
         placeholder="United States"
+        error={locationError}
+        required
       />
 
       <Input
         label="Firm website"
         value={state.website}
-        onChange={(e) => onChange({ website: e.target.value })}
+        onChange={(e) => { onChange({ website: e.target.value }); setWebsiteError(''); }}
         placeholder="e.g. www.3dp.com"
+        error={websiteError}
+        required
       />
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-[#414651]">Firm logo</label>
+        <label className="text-sm font-medium text-[#414651]">
+          Firm logo <span className="text-error-500 ml-0.5">*</span>
+        </label>
         {state.logoPreview ? (
           <div className="flex items-center gap-4">
             <img
@@ -101,28 +175,41 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error }: Step1
             />
             <button
               type="button"
-              onClick={() => onChange({ logoFile: null, logoPreview: null })}
+              onClick={() => { onChange({ logoFile: null, logoPreview: null }); setLogoError('Please upload a firm logo.'); }}
               className="text-sm text-red-500 hover:text-red-600 font-medium"
             >
               Remove
             </button>
           </div>
         ) : (
-          <FileUpload onFile={handleLogoFile} />
+          <FileUpload onFile={handleLogoFile} error={logoError} />
         )}
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-[#414651]">
-          Write a short description
+          Write a short description <span className="text-error-500 ml-0.5">*</span>
         </label>
         <textarea
           value={state.description}
-          onChange={(e) => onChange({ description: e.target.value })}
+          onChange={(e) => { onChange({ description: e.target.value }); setDescriptionError(''); }}
           rows={4}
           placeholder="Brief overview of the firm…"
-          className="w-full px-3.5 py-2.5 text-sm border border-[#D5D7DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7F56D9] resize-none placeholder:text-[#9DA4AE] text-[#181D27]"
+          className={`w-full px-3.5 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 resize-none placeholder:text-[#9DA4AE] text-[#181D27] ${
+            descriptionError
+              ? 'border-red-400 focus:ring-red-300'
+              : 'border-[#D5D7DA] focus:ring-[#7F56D9]'
+          }`}
         />
+        <div className="flex justify-between items-center">
+          {descriptionError
+            ? <p className="text-xs text-red-500">{descriptionError}</p>
+            : <span />
+          }
+          <p className={`text-xs ml-auto ${descCount > MAX_DESCRIPTION_CHARS ? 'text-red-500' : 'text-gray-400'}`}>
+            {descCount}/{MAX_DESCRIPTION_CHARS}
+          </p>
+        </div>
       </div>
 
       <button
@@ -137,6 +224,8 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error }: Step1
   );
 }
 
+// ─── Step 2 ──────────────────────────────────────────────────────────────────
+
 interface Step2Props {
   state: Step2State;
   onChange: (patch: Partial<Step2State>) => void;
@@ -146,33 +235,45 @@ interface Step2Props {
 }
 
 export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2Props) {
+  const [nameError,  setNameError]  = useState('');
+  const [roleError,  setRoleError]  = useState('');
   const [emailError, setEmailError] = useState('');
   const [phoneError, setPhoneError] = useState('');
 
   function validate(): boolean {
-    let valid = true;
+    const errors = { name: '', role: '', email: '', phone: '' };
+
+    const cName = state.contactName.trim();
+    if (!cName) {
+      errors.name = 'Contact name is required.';
+    } else if (cName.length < 2) {
+      errors.name = 'Contact name must be at least 2 characters.';
+    }
+
+    if (!state.contactRole.trim()) {
+      errors.role = 'Contact role is required.';
+    }
 
     const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (state.contactEmail && !emailRx.test(state.contactEmail)) {
-      setEmailError('Please enter a valid email address.');
-      valid = false;
-    } else {
-      setEmailError('');
+    if (!state.contactEmail.trim()) {
+      errors.email = 'Contact email is required.';
+    } else if (!emailRx.test(state.contactEmail.trim())) {
+      errors.email = 'Please enter a valid email address.';
     }
 
-    if (state.contactPhone) {
+    if (!state.contactPhone) {
+      errors.phone = 'Contact phone is required.';
+    } else {
       const phoneErr = getPhoneValidationError(state.contactPhone, state.contactCountry);
-      if (phoneErr) {
-        setPhoneError(phoneErr);
-        valid = false;
-      } else {
-        setPhoneError('');
-      }
-    } else {
-      setPhoneError('');
+      if (phoneErr) errors.phone = phoneErr;
     }
 
-    return valid;
+    setNameError(errors.name);
+    setRoleError(errors.role);
+    setEmailError(errors.email);
+    setPhoneError(errors.phone);
+
+    return !errors.name && !errors.role && !errors.email && !errors.phone;
   }
 
   function handleSubmit() {
@@ -191,15 +292,19 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
       <Input
         label="Name"
         value={state.contactName}
-        onChange={(e) => onChange({ contactName: e.target.value })}
+        onChange={(e) => { onChange({ contactName: e.target.value }); setNameError(''); }}
         placeholder="Enter contact name"
+        error={nameError}
+        required
       />
 
       <Input
         label="Role"
         value={state.contactRole}
-        onChange={(e) => onChange({ contactRole: e.target.value })}
+        onChange={(e) => { onChange({ contactRole: e.target.value }); setRoleError(''); }}
         placeholder="e.g. Marketing Manager"
+        error={roleError}
+        required
       />
 
       <Input
@@ -209,6 +314,7 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
         onChange={(e) => { onChange({ contactEmail: e.target.value }); setEmailError(''); }}
         placeholder="e.g. name@company.com"
         error={emailError}
+        required
       />
 
       <PhoneInput
@@ -218,6 +324,7 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
         countryCode={state.contactCountry}
         onCountryChange={(code) => onChange({ contactCountry: code })}
         error={phoneError}
+        required
       />
 
       <button
@@ -232,6 +339,8 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
   );
 }
 
+// ─── Step 3 ──────────────────────────────────────────────────────────────────
+
 interface Step3Props {
   users: User[];
   selectedId: string | null;
@@ -243,7 +352,8 @@ interface Step3Props {
 }
 
 export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, error, submitLabel }: Step3Props) {
-  const [search, setSearch] = useState('');
+  const [search,       setSearch]       = useState('');
+  const [managerError, setManagerError] = useState('');
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -255,6 +365,16 @@ export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, er
 
   function handleRowClick(id: string) {
     onSelect(selectedId === id ? null : id);
+    setManagerError('');
+  }
+
+  function handleSubmit() {
+    if (!selectedId) {
+      setManagerError('Please select an account manager.');
+      return;
+    }
+    setManagerError('');
+    onSubmit();
   }
 
   return (
@@ -267,7 +387,7 @@ export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, er
 
       <div>
         <label className="block text-sm font-medium text-[#414651] mb-1.5">
-          Choose Account Manager
+          Choose Account Manager <span className="text-error-500 ml-0.5">*</span>
         </label>
 
         <div className="relative mb-3">
@@ -280,12 +400,12 @@ export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, er
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Choose account manager"
+            placeholder="Search account manager"
             className="w-full pl-9 pr-3.5 py-2.5 text-sm border border-[#D5D7DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7F56D9] placeholder:text-[#9DA4AE] text-[#181D27]"
           />
         </div>
 
-        <div className="border border-[#E9EAEB] rounded-lg overflow-hidden max-h-72 overflow-y-auto">
+        <div className={`border rounded-lg overflow-hidden max-h-72 overflow-y-auto ${managerError ? 'border-red-400' : 'border-[#E9EAEB]'}`}>
           {filtered.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-6">No users found.</p>
           ) : (
@@ -304,15 +424,9 @@ export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, er
                       : 'bg-white hover:bg-gray-50 border-l-2 border-l-transparent'}
                   `}
                 >
-                  <Avatar
-                    name={user.name}
-                    src={user.avatar_url ?? undefined}
-                    size="sm"
-                  />
+                  <Avatar name={user.name} src={user.avatar_url ?? undefined} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-[#181D27] truncate">
-                      {user.name}
-                    </p>
+                    <p className="text-sm font-semibold text-[#181D27] truncate">{user.name}</p>
                     <p className="text-xs text-gray-400 truncate">@{handle}</p>
                   </div>
                   {isSelected && (
@@ -325,11 +439,15 @@ export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, er
             })
           )}
         </div>
+
+        {managerError && (
+          <p className="text-xs text-red-500 mt-1.5">{managerError}</p>
+        )}
       </div>
 
       <button
         type="button"
-        onClick={onSubmit}
+        onClick={handleSubmit}
         disabled={isPending}
         className="w-full py-3 bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white font-semibold rounded-lg transition-colors mt-2"
       >
