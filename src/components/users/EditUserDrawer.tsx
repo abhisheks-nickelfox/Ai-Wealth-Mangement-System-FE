@@ -264,6 +264,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
             value={roles}
             onChange={(vals) => { if (vals.length > 0) setRoles(vals.slice(-1)); }}
             columns={1}
+            singleSelect
           />
 
           {/* Member Role — visible when role = member */}

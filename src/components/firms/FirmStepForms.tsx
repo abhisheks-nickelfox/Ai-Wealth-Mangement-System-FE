@@ -52,14 +52,17 @@ interface Step1Props {
   onSubmit: () => void;
   isPending: boolean;
   error: string;
+  apiNameError?: string;
 }
 
-export function Step1Form({ state, onChange, onSubmit, isPending, error }: Step1Props) {
+export function Step1Form({ state, onChange, onSubmit, isPending, error, apiNameError = '' }: Step1Props) {
   const [nameError,        setNameError]        = useState('');
   const [locationError,    setLocationError]    = useState('');
   const [websiteError,     setWebsiteError]      = useState('');
   const [logoError,        setLogoError]         = useState('');
   const [descriptionError, setDescriptionError]  = useState('');
+
+  const displayNameError = apiNameError || nameError;
 
   function handleLogoFile(file: File) {
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
@@ -140,7 +143,7 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error }: Step1
         value={state.name}
         onChange={(e) => { onChange({ name: e.target.value }); setNameError(''); }}
         placeholder="e.g. 3 Portals Wealth Partners"
-        error={nameError}
+        error={displayNameError}
         required
       />
 
@@ -244,26 +247,16 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
     const errors = { name: '', role: '', email: '', phone: '' };
 
     const cName = state.contactName.trim();
-    if (!cName) {
-      errors.name = 'Contact name is required.';
-    } else if (cName.length < 2) {
+    if (cName && cName.length < 2) {
       errors.name = 'Contact name must be at least 2 characters.';
     }
 
-    if (!state.contactRole.trim()) {
-      errors.role = 'Contact role is required.';
-    }
-
     const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!state.contactEmail.trim()) {
-      errors.email = 'Contact email is required.';
-    } else if (!emailRx.test(state.contactEmail.trim())) {
+    if (state.contactEmail.trim() && !emailRx.test(state.contactEmail.trim())) {
       errors.email = 'Please enter a valid email address.';
     }
 
-    if (!state.contactPhone) {
-      errors.phone = 'Contact phone is required.';
-    } else {
+    if (state.contactPhone) {
       const phoneErr = getPhoneValidationError(state.contactPhone, state.contactCountry);
       if (phoneErr) errors.phone = phoneErr;
     }
@@ -293,18 +286,16 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
         label="Name"
         value={state.contactName}
         onChange={(e) => { onChange({ contactName: e.target.value }); setNameError(''); }}
-        placeholder="Enter contact name"
+        placeholder="Enter contact name (optional)"
         error={nameError}
-        required
       />
 
       <Input
         label="Role"
         value={state.contactRole}
         onChange={(e) => { onChange({ contactRole: e.target.value }); setRoleError(''); }}
-        placeholder="e.g. Marketing Manager"
+        placeholder="e.g. Marketing Manager (optional)"
         error={roleError}
-        required
       />
 
       <Input
@@ -312,9 +303,8 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
         type="email"
         value={state.contactEmail}
         onChange={(e) => { onChange({ contactEmail: e.target.value }); setEmailError(''); }}
-        placeholder="e.g. name@company.com"
+        placeholder="e.g. name@company.com (optional)"
         error={emailError}
-        required
       />
 
       <PhoneInput
@@ -324,7 +314,6 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
         countryCode={state.contactCountry}
         onCountryChange={(code) => onChange({ contactCountry: code })}
         error={phoneError}
-        required
       />
 
       <button
@@ -352,8 +341,7 @@ interface Step3Props {
 }
 
 export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, error, submitLabel }: Step3Props) {
-  const [search,       setSearch]       = useState('');
-  const [managerError, setManagerError] = useState('');
+  const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -365,15 +353,9 @@ export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, er
 
   function handleRowClick(id: string) {
     onSelect(selectedId === id ? null : id);
-    setManagerError('');
   }
 
   function handleSubmit() {
-    if (!selectedId) {
-      setManagerError('Please select an account manager.');
-      return;
-    }
-    setManagerError('');
     onSubmit();
   }
 
@@ -387,7 +369,7 @@ export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, er
 
       <div>
         <label className="block text-sm font-medium text-[#414651] mb-1.5">
-          Choose Account Manager <span className="text-error-500 ml-0.5">*</span>
+          Choose Account Manager <span className="text-gray-400 text-xs font-normal ml-1">(optional)</span>
         </label>
 
         <div className="relative mb-3">
@@ -405,7 +387,7 @@ export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, er
           />
         </div>
 
-        <div className={`border rounded-lg overflow-hidden max-h-72 overflow-y-auto ${managerError ? 'border-red-400' : 'border-[#E9EAEB]'}`}>
+        <div className="border border-[#E9EAEB] rounded-lg overflow-hidden max-h-72 overflow-y-auto">
           {filtered.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-6">No users found.</p>
           ) : (
@@ -440,9 +422,6 @@ export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, er
           )}
         </div>
 
-        {managerError && (
-          <p className="text-xs text-red-500 mt-1.5">{managerError}</p>
-        )}
       </div>
 
       <button

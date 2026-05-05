@@ -20,9 +20,10 @@ export default function AddFirmPage() {
   const createFirm   = useCreateFirm();
   const { data: users = [] } = useUsers();
 
-  const [step, setStep]         = useState<StepId>(1);
-  const [apiError, setApiError] = useState('');
-  const [showToast, setShowToast] = useState(false);
+  const [step, setStep]             = useState<StepId>(1);
+  const [apiError, setApiError]     = useState('');
+  const [nameApiError, setNameApiError] = useState('');
+  const [showToast, setShowToast]   = useState(false);
 
   const [step1, setStep1] = useState<Step1State>({
     name:        '',
@@ -55,6 +56,7 @@ export default function AddFirmPage() {
 
   async function handleStep3Submit() {
     setApiError('');
+    setNameApiError('');
     try {
       const e164 = step2.contactPhone
         ? buildE164Phone(step2.contactPhone, step2.contactCountry)
@@ -76,7 +78,13 @@ export default function AddFirmPage() {
       setShowToast(true);
       setTimeout(() => navigate(`/firms/${firm.id}`), 1500);
     } catch (err) {
-      setApiError((err as Error).message);
+      const msg = (err as Error).message;
+      if (msg.toLowerCase().includes('already exists')) {
+        setNameApiError(msg);
+        setStep(1);
+      } else {
+        setApiError(msg);
+      }
     }
   }
 
@@ -123,10 +131,14 @@ export default function AddFirmPage() {
               {step === 1 && (
                 <Step1Form
                   state={step1}
-                  onChange={(patch) => setStep1((s) => ({ ...s, ...patch }))}
+                  onChange={(patch) => {
+                    if (patch.name !== undefined) setNameApiError('');
+                    setStep1((s) => ({ ...s, ...patch }));
+                  }}
                   onSubmit={handleStep1Submit}
                   isPending={isPending}
                   error={apiError}
+                  apiNameError={nameApiError}
                 />
               )}
 

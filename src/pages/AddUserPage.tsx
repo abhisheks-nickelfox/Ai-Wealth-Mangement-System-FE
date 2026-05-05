@@ -79,6 +79,7 @@ export default function AddUserPage() {
                   value={field.value ? [field.value as SystemRole] : []}
                   onChange={(vals) => field.onChange(vals.length > 0 ? vals[vals.length - 1] : '')}
                   columns={1}
+                  singleSelect
                 />
               )}
             />

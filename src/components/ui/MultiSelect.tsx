@@ -18,6 +18,7 @@ interface MultiSelectProps {
   searchable?: boolean;
   searchPlaceholder?: string;
   showBadges?: boolean;
+  singleSelect?: boolean;
 }
 
 export default function MultiSelect({
@@ -30,6 +31,7 @@ export default function MultiSelect({
   searchable = false,
   searchPlaceholder = 'Search…',
   showBadges = false,
+  singleSelect = false,
 }: MultiSelectProps) {
   const [open,  setOpen]  = useState(false);
   const [query, setQuery] = useState('');
@@ -62,6 +64,7 @@ export default function MultiSelect({
     if (next.has(optValue)) next.delete(optValue);
     else next.add(optValue);
     onChange([...next]);
+    if (singleSelect) close();
   }
 
   const midpoint     = Math.ceil(filtered.length / 2);
