@@ -8,24 +8,28 @@ import type { User } from '../../lib/api';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ProjectDetail {
-  id: string;
-  name: string;
+  id:          string;
+  name:        string;
   description?: string;
-  status: ProjectStatus;
-  memberIds: string[];
-  firmName: string;
-  firmAbbr: string;
+  status:      ProjectStatus;
+  memberIds:   string[];
+  firmName:    string;
+  firmAbbr:    string;
+  startDate?:  string;
+  endDate?:    string;
+  priority?:   'high' | 'medium' | 'low';
+  type?:       string;
 }
 
 type ProjectStatus = 'In progress' | 'To Do' | 'In Review' | 'Approved' | 'Completed';
 
 interface ProjectDetailPanelProps {
-  open: boolean;
-  onClose: () => void;
-  project: ProjectDetail | null;
-  users: User[];
-  onSave?: (updated: ProjectDetail) => Promise<void>;
-  onViewTask?: (projectId: string) => void;
+  open:         boolean;
+  onClose:      () => void;
+  project:      ProjectDetail | null;
+  users:        User[];
+  onSave?:      (updated: ProjectDetail) => Promise<void>;
+  onViewTask?:  (projectId: string) => void;
 }
 
 const STATUS_OPTIONS: ProjectStatus[] = [
@@ -44,6 +48,24 @@ const STATUS_DOT: Record<ProjectStatus, string> = {
   'Completed':   'bg-[#181D27]',
 };
 
+const PRIORITY_OPTIONS: { value: 'high' | 'medium' | 'low'; label: string; dot: string }[] = [
+  { value: 'high',   label: 'High',   dot: 'bg-orange-400' },
+  { value: 'medium', label: 'Medium', dot: 'bg-yellow-400' },
+  { value: 'low',    label: 'Low',    dot: 'bg-green-500'  },
+];
+
+const PROJECT_TYPES = [
+  'Marketing Campaign',
+  'Brand Redesign',
+  'Social Media',
+  'SEO / Content',
+  'Paid Ads',
+  'Email Marketing',
+  'Web Development',
+  'Analytics',
+  'Other',
+];
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ProjectDetailPanel({
@@ -58,10 +80,17 @@ export default function ProjectDetailPanel({
   const [description, setDescription] = useState('');
   const [status,      setStatus]      = useState<ProjectStatus>('In progress');
   const [memberIds,   setMemberIds]   = useState<string[]>([]);
+  const [startDate,   setStartDate]   = useState('');
+  const [endDate,     setEndDate]     = useState('');
+  const [priority,    setPriority]    = useState<'high' | 'medium' | 'low'>('medium');
+  const [type,        setType]        = useState('');
   const [saving,      setSaving]      = useState(false);
   const [copied,      setCopied]      = useState(false);
-  const [showStatus,  setShowStatus]  = useState(false);
-  const [showPicker,  setShowPicker]  = useState(false);
+
+  const [showStatus,   setShowStatus]   = useState(false);
+  const [showPicker,   setShowPicker]   = useState(false);
+  const [showPriority, setShowPriority] = useState(false);
+  const [showType,     setShowType]     = useState(false);
 
   // Sync form when project changes
   useEffect(() => {
@@ -70,6 +99,10 @@ export default function ProjectDetailPanel({
       setDescription(project.description ?? '');
       setStatus(project.status);
       setMemberIds(project.memberIds);
+      setStartDate(project.startDate ?? '');
+      setEndDate(project.endDate ?? '');
+      setPriority(project.priority ?? 'medium');
+      setType(project.type ?? '');
     }
   }, [project]);
 
@@ -94,15 +127,17 @@ export default function ProjectDetailPanel({
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave?.({ ...project, name, description, status, memberIds });
+      await onSave?.({ ...project, name, description, status, memberIds, startDate, endDate, priority, type });
       onClose();
     } finally {
       setSaving(false);
     }
   };
 
-  const members      = users.filter((u) => memberIds.includes(u.id));
-  const nonMembers   = users.filter((u) => !memberIds.includes(u.id));
+  const members    = users.filter((u) => memberIds.includes(u.id));
+  const nonMembers = users.filter((u) => !memberIds.includes(u.id));
+
+  const priorityOpt = PRIORITY_OPTIONS.find((p) => p.value === priority) ?? PRIORITY_OPTIONS[1];
 
   return (
     <SlideOver
@@ -133,125 +168,206 @@ export default function ProjectDetailPanel({
           </div>
         </div>
 
-          {/* Name of project */}
-          <Input
-            label="Name of project"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
+        {/* Name of project */}
+        <Input
+          label="Name of project"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+
+        {/* Description */}
+        <div>
+          <label className="block text-sm font-medium text-[#344054] mb-1.5 flex items-center gap-1">
+            Description
+            <HelpCircle width={13} height={13} className="text-[#A4A7AE]" />
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="A little about the project and its goals."
+            className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white resize-none"
           />
+        </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-[#344054] mb-1.5 flex items-center gap-1">
-              Description
-              <HelpCircle width={13} height={13} className="text-[#A4A7AE]" />
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              placeholder="A little about the company and the team that you'll be working with."
-              className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white resize-none"
-            />
-          </div>
-
-          {/* Project status */}
-          <div>
-            <label className="block text-sm font-medium text-[#344054] mb-1.5">Project status</label>
-            <div className="relative">
+        {/* Project Type */}
+        <div className="relative">
+          <label className="block text-sm font-medium text-[#344054] mb-1.5">Project Type</label>
+          <button
+            type="button"
+            onClick={() => setShowType((v) => !v)}
+            className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white flex items-center gap-2"
+          >
+            <span className="flex-1 text-left text-[#181D27]">{type || <span className="text-[#A4A7AE]">Select type</span>}</span>
+            <ChevronDown width={15} height={15} className="text-[#717680] shrink-0" />
+          </button>
+          {showType && (
+            <div className="absolute top-full mt-1 left-0 right-0 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 max-h-48 overflow-y-auto">
               <button
                 type="button"
-                onClick={() => setShowStatus((v) => !v)}
-                className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white flex items-center gap-2"
+                onClick={() => { setType(''); setShowType(false); }}
+                className="w-full text-left px-3 py-2 text-sm text-[#A4A7AE] hover:bg-[#F9FAFB]"
               >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
-                <span className="flex-1 text-left">{status}</span>
-                <ChevronDown width={15} height={15} className="text-[#717680] shrink-0" />
+                None
               </button>
-              {showStatus && (
-                <div className="absolute top-full mt-1 left-0 right-0 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1">
-                  {STATUS_OPTIONS.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => { setStatus(opt); setShowStatus(false); }}
-                      className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors ${
-                        status === opt ? 'text-[#6941C6] font-medium' : 'text-[#344054]'
-                      }`}
-                    >
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[opt]}`} />
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Team members */}
-          <div>
-            <p className="text-sm font-semibold text-[#181D27] mb-0.5">Team members</p>
-            <p className="text-xs text-[#717680] mb-3">The following are working on this project.</p>
-
-            <div className="flex flex-col gap-3">
-              {members.map((user) => (
-                <div key={user.id} className="flex items-center gap-3">
-                  <Avatar
-                    name={user.name}
-                    src={user.avatar_url ?? undefined}
-                    size="sm"
-                    className="shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#181D27] truncate">{user.name}</p>
-                    <p className="text-xs text-[#717680] truncate">{user.email}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeMember(user.id)}
-                    className="text-xs font-semibold text-red-500 hover:text-red-600 shrink-0 transition-colors"
-                  >
-                    Remove
-                  </button>
-                </div>
+              {PROJECT_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => { setType(t); setShowType(false); }}
+                  className={`flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors ${
+                    type === t ? 'text-[#6941C6] font-medium' : 'text-[#344054]'
+                  }`}
+                >
+                  {t}
+                </button>
               ))}
             </div>
+          )}
+        </div>
 
-            {/* Add team member */}
-            <div className="relative mt-4">
-              <button
-                type="button"
-                onClick={() => setShowPicker((v) => !v)}
-                className="flex items-center gap-1.5 text-sm text-[#344054] font-medium hover:text-[#181D27] transition-colors"
-              >
-                <span className="w-6 h-6 rounded-full border-2 border-dashed border-[#D5D7DA] flex items-center justify-center text-[#A4A7AE] hover:border-[#7F56D9] hover:text-[#7F56D9] transition-colors">
-                  <Plus width={11} height={11} />
-                </span>
-                Add team member
-              </button>
-
-              {showPicker && nonMembers.length > 0 && (
-                <div className="absolute top-full mt-1 left-0 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 w-60 max-h-48 overflow-y-auto">
-                  {nonMembers.map((u) => (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => addMember(u.id)}
-                      className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
-                    >
-                      <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" className="shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm text-[#344054] font-medium truncate">{u.name}</p>
-                        <p className="text-xs text-[#717680] truncate">{u.email}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
+        {/* Project status */}
+        <div className="relative">
+          <label className="block text-sm font-medium text-[#344054] mb-1.5">Project Status</label>
+          <button
+            type="button"
+            onClick={() => setShowStatus((v) => !v)}
+            className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white flex items-center gap-2"
+          >
+            <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
+            <span className="flex-1 text-left">{status}</span>
+            <ChevronDown width={15} height={15} className="text-[#717680] shrink-0" />
+          </button>
+          {showStatus && (
+            <div className="absolute top-full mt-1 left-0 right-0 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1">
+              {STATUS_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => { setStatus(opt); setShowStatus(false); }}
+                  className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors ${
+                    status === opt ? 'text-[#6941C6] font-medium' : 'text-[#344054]'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[opt]}`} />
+                  {opt}
+                </button>
+              ))}
             </div>
+          )}
+        </div>
+
+        {/* Priority */}
+        <div className="relative">
+          <label className="block text-sm font-medium text-[#344054] mb-1.5">Priority</label>
+          <button
+            type="button"
+            onClick={() => setShowPriority((v) => !v)}
+            className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] transition bg-white flex items-center gap-2"
+          >
+            <span className={`w-2 h-2 rounded-full shrink-0 ${priorityOpt.dot}`} />
+            <span className="flex-1 text-left">{priorityOpt.label}</span>
+            <ChevronDown width={15} height={15} className="text-[#717680] shrink-0" />
+          </button>
+          {showPriority && (
+            <div className="absolute top-full mt-1 left-0 right-0 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1">
+              {PRIORITY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => { setPriority(opt.value); setShowPriority(false); }}
+                  className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors ${
+                    priority === opt.value ? 'text-[#6941C6] font-medium' : 'text-[#344054]'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${opt.dot}`} />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Start date / End date */}
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Start Date"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+          <Input
+            label="End Date"
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+        </div>
+
+        {/* Team members */}
+        <div>
+          <p className="text-sm font-semibold text-[#181D27] mb-0.5">Team members</p>
+          <p className="text-xs text-[#717680] mb-3">The following are working on this project.</p>
+
+          <div className="flex flex-col gap-3">
+            {members.map((user) => (
+              <div key={user.id} className="flex items-center gap-3">
+                <Avatar
+                  name={user.name}
+                  src={user.avatar_url ?? undefined}
+                  size="sm"
+                  className="shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[#181D27] truncate">{user.name}</p>
+                  <p className="text-xs text-[#717680] truncate">{user.email}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeMember(user.id)}
+                  className="text-xs font-semibold text-red-500 hover:text-red-600 shrink-0 transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
           </div>
+
+          {/* Add team member */}
+          <div className="relative mt-4">
+            <button
+              type="button"
+              onClick={() => setShowPicker((v) => !v)}
+              className="flex items-center gap-1.5 text-sm text-[#344054] font-medium hover:text-[#181D27] transition-colors"
+            >
+              <span className="w-6 h-6 rounded-full border-2 border-dashed border-[#D5D7DA] flex items-center justify-center text-[#A4A7AE] hover:border-[#7F56D9] hover:text-[#7F56D9] transition-colors">
+                <Plus width={11} height={11} />
+              </span>
+              Add team member
+            </button>
+
+            {showPicker && nonMembers.length > 0 && (
+              <div className="absolute top-full mt-1 left-0 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 w-60 max-h-48 overflow-y-auto">
+                {nonMembers.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => addMember(u.id)}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                  >
+                    <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" className="shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm text-[#344054] font-medium truncate">{u.name}</p>
+                      <p className="text-xs text-[#717680] truncate">{u.email}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Footer actions */}
         <div className="flex items-center gap-3 pt-4 border-t border-[#E9EAEB]">

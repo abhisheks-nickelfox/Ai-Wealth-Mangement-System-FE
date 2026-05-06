@@ -270,25 +270,103 @@ export interface Prompt {
   content?: string;
 }
 
-export interface Task {
+export interface ProjectMember {
   id: string;
-  session_id: string | null;
-  firm_id: string;
-  project_id: string | null;
-  assignee_id: string | null;
-  title: string;
-  description: string | null;
-  type: string;
-  priority: 'low' | 'normal' | 'high' | 'urgent';
-  status: 'to_do' | 'assigned' | 'in_progress' | 'revisions' | 'internal_review' | 'client_review' | 'completed' | 'blocked';
-  deadline: string | null;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+}
+
+export interface Project {
+  id:              string;
+  firm_id:         string;
+  name:            string;
+  description:     string | null;
+  status:          'active' | 'archived';
+  workflow_status: 'todo' | 'in_progress' | 'in_review' | 'approved' | 'completed';
+  start_date:      string | null;
+  end_date:        string | null;
+  priority:        'high' | 'medium' | 'low';
+  type:            string | null;
+  created_at:      string;
+  updated_at:      string;
+  firm_name:       string | null;
+  ticket_count:    number;
+  members:         ProjectMember[];
+}
+
+export interface CreateProjectPayload {
+  firm_id:         string;
+  name:            string;
+  description?:    string;
+  workflow_status?: Project['workflow_status'];
+  member_ids?:     string[];
+  start_date?:     string;
+  end_date?:       string;
+  priority?:       Project['priority'];
+  type?:           string;
+}
+
+export interface UpdateProjectPayload {
+  name?:           string;
+  description?:    string;
+  workflow_status?: Project['workflow_status'];
+  member_ids?:     string[];
+  start_date?:     string | null;
+  end_date?:       string | null;
+  priority?:       Project['priority'];
+  type?:           string | null;
+}
+
+export const projectsApi = {
+  list: (firm_id?: string) => {
+    const qs = firm_id ? `?firm_id=${firm_id}` : '';
+    return request<{ data: Project[] }>('GET', `/projects${qs}`).then((r) => r.data);
+  },
+  get: (id: string) =>
+    request<{ data: Project }>('GET', `/projects/${id}`).then((r) => r.data),
+  create: (payload: CreateProjectPayload) =>
+    request<{ data: Project }>('POST', '/projects', payload).then((r) => r.data),
+  update: (id: string, payload: UpdateProjectPayload) =>
+    request<{ data: Project }>('PATCH', `/projects/${id}`, payload).then((r) => r.data),
+  archive: (id: string) =>
+    request<{ data: Project }>('PATCH', `/projects/${id}/archive`).then((r) => r.data),
+  getTasks: (id: string) =>
+    request<{ data: { id: string; title: string; status: string; priority: string }[] }>('GET', `/projects/${id}/tasks`)
+      .then((r) => r.data),
+  delete: (id: string, task_ids: string[] = []) =>
+    request<{ deleted: boolean; hasTickets: boolean; projectDeleted: boolean }>(
+      'DELETE', `/projects/${id}`, { task_ids },
+    ),
+};
+
+export interface TaskAssignee {
+  id:         string;
+  name:       string;
+  email:      string;
+  avatar_url: string | null;
+}
+
+export interface Task {
+  id:              string;
+  session_id:      string | null;
+  firm_id:         string;
+  project_id:      string | null;
+  assignee_id:     string | null;
+  title:           string;
+  description:     string | null;
+  type:            string;
+  priority:        'low' | 'normal' | 'high' | 'urgent';
+  status:          'to_do' | 'assigned' | 'in_progress' | 'revisions' | 'internal_review' | 'client_review' | 'completed' | 'blocked';
+  deadline:        string | null;
   estimated_hours: number | null;
-  ai_generated: boolean;
-  edited: boolean;
-  archived: boolean;
-  created_at: string;
-  firms?: { name: string };
-  assignee?: { name: string; email: string } | null;
+  ai_generated:    boolean;
+  edited:          boolean;
+  archived:        boolean;
+  created_at:      string;
+  firms?:          { name: string };
+  assignee?:       { name: string; email: string } | null;
+  assignees?:      TaskAssignee[];
 }
 
 export const transcriptsApi = {
@@ -336,7 +414,23 @@ export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   blocked:         ['to_do', 'in_progress'],
 };
 
+export interface CreateTaskPayload {
+  firm_id:         string;
+  title:           string;
+  type:            'task' | 'design' | 'development' | 'account_management';
+  priority?:       'low' | 'normal' | 'high' | 'urgent';
+  description?:    string;
+  project_id?:     string;
+  assignee_id?:    string;
+  assignee_ids?:   string[];
+  deadline?:       string;
+  estimated_hours?: number;
+  initial_status?: string;
+}
+
 export const tasksApi = {
+  create: (payload: CreateTaskPayload) =>
+    request<{ data: Task }>('POST', '/tasks', payload).then((r) => r.data),
   list: (params?: { firm_id?: string; session_id?: string; status?: string }) => {
     const q = new URLSearchParams();
     if (params?.firm_id) q.set('firm_id', params.firm_id);
@@ -345,7 +439,7 @@ export const tasksApi = {
     const qs = q.toString() ? `?${q.toString()}` : '';
     return request<{ data: Task[] }>('GET', `/tasks${qs}`).then((r) => r.data);
   },
-  update: (id: string, payload: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'deadline'>>) =>
+  update: (id: string, payload: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'deadline'>> & { assignee_id?: string | null; assignee_ids?: string[]; project_id?: string | null }) =>
     request<{ data: Task }>('PATCH', `/tasks/${id}`, payload).then((r) => r.data),
   assignApprove: (id: string, payload: { assignee_id: string; priority?: string; deadline?: string }) =>
     request<{ data: Task }>('PATCH', `/tasks/${id}/assign-approve`, payload).then((r) => r.data),
@@ -355,6 +449,8 @@ export const tasksApi = {
     request<{ data: Task }>('PATCH', `/tasks/${id}/discard`).then((r) => r.data),
   archive: (id: string, archived: boolean) =>
     request<{ data: Task }>('PATCH', `/tasks/${id}/archive`, { archived }).then((r) => r.data),
+  delete: (id: string) =>
+    request<{ message: string }>('DELETE', `/tasks/${id}`),
 };
 
 // ── Org Settings API ──────────────────────────────────────────────────────────

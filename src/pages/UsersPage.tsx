@@ -19,6 +19,7 @@ import Pagination from '../components/ui/Pagination';
 import Checkbox from '../components/ui/Checkbox';
 import { useUsers, useDeleteUser, useResendInvite, useUpdateUser } from '../hooks/useUsers';
 import { useClickOutside } from '../hooks/useClickOutside';
+import { useToast } from '../hooks/useToast';
 import type { UserStatus } from '../types';
 import { EXTRA_PERMISSIONS } from '../lib/constants';
 
@@ -73,10 +74,12 @@ function StatusMenu({
   userId,
   status,
   onUpdated,
+  onError,
 }: {
   userId: string;
   status: UserStatus;
   onUpdated: (message: string) => void;
+  onError: (message: string) => void;
 }) {
   const updateUser = useUpdateUser();
   const [open, setOpen] = useState(false);
@@ -101,7 +104,7 @@ function StatusMenu({
       setOpen(false);
       onUpdated(`User status changed to ${nextStatus}`);
     } catch (err) {
-      alert((err as Error).message);
+      onError((err as Error).message || 'Failed to update status');
     }
   }
 
@@ -155,6 +158,7 @@ export default function UsersPage() {
   const [selected,     setSelected]    = useState<Set<string>>(new Set());
   const [currentPage,  setCurrentPage] = useState(1);
   const [search,       setSearch]      = useState('');
+  const { toast, notify, dismiss } = useToast();
   const [toastMessage, setToastMessage] = useState<string | null>(
     (location.state as { toastMessage?: string } | null)?.toastMessage ?? null
   );
@@ -208,9 +212,9 @@ export default function UsersPage() {
   async function handleResendInvite(id: string) {
     try {
       await resendInvite.mutateAsync(id);
-      setToastMessage('Invite resent successfully');
+      notify('Invite resent successfully');
     } catch (err) {
-      alert((err as Error).message);
+      notify((err as Error).message || 'Failed to resend invite', 'error');
     }
   }
 
@@ -230,8 +234,10 @@ export default function UsersPage() {
         return n;
       });
       setUserPendingDelete(null);
+      notify('Team member deleted');
     } catch (err) {
-      alert((err as Error).message);
+      setUserPendingDelete(null);
+      notify((err as Error).message || 'Failed to delete user', 'error');
     }
   }
 
@@ -364,7 +370,8 @@ export default function UsersPage() {
                           <StatusMenu
                             userId={user.id}
                             status={user.status}
-                            onUpdated={setToastMessage}
+                            onUpdated={(msg) => notify(msg)}
+                            onError={(msg) => notify(msg, 'error')}
                           />
                         </td>
 
@@ -476,8 +483,13 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* Success toast */}
-      {toastMessage && (
+      {/* Action toast */}
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={dismiss} />
+      )}
+
+      {/* Navigation toast (from AddUserPage redirect) */}
+      {toastMessage && !toast && (
         <Toast
           message={toastMessage}
           subtitle="The team member has been notified by email."

@@ -1,5 +1,10 @@
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 
+// Dispatched globally so any mounted component can surface the error as a toast
+function emitApiError(message: string) {
+  window.dispatchEvent(new CustomEvent<{ message: string }>('api-error', { detail: { message } }));
+}
+
 function getToken(): string | null {
   return localStorage.getItem('mw_token') ?? sessionStorage.getItem('mw_token');
 }
@@ -26,10 +31,14 @@ export function applyInterceptors(instance: AxiosInstance): void {
   instance.interceptors.response.use(
     (response: AxiosResponse) => response,
     (error: AxiosError<{ error?: string }>) => {
+      // Timeout
       if (error.code === 'ECONNABORTED') {
-        return Promise.reject(new Error('Request timed out. Please try again.'));
+        const msg = 'Request timed out. Please try again.';
+        emitApiError(msg);
+        return Promise.reject(new Error(msg));
       }
 
+      // Server responded with an error status
       if (error.response) {
         const msg =
           error.response.data?.error ??
@@ -40,10 +49,18 @@ export function applyInterceptors(instance: AxiosInstance): void {
           window.location.href = '/login';
         }
 
+        // Surface unexpected server errors globally (5xx)
+        if (error.response.status >= 500) {
+          emitApiError('Something went wrong on the server. Please try again.');
+        }
+
         return Promise.reject(new Error(msg));
       }
 
-      return Promise.reject(error);
+      // No response — server unreachable / no internet
+      const msg = 'Unable to connect. Please check your internet connection.';
+      emitApiError(msg);
+      return Promise.reject(new Error(msg));
     },
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   HelpCircle,
   CalendarDate,
@@ -12,46 +12,54 @@ import Avatar from '../ui/Avatar';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
 import { useClickOutside } from '../../hooks/useClickOutside';
-import type { User } from '../../lib/api';
+import { useTaskTypes } from '../../hooks/useTaskTypes';
+import type { User, Project } from '../../lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface AddProjectModalProps {
+interface AddTaskModalProps {
   open: boolean;
   onClose: () => void;
   firmName?: string;
   users?: User[];
-  defaultWorkflowStatus?: string;
-  onCreate?: (data: ProjectFormData) => Promise<void>;
+  projects?: Project[];
+  /** Pre-select a project when opened from within a project row. */
+  defaultProjectId?: string;
+  /** Pre-set the initial task status when opened from within a status section. */
+  defaultStatus?: string;
+  onCreate?: (data: TaskFormData) => Promise<void>;
 }
 
-export interface ProjectFormData {
-  name: string;
+export interface TaskFormData {
+  title: string;
   description: string;
+  type: string;
+  priority: TaskPriority;
+  projectId: string;
+  assigneeIds: string[];
   startDate: string;
   endDate: string;
-  assigneeIds: string[];
-  priority: 'High' | 'Medium' | 'Low';
   files: File[];
-  workflowStatus: string;
+  initialStatus?: string;
 }
 
-const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'] as const;
+type TaskPriority = 'High' | 'Medium' | 'Low' | 'Urgent';
+type TaskSubtype  = 'task' | 'subtask';
+
+const SUBTASK_OPTIONS: { value: TaskSubtype; label: string }[] = [
+  { value: 'task',    label: 'Task' },
+  { value: 'subtask', label: 'Subtask' },
+];
+
+const PRIORITY_OPTIONS = ['Urgent', 'High', 'Medium', 'Low'] as const;
 const PRIORITY_DOT: Record<string, string> = {
-  High:   'bg-red-500',
+  Urgent: 'bg-red-500',
+  High:   'bg-orange-400',
   Medium: 'bg-yellow-400',
   Low:    'bg-green-500',
 };
 
-const TEMPLATE_OPTIONS = [
-  'No Templates Required',
-  'Marketing Campaign',
-  'Website Redesign',
-  'Brand Strategy',
-  'Social Media',
-];
-
-// ── Assignee picker ───────────────────────────────────────────────────────────
+// ── Assignee picker (multi) ───────────────────────────────────────────────────
 
 function AssigneePicker({
   users,
@@ -138,16 +146,9 @@ function AssigneePicker({
 
 // ── File upload zone ──────────────────────────────────────────────────────────
 
-interface UploadedFile {
-  file: File;
-  preview: string | null;
-}
+interface UploadedFile { file: File; preview: string | null }
 
-function FileUploadZone({
-  files,
-  onAdd,
-  onRemove,
-}: {
+function FileUploadZone({ files, onAdd, onRemove }: {
   files: UploadedFile[];
   onAdd: (f: File) => void;
   onRemove: (idx: number) => void;
@@ -162,7 +163,6 @@ function FileUploadZone({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Drop zone */}
       <div
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -186,14 +186,10 @@ function FileUploadZone({
         </div>
       </div>
 
-      {/* Uploaded file list */}
       {files.length > 0 && (
         <div className="flex flex-col gap-2">
           {files.map(({ file, preview }, idx) => (
-            <div
-              key={idx}
-              className="flex items-center gap-3 p-3 border border-[#E9EAEB] rounded-lg bg-white"
-            >
+            <div key={idx} className="flex items-center gap-3 p-3 border border-[#E9EAEB] rounded-lg bg-white">
               {preview ? (
                 <img src={preview} alt={file.name} className="w-10 h-10 rounded-lg object-cover shrink-0 border border-[#E9EAEB]" />
               ) : (
@@ -205,11 +201,7 @@ function FileUploadZone({
                 <p className="text-sm font-medium text-[#344054] truncate">{file.name}</p>
                 <p className="text-xs text-[#717680]">{(file.size / 1024).toFixed(0)} KB</p>
               </div>
-              <button
-                type="button"
-                onClick={() => onRemove(idx)}
-                className="shrink-0 text-[#717680] hover:text-[#D92D20] transition-colors p-1 rounded"
-              >
+              <button type="button" onClick={() => onRemove(idx)} className="shrink-0 text-[#717680] hover:text-[#D92D20] transition-colors p-1 rounded">
                 <Trash01 width={14} height={14} />
               </button>
             </div>
@@ -231,38 +223,55 @@ function FileUploadZone({
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function AddProjectModal({
+export default function AddTaskModal({
   open,
   onClose,
   firmName = '',
   users = [],
-  defaultWorkflowStatus = 'todo',
+  projects = [],
+  defaultProjectId = '',
+  defaultStatus,
   onCreate,
-}: AddProjectModalProps) {
-  const [template,    setTemplate]    = useState('No Templates Required');
-  const [name,        setName]        = useState('');
+}: AddTaskModalProps) {
+  const { data: taskTypes = [] } = useTaskTypes();
+
+  const [taskTypeId,  setTaskTypeId]  = useState('');
+  const [title,       setTitle]       = useState('');
   const [description, setDescription] = useState('');
+  const [projectId,   setProjectId]   = useState(defaultProjectId);
+  const [subtype,     setSubtype]     = useState<TaskSubtype>('task');
   const [startDate,   setStartDate]   = useState('');
   const [endDate,     setEndDate]     = useState('');
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
-  const [priority,    setPriority]    = useState<'High' | 'Medium' | 'Low'>('High');
+  const [priority,    setPriority]    = useState<TaskPriority>('High');
   const [files,       setFiles]       = useState<UploadedFile[]>([]);
   const [saving,      setSaving]      = useState(false);
 
-  const [showTemplateMenu, setShowTemplateMenu] = useState(false);
+  const [showTypeMenu,     setShowTypeMenu]     = useState(false);
+  const [showProjectMenu,  setShowProjectMenu]  = useState(false);
+  const [showSubtypeMenu,  setShowSubtypeMenu]  = useState(false);
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
-  const templateRef = useRef<HTMLDivElement>(null);
+
+  // Sync projectId whenever the modal opens with a new default
+  useEffect(() => {
+    if (open) setProjectId(defaultProjectId);
+  }, [open, defaultProjectId]);
+
+  const typeRef     = useRef<HTMLDivElement>(null);
+  const projectRef  = useRef<HTMLDivElement>(null);
+  const subtypeRef  = useRef<HTMLDivElement>(null);
   const priorityRef = useRef<HTMLDivElement>(null);
-  useClickOutside(templateRef, () => setShowTemplateMenu(false));
+
+  useClickOutside(typeRef,     () => setShowTypeMenu(false));
+  useClickOutside(projectRef,  () => setShowProjectMenu(false));
+  useClickOutside(subtypeRef,  () => setShowSubtypeMenu(false));
   useClickOutside(priorityRef, () => setShowPriorityMenu(false));
 
   const toggleAssignee = (id: string) =>
     setAssigneeIds((prev) => prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]);
 
   function addFile(f: File) {
-    const preview = f.type.startsWith('image/')
-      ? URL.createObjectURL(f)
-      : null;
+    const preview = f.type.startsWith('image/') ? URL.createObjectURL(f) : null;
     setFiles((prev) => [...prev, { file: f, preview }]);
   }
 
@@ -276,18 +285,21 @@ export default function AddProjectModal({
   }
 
   const handleCreate = async () => {
-    if (!name.trim()) return;
+    if (!title.trim() || !taskTypeId) return;
+    const selected = taskTypes.find((t) => t.id === taskTypeId);
     setSaving(true);
     try {
       await onCreate?.({
-        name,
+        title,
         description,
+        type:          selected?.name ?? taskTypeId,
+        priority,
+        projectId,
+        assigneeIds,
         startDate,
         endDate,
-        assigneeIds,
-        priority,
-        files: files.map((f) => f.file),
-        workflowStatus: defaultWorkflowStatus,
+        files:         files.map((f) => f.file),
+        initialStatus: defaultStatus,
       });
       handleClose();
     } finally {
@@ -297,18 +309,23 @@ export default function AddProjectModal({
 
   const handleClose = () => {
     files.forEach((f) => { if (f.preview) URL.revokeObjectURL(f.preview); });
-    setTemplate('No Templates Required');
-    setName(''); setDescription(''); setStartDate(''); setEndDate('');
-    setAssigneeIds([]); setPriority('High'); setFiles([]); setSaving(false);
+    setTaskTypeId(''); setTitle(''); setDescription('');
+    setProjectId(defaultProjectId); setSubtype('task'); setStartDate('');
+    setEndDate(''); setAssigneeIds([]); setPriority('High');
+    setFiles([]); setSaving(false);
     onClose();
   };
+
+  const selectedTaskType     = taskTypes.find((t) => t.id === taskTypeId);
+  const selectedProjectLabel = projects.find((p) => p.id === projectId)?.name ?? 'No Project';
+  const selectedSubtypeLabel = SUBTASK_OPTIONS.find((o) => o.value === subtype)?.label ?? 'Task';
 
   return (
     <SlideOver
       open={open}
       onClose={handleClose}
-      title={name.trim() || 'Create a Project'}
-      subtitle={firmName ? `${firmName}` : 'Fill in the details below'}
+      title={title.trim() || 'Create a Task'}
+      subtitle={firmName ? firmName : 'Fill in the details below'}
       width="max-w-[680px]"
       footer={
         <div className="flex items-center justify-end gap-3">
@@ -322,7 +339,7 @@ export default function AddProjectModal({
           <button
             type="button"
             onClick={handleCreate}
-            disabled={saving || !name.trim()}
+            disabled={saving || !title.trim() || !taskTypeId}
             className="px-4 py-2.5 rounded-lg bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white text-sm font-semibold transition-colors"
           >
             {saving ? 'Creating…' : 'Create'}
@@ -332,42 +349,60 @@ export default function AddProjectModal({
     >
       <div className="flex flex-col gap-5">
 
-        {/* Choose from a template */}
-        <div ref={templateRef} className="relative">
+        {/* Task type — dynamic from project settings */}
+        <div ref={typeRef} className="relative">
           <label className="block text-sm font-medium text-[#344054] mb-1.5">
-            Choose from a template <span className="text-red-500">*</span>
+            Task Type <span className="text-red-500">*</span>
           </label>
           <button
             type="button"
-            onClick={() => setShowTemplateMenu((v) => !v)}
+            onClick={() => setShowTypeMenu((v) => !v)}
             className="w-full flex items-center justify-between border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white hover:border-[#7F56D9] focus:ring-2 focus:ring-[#7F56D9] outline-none transition-colors"
           >
-            <span>{template}</span>
+            {selectedTaskType ? (
+              <span className="flex items-center gap-2">
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: selectedTaskType.color ?? '#6B7280' }}
+                />
+                {selectedTaskType.name}
+              </span>
+            ) : (
+              <span className="text-[#A4A7AE]">Select task type</span>
+            )}
             <ChevronDown width={16} height={16} className="text-[#717680] shrink-0" />
           </button>
-          {showTemplateMenu && (
-            <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1">
-              {TEMPLATE_OPTIONS.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => { setTemplate(t); setShowTemplateMenu(false); }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] ${template === t ? 'text-[#7F56D9] font-semibold' : 'text-[#344054]'}`}
-                >
-                  {t}
-                </button>
-              ))}
+          {showTypeMenu && (
+            <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 max-h-52 overflow-y-auto">
+              {taskTypes.length === 0 ? (
+                <p className="px-3 py-2 text-sm text-[#717680]">No task types configured</p>
+              ) : (
+                taskTypes.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => { setTaskTypeId(t.id); setShowTypeMenu(false); }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-[#F9FAFB] ${taskTypeId === t.id ? 'text-[#7F56D9] font-semibold' : 'text-[#344054]'}`}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: t.color ?? '#6B7280' }}
+                    />
+                    {t.name}
+                  </button>
+                ))
+              )}
             </div>
           )}
         </div>
 
-        {/* Name of project */}
+        {/* Task name */}
         <Input
           label="Name of project"
           type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Marketing site redesign"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="e.g. Design homepage hero section"
           required
         />
 
@@ -386,7 +421,76 @@ export default function AddProjectModal({
           />
         </div>
 
-        {/* Start date / End date / Assignee / Priority */}
+        {/* Project + Tasks/Subtask — 2-col row */}
+        <div className="grid grid-cols-2 gap-4">
+
+          {/* Project */}
+          <div ref={projectRef} className="relative">
+            <label className="block text-sm font-medium text-[#344054] mb-1.5">
+              Project <span className="text-red-500">*</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowProjectMenu((v) => !v)}
+              className="w-full flex items-center justify-between border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white hover:border-[#7F56D9] focus:ring-2 focus:ring-[#7F56D9] outline-none transition-colors"
+            >
+              <span className="truncate">{selectedProjectLabel}</span>
+              <ChevronDown width={16} height={16} className="text-[#717680] shrink-0 ml-2" />
+            </button>
+            {showProjectMenu && (
+              <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 max-h-52 overflow-y-auto">
+                <button
+                  type="button"
+                  onClick={() => { setProjectId(''); setShowProjectMenu(false); }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] ${!projectId ? 'text-[#7F56D9] font-semibold' : 'text-[#344054]'}`}
+                >
+                  No Project
+                </button>
+                {projects.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => { setProjectId(p.id); setShowProjectMenu(false); }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] ${projectId === p.id ? 'text-[#7F56D9] font-semibold' : 'text-[#344054]'}`}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Tasks/Subtask */}
+          <div ref={subtypeRef} className="relative">
+            <label className="block text-sm font-medium text-[#344054] mb-1.5">
+              Tasks/Subtask <span className="text-red-500">*</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowSubtypeMenu((v) => !v)}
+              className="w-full flex items-center justify-between border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white hover:border-[#7F56D9] focus:ring-2 focus:ring-[#7F56D9] outline-none transition-colors"
+            >
+              <span>{selectedSubtypeLabel}</span>
+              <ChevronDown width={16} height={16} className="text-[#717680] shrink-0" />
+            </button>
+            {showSubtypeMenu && (
+              <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1">
+                {SUBTASK_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => { setSubtype(o.value); setShowSubtypeMenu(false); }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] ${subtype === o.value ? 'text-[#7F56D9] font-semibold' : 'text-[#344054]'}`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Start date / End date / Assignee / Priority — 4-col row */}
         <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-4 items-end">
 
           <Input
@@ -441,20 +545,18 @@ export default function AddProjectModal({
           </div>
         </div>
 
-        {/* Selected assignees chips */}
+        {/* Assignee chips */}
         {assigneeIds.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {users
-              .filter((u) => assigneeIds.includes(u.id))
-              .map((u) => (
-                <div key={u.id} className="flex items-center gap-1.5 px-2.5 py-1 bg-[#F9F5FF] border border-[#E9D7FE] rounded-full">
-                  <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
-                  <span className="text-xs font-medium text-[#6941C6] max-w-[120px] truncate">{u.name}</span>
-                  <button type="button" onClick={() => toggleAssignee(u.id)} className="text-[#9E77ED] hover:text-[#6941C6]">
-                    <X width={12} height={12} />
-                  </button>
-                </div>
-              ))}
+            {users.filter((u) => assigneeIds.includes(u.id)).map((u) => (
+              <div key={u.id} className="flex items-center gap-1.5 px-2.5 py-1 bg-[#F9F5FF] border border-[#E9D7FE] rounded-full">
+                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+                <span className="text-xs font-medium text-[#6941C6] max-w-[120px] truncate">{u.name}</span>
+                <button type="button" onClick={() => toggleAssignee(u.id)} className="text-[#9E77ED] hover:text-[#6941C6]">
+                  <X width={12} height={12} />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
