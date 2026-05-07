@@ -284,6 +284,7 @@ export default function AddProjectModal({
   };
 
   const [dateError, setDateError] = useState('');
+  const [apiError, setApiError] = useState('');
 
   return (
     <Formik
@@ -291,6 +292,7 @@ export default function AddProjectModal({
       validationSchema={createProjectSchema}
       onSubmit={async (values, { setSubmitting }) => {
         setDateError('');
+        setApiError('');
         if (startDate && endDate && endDate < startDate) {
           setDateError('End date must be on or after the start date.');
           setSubmitting(false);
@@ -308,12 +310,14 @@ export default function AddProjectModal({
             workflowStatus: defaultWorkflowStatus,
           });
           handleClose();
+        } catch (err) {
+          setApiError(err instanceof Error ? err.message : 'Failed to create project. Please try again.');
         } finally {
           setSubmitting(false);
         }
       }}
     >
-      {({ values, errors, touched, handleChange, handleBlur, isSubmitting, resetForm }) => {
+      {({ values, errors, touched, handleChange, handleBlur, isSubmitting, resetForm, submitForm }) => {
         const wrappedClose = () => { resetForm(); handleClose(); };
 
         return (
@@ -333,7 +337,8 @@ export default function AddProjectModal({
                   Cancel
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => submitForm()}
                   disabled={isSubmitting}
                   className="px-4 py-2.5 rounded-lg bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white text-sm font-semibold transition-colors"
                 >
@@ -343,6 +348,12 @@ export default function AddProjectModal({
             }
           >
             <Form className="flex flex-col gap-5">
+
+              {apiError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+                  {apiError}
+                </div>
+              )}
 
               {/* Choose from a template */}
               <div ref={templateRef} className="relative">
