@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
-import { Eye, EyeOff, AlertCircle } from '@untitled-ui/icons-react';
+import { Eye, EyeOff } from '@untitled-ui/icons-react';
 import AuthLayout from '../../components/layout/AuthLayout';
 import Input from '../../components/ui/Input';
 import Checkbox from '../../components/ui/Checkbox';
@@ -67,12 +67,6 @@ export default function Login() {
             }
             {...register('password')}
           />
-          {errors.password && (
-            <p className="flex items-center gap-1.5 text-xs text-error-600 mt-1.5">
-              <AlertCircle width={13} height={13} />
-              {errors.password.message}
-            </p>
-          )}
         </div>
 
         {/* Remember + Forgot */}

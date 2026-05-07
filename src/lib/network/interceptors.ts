@@ -44,7 +44,7 @@ export function applyInterceptors(instance: AxiosInstance): void {
           error.response.data?.error ??
           `Request failed with status ${error.response.status}`;
 
-        if (error.response.status === 401) {
+        if (error.response.status === 401 && !window.location.pathname.startsWith('/login')) {
           clearToken();
           window.location.href = '/login';
         }
