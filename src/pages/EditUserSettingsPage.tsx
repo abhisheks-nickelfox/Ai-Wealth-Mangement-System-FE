@@ -129,9 +129,11 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
       .filter((s) => !s.id.startsWith('temp-'))
       .map((s) => ({ skill_id: s.id, experience: s.experience ?? null }));
     try {
+      const fullName = [firstName, lastName].filter(Boolean).join(' ') || user.name;
       await updateUser.mutateAsync({
         id: userId,
         payload: {
+          name:           fullName,
           first_name:     firstName,
           last_name:      lastName,
           role,
@@ -154,9 +156,10 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
     }
   }
 
-  const displayAvatar = croppedUrl ?? avatarUrl ?? undefined;
-  const displayTitle  = role.replace(/_/g, ' ');
-  const photoLabel    = firstName || user.first_name || user.name.split(' ')[0];
+  const displayAvatar   = croppedUrl ?? avatarUrl ?? undefined;
+  const displayTitle    = role.replace(/_/g, ' ');
+  const displayFullName = [firstName || user.first_name, lastName || user.last_name].filter(Boolean).join(' ') || user.name;
+  const photoLabel      = firstName || user.first_name || user.name.split(' ')[0];
   const statusOptions = isInvitedUser
     ? [{ value: 'invited', label: 'Invited' as const }]
     : [
@@ -173,7 +176,7 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
 
           {/* Left: name + subtitle */}
           <div>
-            <h1 className="text-2xl font-bold text-[#181D27]">{user.name}</h1>
+            <h1 className="text-2xl font-bold text-[#181D27]">{displayFullName}</h1>
             <p className="text-sm text-gray-500 mt-0.5 capitalize">{displayTitle}</p>
           </div>
 
