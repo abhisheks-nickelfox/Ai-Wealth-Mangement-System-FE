@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Formik, Form } from 'formik';
 import { Eye, EyeOff, AlertCircle, Plus } from '@untitled-ui/icons-react';
 import OnboardingLayout from '../../components/layout/OnboardingLayout';
 import OnboardingStepper from '../../components/onboarding/OnboardingStepper';
@@ -11,6 +12,7 @@ import ImageCropModal from '../../components/ui/ImageCropModal';
 import { onboardingApi, skillsApi } from '../../lib/api';
 import type { Skill } from '../../lib/api';
 import { useAuth, saveToken } from '../../context/AuthContext';
+import { passwordStepSchema, personalDetailsSchema } from '../../validations/onboarding.validations';
 
 // ── Steps config ──────────────────────────────────────────────────────────────
 
@@ -79,25 +81,19 @@ export default function OnboardingPage() {
   const [redirectCount, setRedirectCount] = useState(3);
 
   // Wizard state
-  const [step,       setStep]       = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [done,       setDone]       = useState(false);
+  const [step, setStep] = useState(0);
+  const [done, setDone] = useState(false);
 
-  // Step 1 — password
-  const [password, setPassword] = useState('');
-  const [confirm,  setConfirm]  = useState('');
-  const [showPw,   setShowPw]   = useState(false);
-  const [showConf, setShowConf] = useState(false);
-  const [pwError,  setPwError]  = useState('');
+  // Committed values from Formik steps — stored when advancing
+  const [committedPassword,  setCommittedPassword]  = useState('');
+  const [committedFirstName, setCommittedFirstName] = useState('');
+  const [committedLastName,  setCommittedLastName]  = useState('');
+  const [committedPhone,     setCommittedPhone]     = useState('');
 
-  // Step 2 — personal details
-  const [firstName,      setFirstName]      = useState('');
-  const [lastName,       setLastName]       = useState('');
-  const [phoneNumber,    setPhoneNumber]    = useState('');
-  const [countryCode,    setCountryCode]    = useState('US');
-  const [firstNameError, setFirstNameError] = useState('');
-  const [lastNameError,  setLastNameError]  = useState('');
-  const [phoneError,     setPhoneError]     = useState('');
+  // Step 2 — phone state (managed outside Formik because PhoneInput has country code)
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [countryCode, setCountryCode] = useState('US');
+  const [phoneError,  setPhoneError]  = useState('');
 
   // Step 3 — avatar upload & crop
   const [cropSrc,     setCropSrc]     = useState('');
@@ -111,6 +107,7 @@ export default function OnboardingPage() {
   const [allSkills,  setAllSkills]  = useState<Skill[]>([]);
   const [skillRows,  setSkillRows]  = useState<SkillRow[]>([{ ...EMPTY_SKILL_ROW }]);
   const [skillError, setSkillError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   // ── Validate token on mount ─────────────────────────────────────────────────
 
@@ -146,30 +143,7 @@ export default function OnboardingPage() {
     return () => clearTimeout(t);
   }, [alreadyUsed, redirectCount, navigate]);
 
-  // ── Step handlers ───────────────────────────────────────────────────────────
-
-  function handlePasswordNext() {
-    setPwError('');
-    if (password.length < 8) { setPwError('Password must be at least 8 characters'); return; }
-    if (password !== confirm) { setPwError('Passwords do not match'); return; }
-    setStep(1);
-  }
-
-  function handleDetailsNext() {
-    setFirstNameError(''); setLastNameError(''); setPhoneError('');
-    let valid = true;
-    if (!firstName.trim()) { setFirstNameError('First name is required'); valid = false; }
-    else if (!/[a-zA-Z]/.test(firstName)) { setFirstNameError('First name must contain at least one letter'); valid = false; }
-    if (!lastName.trim())  { setLastNameError('Last name is required'); valid = false; }
-    else if (!/[a-zA-Z]/.test(lastName))  { setLastNameError('Last name must contain at least one letter');  valid = false; }
-    const phoneValidationError = getPhoneValidationError(phoneNumber, countryCode);
-    if (phoneValidationError) {
-      setPhoneError(phoneValidationError);
-      valid = false;
-    }
-    if (!valid) return;
-    setStep(2);
-  }
+  // ── Avatar handlers ─────────────────────────────────────────────────────────
 
   function handleFileSelected(file: File) {
     if (cropSrcRef.current) URL.revokeObjectURL(cropSrcRef.current);
@@ -185,7 +159,8 @@ export default function OnboardingPage() {
     setUploadError('');
   }
 
-  // Skill row helpers
+  // ── Skill row helpers ───────────────────────────────────────────────────────
+
   function updateSkillRow(index: number, field: keyof SkillRow, value: string) {
     setSkillRows((rows) => rows.map((r, i) => i === index ? { ...r, [field]: value } : r));
     setSkillError('');
@@ -219,7 +194,6 @@ export default function OnboardingPage() {
         setAvatarUrl(avatar_url);
       }
 
-      // Catalog skills — rows where a catalog ID was selected
       const skills = skillRows
         .filter((r) => r.skillId && r.skillId !== '__other__')
         .map((r) => ({
@@ -228,18 +202,17 @@ export default function OnboardingPage() {
         }))
         .filter((s) => s.skill_name);
 
-      // Pending (other) skills — member typed a custom name; admin will review
       const pending_skills = skillRows
         .filter((r) => r.skillId === '__other__' && r.customName.trim())
         .map((r) => r.customName.trim());
 
       const result = await onboardingApi.complete({
         token,
-        first_name:     firstName.trim(),
-        last_name:      lastName.trim(),
-        phone_number:   buildE164Phone(phoneNumber, countryCode) || undefined,
+        first_name:     committedFirstName.trim(),
+        last_name:      committedLastName.trim(),
+        phone_number:   buildE164Phone(committedPhone, countryCode) || undefined,
         avatar_url:     finalAvatarUrl || undefined,
-        password,
+        password:       committedPassword,
         skills:         skills.length > 0 ? skills : undefined,
         pending_skills: pending_skills.length > 0 ? pending_skills : undefined,
       });
@@ -313,10 +286,6 @@ export default function OnboardingPage() {
   );
 
   function goToStep(i: number) {
-    // Clear errors for the step being navigated away from so they don't
-    // reappear when the user goes back without touching anything
-    if (i !== 1) { setFirstNameError(''); setLastNameError(''); setPhoneError(''); }
-    if (i !== 0) { setPwError(''); }
     setStep(i);
   }
 
@@ -331,7 +300,7 @@ export default function OnboardingPage() {
   // ── Completion screen ───────────────────────────────────────────────────────
 
   if (done) {
-    const displayName = firstName || initialName;
+    const displayName = committedFirstName || initialName;
     return (
       <OnboardingLayout stepper={<OnboardingStepper steps={STEPS} currentStep={STEPS.length} />}>
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
@@ -357,104 +326,102 @@ export default function OnboardingPage() {
 
       <OnboardingLayout stepper={stepper}>
         <div key={step} className="onboarding-step-enter">
+
         {/* ── STEP 1: Set Password ── */}
         {step === 0 && (
-          <div className="flex flex-col gap-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Welcome</h1>
-              <p className="text-base text-gray-600 mt-2">Please set your password</p>
-            </div>
-            <div className="flex flex-col gap-5">
-              <Input
-                label="Enter Password"
-                type={showPw ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setPwError(''); }}
-                placeholder="Min. 8 characters"
-                rightIcon={
-                  <button type="button" onClick={() => setShowPw((v) => !v)} className="text-gray-400 hover:text-gray-600" tabIndex={-1}>
-                    {showPw ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
-                  </button>
-                }
+          <Formik
+            initialValues={{ password: committedPassword, confirm: '' }}
+            validationSchema={passwordStepSchema}
+            onSubmit={(values) => {
+              setCommittedPassword(values.password);
+              setStep(1);
+            }}
+          >
+            {({ values, errors, touched, handleChange, handleBlur }) => (
+              <PasswordStepForm
+                values={values}
+                errors={errors}
+                touched={touched}
+                handleChange={handleChange}
+                handleBlur={handleBlur}
               />
-              <Input
-                label="Confirm Password"
-                type={showConf ? 'text' : 'password'}
-                value={confirm}
-                onChange={(e) => { setConfirm(e.target.value); setPwError(''); }}
-                placeholder="Re-enter your password"
-                error={pwError || undefined}
-                rightIcon={
-                  <button type="button" onClick={() => setShowConf((v) => !v)} className="text-gray-400 hover:text-gray-600" tabIndex={-1}>
-                    {showConf ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
-                  </button>
-                }
-              />
-            </div>
-            <Button className="w-full justify-center" onClick={handlePasswordNext}>
-              Reset Password
-            </Button>
-          </div>
+            )}
+          </Formik>
         )}
 
         {/* ── STEP 2: Personal Details ── */}
         {step === 1 && (
-          <div className="flex flex-col gap-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Welcome</h1>
-              <p className="text-base text-gray-600 mt-2">Please enter your personal details.</p>
-            </div>
-            <div className="flex flex-col gap-5">
-              <Input
-                label="First Name"
-                type="text"
-                value={firstName}
-                onChange={(e) => { setFirstName(e.target.value); if (/[a-zA-Z]/.test(e.target.value)) setFirstNameError(''); }}
-                onBlur={() => {
-                  if (!firstName.trim()) setFirstNameError('First name is required');
-                  else if (!/[a-zA-Z]/.test(firstName)) setFirstNameError('First name must contain at least one letter');
-                }}
-                placeholder="First name"
-                error={firstNameError || undefined}
-                required
-              />
-              <Input
-                label="Last Name"
-                type="text"
-                value={lastName}
-                onChange={(e) => { setLastName(e.target.value); if (/[a-zA-Z]/.test(e.target.value)) setLastNameError(''); }}
-                onBlur={() => {
-                  if (!lastName.trim()) setLastNameError('Last name is required');
-                  else if (!/[a-zA-Z]/.test(lastName)) setLastNameError('Last name must contain at least one letter');
-                }}
-                placeholder="Last name"
-                error={lastNameError || undefined}
-                required
-              />
-              <PhoneInput
-                label="Phone Number"
-                value={phoneNumber}
-                onChange={(v) => {
-                  setPhoneNumber(v);
-                  // Only re-validate while typing if there's already an error — so the
-                  // message clears in real-time as the user fixes it, but never fires
-                  // on a fresh untouched field
-                  if (phoneError) setPhoneError(getPhoneValidationError(v, countryCode));
-                }}
-                onBlur={() => setPhoneError(getPhoneValidationError(phoneNumber, countryCode))}
-                countryCode={countryCode}
-                onCountryChange={(code) => {
-                  setCountryCode(code);
-                  if (phoneNumber.trim()) setPhoneError(getPhoneValidationError(phoneNumber, code));
-                }}
-                error={phoneError || undefined}
-                required
-              />
-            </div>
-            <Button className="w-full justify-center" onClick={handleDetailsNext}>
-              Update &amp; Continue
-            </Button>
-          </div>
+          <Formik
+            initialValues={{
+              firstName: committedFirstName,
+              lastName:  committedLastName,
+            }}
+            validationSchema={personalDetailsSchema}
+            onSubmit={(values) => {
+              // Phone validated separately via PhoneInput helper
+              const phoneValidationError = getPhoneValidationError(phoneNumber, countryCode);
+              if (phoneValidationError) {
+                setPhoneError(phoneValidationError);
+                return;
+              }
+              setCommittedFirstName(values.firstName);
+              setCommittedLastName(values.lastName);
+              setCommittedPhone(phoneNumber);
+              setStep(2);
+            }}
+          >
+            {({ values, errors, touched, handleChange, handleBlur, submitForm }) => (
+              <div className="flex flex-col gap-6">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Welcome</h1>
+                  <p className="text-base text-gray-600 mt-2">Please enter your personal details.</p>
+                </div>
+                <div className="flex flex-col gap-5">
+                  <Input
+                    label="First Name"
+                    type="text"
+                    name="firstName"
+                    value={values.firstName}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    placeholder="First name"
+                    error={touched.firstName && errors.firstName ? errors.firstName : undefined}
+                    required
+                  />
+                  <Input
+                    label="Last Name"
+                    type="text"
+                    name="lastName"
+                    value={values.lastName}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    placeholder="Last name"
+                    error={touched.lastName && errors.lastName ? errors.lastName : undefined}
+                    required
+                  />
+                  <PhoneInput
+                    label="Phone Number"
+                    value={phoneNumber}
+                    onChange={(v) => {
+                      setPhoneNumber(v);
+                      if (phoneError) setPhoneError(getPhoneValidationError(v, countryCode));
+                    }}
+                    onBlur={() => setPhoneError(getPhoneValidationError(phoneNumber, countryCode))}
+                    countryCode={countryCode}
+                    onCountryChange={(code) => {
+                      setCountryCode(code);
+                      if (phoneNumber.trim()) setPhoneError(getPhoneValidationError(phoneNumber, code));
+                    }}
+                    error={phoneError || undefined}
+                    required
+                  />
+                </div>
+                <Button className="w-full justify-center" onClick={() => submitForm()}>
+                  Update &amp; Continue
+                </Button>
+              </div>
+            )}
+          </Formik>
         )}
 
         {/* ── STEP 3: Choose Avatar ── */}
@@ -469,7 +436,7 @@ export default function OnboardingPage() {
                     className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-500 hover:text-error-500 text-xs"
                   >×</button>
                 </div>
-                <p className="text-sm text-gray-500">{`${firstName} ${lastName}`.trim() || initialName}</p>
+                <p className="text-sm text-gray-500">{`${committedFirstName} ${committedLastName}`.trim() || initialName}</p>
                 <button onClick={() => setShowCrop(true)} className="text-sm font-medium text-brand-600 hover:text-brand-700">
                   Re-crop image
                 </button>
@@ -508,7 +475,7 @@ export default function OnboardingPage() {
               {skillRows.map((row, index) => (
                 <div key={index} className="grid grid-cols-[1fr_1fr_36px] gap-3 items-start">
 
-                  {/* Skill select — catalog options + custom entry */}
+                  {/* Skill select */}
                   <div className="flex flex-col gap-1.5">
                     <div className="relative">
                       <select
@@ -588,7 +555,7 @@ export default function OnboardingPage() {
 
             {skillError && <p className="text-sm text-error-600">{skillError}</p>}
 
-            {/* Button spans only the skills + experience columns, not the remove-button column */}
+            {/* Button spans only the skills + experience columns */}
             <div className="grid grid-cols-[1fr_1fr_36px] gap-3">
               <div className="col-span-2">
                 <Button className="w-full justify-center" loading={submitting} onClick={handleComplete}>
@@ -603,5 +570,65 @@ export default function OnboardingPage() {
 
       </OnboardingLayout>
     </>
+  );
+}
+
+// ── Password step sub-component ───────────────────────────────────────────────
+// Extracted so we can use local show/hide toggle state without polluting Formik
+
+interface PasswordStepFormProps {
+  values:       { password: string; confirm: string };
+  errors:       Partial<{ password: string; confirm: string }>;
+  touched:      Partial<{ password: boolean; confirm: boolean }>;
+  handleChange: React.ChangeEventHandler<HTMLInputElement>;
+  handleBlur:   React.FocusEventHandler<HTMLInputElement>;
+}
+
+function PasswordStepForm({ values, errors, touched, handleChange, handleBlur }: PasswordStepFormProps) {
+  const [showPw,   setShowPw]   = useState(false);
+  const [showConf, setShowConf] = useState(false);
+
+  return (
+    <Form className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Welcome</h1>
+        <p className="text-base text-gray-600 mt-2">Please set your password</p>
+      </div>
+      <div className="flex flex-col gap-5">
+        <Input
+          label="Enter Password"
+          type={showPw ? 'text' : 'password'}
+          name="password"
+          value={values.password}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          placeholder="Min. 8 characters"
+          error={touched.password && errors.password ? errors.password : undefined}
+          rightIcon={
+            <button type="button" onClick={() => setShowPw((v) => !v)} className="text-gray-400 hover:text-gray-600" tabIndex={-1}>
+              {showPw ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
+            </button>
+          }
+        />
+        <Input
+          label="Confirm Password"
+          type={showConf ? 'text' : 'password'}
+          name="confirm"
+          value={values.confirm}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          placeholder="Re-enter your password"
+          error={touched.confirm && errors.confirm ? errors.confirm : undefined}
+          rightIcon={
+            <button type="button" onClick={() => setShowConf((v) => !v)} className="text-gray-400 hover:text-gray-600" tabIndex={-1}>
+              {showConf ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
+            </button>
+          }
+        />
+      </div>
+      <Button type="submit" className="w-full justify-center">
+        Reset Password
+      </Button>
+    </Form>
   );
 }

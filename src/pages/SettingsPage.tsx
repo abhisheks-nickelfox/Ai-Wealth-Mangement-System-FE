@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
+import { Formik, Form } from 'formik';
 import {
   Mail01,
   Trash01,
@@ -10,7 +9,7 @@ import {
   Eye,
   EyeOff,
 } from '@untitled-ui/icons-react';
-import { changePasswordSchema } from '../lib/validation/auth.schemas';
+import { changePasswordSchema } from '../validations/auth.validations';
 import Avatar from '../components/ui/Avatar';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
@@ -980,25 +979,6 @@ export default function SettingsPage() {
   const [showNewPwd,         setShowNewPwd]         = useState(false);
   const [showConfirmPwd,     setShowConfirmPwd]     = useState(false);
 
-  const {
-    register:     registerPwd,
-    handleSubmit: handlePwdSubmit,
-    reset:        resetPwd,
-    setError:     setPwdError,
-    formState:    { errors: pwdErrors, isSubmitting: changingPwd },
-  } = useForm({ resolver: yupResolver(changePasswordSchema) });
-
-  const onChangePwd = async (data: { currentPassword: string; newPassword: string; confirmPassword: string }) => {
-    try {
-      await authApi.changePassword(data.currentPassword, data.newPassword);
-      setShowChangePassword(false);
-      resetPwd();
-      notify('Password changed successfully');
-    } catch (err) {
-      setPwdError('root', { message: (err as Error).message });
-    }
-  };
-
 
   // ── Load profile ─────────────────────────────────────────────────────────────
 
@@ -1160,7 +1140,7 @@ export default function SettingsPage() {
               <p className="text-sm text-[#535862] mt-0.5">Update your photo and personal details here.</p>
             </div>
             <button
-              onClick={() => { setShowChangePassword(true); resetPwd(); }}
+              onClick={() => setShowChangePassword(true)}
               className="px-4 py-2 text-sm font-semibold text-[#414651] border border-[#D5D7DA] rounded-lg bg-white hover:bg-gray-50 transition-colors shrink-0"
             >
               Change Password
@@ -1388,77 +1368,102 @@ export default function SettingsPage() {
 
       {/* ── Change Password Slide-Over ─────────────────────────────────────────── */}
       {showChangePassword && (
-        <SlideOver
-          open
-          onClose={() => setShowChangePassword(false)}
-          title="Change Password"
-          subtitle="Choose a new password for your account."
-          width="max-w-md"
-          footer={
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setShowChangePassword(false)}
-                className="px-4 py-2.5 text-sm font-semibold text-[#414651] border border-[#D5D7DA] rounded-lg bg-white hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <Button onClick={() => handlePwdSubmit(onChangePwd)()} loading={changingPwd} size="md">
-                Update password
-              </Button>
-            </div>
-          }
+        <Formik
+          initialValues={{ currentPassword: '', newPassword: '', confirmPassword: '' }}
+          validationSchema={changePasswordSchema}
+          onSubmit={async (values, { setFieldError, setSubmitting, resetForm }) => {
+            try {
+              await authApi.changePassword(values.currentPassword, values.newPassword);
+              setShowChangePassword(false);
+              resetForm();
+              notify('Password changed successfully');
+            } catch (err) {
+              setFieldError('currentPassword', (err as Error).message);
+            } finally {
+              setSubmitting(false);
+            }
+          }}
         >
-          <form onSubmit={handlePwdSubmit(onChangePwd)} className="flex flex-col gap-5">
-            <div>
-              <label className="block text-sm font-medium text-[#414651] mb-1.5">Current password</label>
-              <div className="relative">
-                <Input
-                  type={showCurrentPwd ? 'text' : 'password'}
-                  placeholder="Enter current password"
-                  error={pwdErrors.currentPassword?.message}
-                  {...registerPwd('currentPassword')}
-                />
-                <button type="button" onClick={() => setShowCurrentPwd((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors">
-                  {showCurrentPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[#414651] mb-1.5">New password</label>
-              <div className="relative">
-                <Input
-                  type={showNewPwd ? 'text' : 'password'}
-                  placeholder="Min. 8 characters"
-                  error={pwdErrors.newPassword?.message}
-                  {...registerPwd('newPassword')}
-                />
-                <button type="button" onClick={() => setShowNewPwd((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors">
-                  {showNewPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[#414651] mb-1.5">Confirm new password</label>
-              <div className="relative">
-                <Input
-                  type={showConfirmPwd ? 'text' : 'password'}
-                  placeholder="Re-enter new password"
-                  error={pwdErrors.confirmPassword?.message}
-                  {...registerPwd('confirmPassword')}
-                />
-                <button type="button" onClick={() => setShowConfirmPwd((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors">
-                  {showConfirmPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
-                </button>
-              </div>
-            </div>
-            {pwdErrors.root && (
-              <p className="text-sm text-red-600">{pwdErrors.root.message}</p>
-            )}
-          </form>
-        </SlideOver>
+          {({ values, errors, touched, handleChange, handleBlur, isSubmitting, submitForm }) => (
+            <SlideOver
+              open
+              onClose={() => setShowChangePassword(false)}
+              title="Change Password"
+              subtitle="Choose a new password for your account."
+              width="max-w-md"
+              footer={
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => setShowChangePassword(false)}
+                    className="px-4 py-2.5 text-sm font-semibold text-[#414651] border border-[#D5D7DA] rounded-lg bg-white hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <Button onClick={() => submitForm()} loading={isSubmitting} size="md">
+                    Update password
+                  </Button>
+                </div>
+              }
+            >
+              <Form className="flex flex-col gap-5">
+                <div>
+                  <label className="block text-sm font-medium text-[#414651] mb-1.5">Current password</label>
+                  <div className="relative">
+                    <Input
+                      type={showCurrentPwd ? 'text' : 'password'}
+                      name="currentPassword"
+                      placeholder="Enter current password"
+                      value={values.currentPassword}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={touched.currentPassword && errors.currentPassword ? errors.currentPassword : undefined}
+                    />
+                    <button type="button" onClick={() => setShowCurrentPwd((p) => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors">
+                      {showCurrentPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#414651] mb-1.5">New password</label>
+                  <div className="relative">
+                    <Input
+                      type={showNewPwd ? 'text' : 'password'}
+                      name="newPassword"
+                      placeholder="Min. 8 characters"
+                      value={values.newPassword}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={touched.newPassword && errors.newPassword ? errors.newPassword : undefined}
+                    />
+                    <button type="button" onClick={() => setShowNewPwd((p) => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors">
+                      {showNewPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#414651] mb-1.5">Confirm new password</label>
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPwd ? 'text' : 'password'}
+                      name="confirmPassword"
+                      placeholder="Re-enter new password"
+                      value={values.confirmPassword}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      error={touched.confirmPassword && errors.confirmPassword ? errors.confirmPassword : undefined}
+                    />
+                    <button type="button" onClick={() => setShowConfirmPwd((p) => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#717680] hover:text-[#414651] transition-colors">
+                      {showConfirmPwd ? <EyeOff width={16} height={16} /> : <Eye width={16} height={16} />}
+                    </button>
+                  </div>
+                </div>
+              </Form>
+            </SlideOver>
+          )}
+        </Formik>
       )}
 
       {/* ── Organization Info ─────────────────────────────────────────────────── */}

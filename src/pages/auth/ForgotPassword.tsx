@@ -1,30 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
+import { Formik, Form } from 'formik';
 import { ArrowLeft, Key01 } from '@untitled-ui/icons-react';
 import AuthLayout from '../../components/layout/AuthLayout';
 import Input from '../../components/ui/Input';
 import { authApi } from '../../lib/api';
-import { forgotPasswordSchema } from '../../lib/validation/auth.schemas';
+import { forgotPasswordSchema } from '../../validations/auth.validations';
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
-
-  const {
-    register,
-    handleSubmit,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm({ resolver: yupResolver(forgotPasswordSchema) });
-
-  const onSubmit = async (data: { email: string }) => {
-    try {
-      await authApi.forgotPassword(data.email);
-      navigate('/reset-link-sent');
-    } catch (err) {
-      setError('email', { message: (err as Error).message ?? 'Something went wrong. Please try again.' });
-    }
-  };
 
   return (
     <AuthLayout hidePanel>
@@ -39,23 +22,43 @@ export default function ForgotPassword() {
         No worries, we'll send you reset instructions.
       </p>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-        <Input
-          label="Email"
-          type="email"
-          placeholder="Enter your email"
-          error={errors.email?.message}
-          {...register('email')}
-        />
+      <Formik
+        initialValues={{ email: '' }}
+        validationSchema={forgotPasswordSchema}
+        onSubmit={async (values, { setFieldError, setSubmitting }) => {
+          try {
+            await authApi.forgotPassword(values.email);
+            navigate('/reset-link-sent');
+          } catch (err) {
+            setFieldError('email', (err as Error).message ?? 'Something went wrong. Please try again.');
+          } finally {
+            setSubmitting(false);
+          }
+        }}
+      >
+        {({ values, errors, touched, handleChange, handleBlur, isSubmitting }) => (
+          <Form className="flex flex-col gap-4">
+            <Input
+              label="Email"
+              type="email"
+              name="email"
+              placeholder="Enter your email"
+              value={values.email}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              error={touched.email && errors.email ? errors.email : undefined}
+            />
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-60 text-white font-semibold text-sm rounded-lg py-2.5 transition-colors"
-        >
-          {isSubmitting ? 'Sending…' : 'Reset password'}
-        </button>
-      </form>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-60 text-white font-semibold text-sm rounded-lg py-2.5 transition-colors"
+            >
+              {isSubmitting ? 'Sending…' : 'Reset password'}
+            </button>
+          </Form>
+        )}
+      </Formik>
 
       <Link
         to="/login"

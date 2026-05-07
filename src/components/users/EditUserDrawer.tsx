@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Formik, Form } from 'formik';
 import { Save01, Plus, Trash01 } from '@untitled-ui/icons-react';
 import SlideOver from '../ui/SlideOver';
 import MultiSelect from '../ui/MultiSelect';
@@ -10,6 +11,7 @@ import { ROLE_OPTIONS, STATUS_OPTIONS } from '../../lib/constants';
 import { useUser, useUpdateUser } from '../../hooks/useUsers';
 import { useSkills, useCreateSkill } from '../../hooks/useSkills';
 import { useMemberRoles, useCreateMemberRole } from '../../hooks/useMemberRoles';
+import { editUserSchema } from '../../validations/user.validations';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -28,13 +30,11 @@ interface EditUserDrawerProps {
 // ── EditUserDrawer ─────────────────────────────────────────────────────────────
 
 export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUserDrawerProps) {
-  // Form state
-  const [name,            setName]            = useState('');
+  // Complex multi-value state kept outside Formik
   const [roles,           setRoles]           = useState<string[]>([]);
   const [status,          setStatus]          = useState<string[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [selectedSkills,  setSelectedSkills]  = useState<SkillEntry[]>([]);
-  const [error,           setError]           = useState('');
   const [skillErrors,     setSkillErrors]     = useState<Record<string, boolean>>({});
 
   // Inline add panels
@@ -53,12 +53,11 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
 
   const isMember = roles.includes('member');
 
-  // Sync form state when drawer opens or liveUser changes
+  // Sync state when drawer opens or liveUser changes
   useEffect(() => {
     if (!open) return;
     const u = liveUser ?? user;
     if (!u) return;
-    setName(u.name);
     setRoles([u.role]);
     setStatus([u.status]);
     setSelectedSkills(
@@ -67,13 +66,12 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
         experience: (s as typeof s & { experience?: string | null }).experience ?? '',
       })),
     );
-    setError('');
     setSkillErrors({});
     setShowRoleForm(false);
     setShowSkillForm(false);
   }, [open, liveUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Set member role selection after catalogs + live user are both ready
+  // Set member role after catalogs + live user are ready
   useEffect(() => {
     const u = liveUser ?? user;
     if (!u || memberRolesLoading) return;
@@ -87,17 +85,13 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
 
   // ── Skill helpers ───────────────────────────────────────────────────────────
 
-  // Called by MultiSelect when the set of selected skill IDs changes
   function handleSkillIdsChange(ids: string[]) {
     setSelectedSkills((prev) => {
-      // Keep existing entries (preserve experience already set)
-      const kept   = prev.filter((e) => ids.includes(e.id));
+      const kept    = prev.filter((e) => ids.includes(e.id));
       const keptIds = new Set(kept.map((e) => e.id));
-      // Add entries for newly added skill IDs with blank experience
-      const added  = ids.filter((id) => !keptIds.has(id)).map((id) => ({ id, experience: '' }));
+      const added   = ids.filter((id) => !keptIds.has(id)).map((id) => ({ id, experience: '' }));
       return [...kept, ...added];
     });
-    // Clear errors for deselected skills
     setSkillErrors((prev) => {
       const next = { ...prev };
       Object.keys(prev).forEach((id) => { if (!ids.includes(id)) delete next[id]; });
@@ -140,65 +134,6 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
     } catch (e) { setSkillAddError((e as Error).message); }
   }
 
-  // ── Save ────────────────────────────────────────────────────────────────────
-
-  async function handleSave() {
-    const u = liveUser ?? user;
-    if (!u) return;
-    if (!name.trim() || roles.length === 0 || status.length === 0) {
-      setError('Name, role and status are required.');
-      return;
-    }
-
-    // Validate that every selected skill has an experience level
-    const missing: Record<string, boolean> = {};
-    selectedSkills.forEach((e) => { if (!e.experience) missing[e.id] = true; });
-    if (Object.keys(missing).length > 0) {
-      setSkillErrors(missing);
-      setError('Please enter an experience level for each skill.');
-      return;
-    }
-
-    const tooLong: Record<string, boolean> = {};
-    selectedSkills.forEach((e) => {
-      if (e.experience) {
-        const n = Number(e.experience);
-        if (isNaN(n) || n < 1 || n > 50) tooLong[e.id] = true;
-      }
-    });
-    if (Object.keys(tooLong).length > 0) {
-      setSkillErrors(tooLong);
-      setError('Invalid experience — must be a number between 1 and 50.');
-      return;
-    }
-
-    const memberRoleName = isMember && selectedRoleIds.length > 0
-      ? memberRoles.find((r) => r.id === selectedRoleIds[0])?.name
-      : undefined;
-
-    setError('');
-    setSkillErrors({});
-    try {
-      const updated = await updateUser.mutateAsync({
-        id: u.id,
-        payload: {
-          name:        name.trim(),
-          role:        roles[0] as 'admin' | 'member',
-          member_role: memberRoleName ?? (isMember ? undefined : ''),
-          status:      status[0] as User['status'],
-          skills_with_experience: selectedSkills.map((e) => ({
-            skill_id:   e.id,
-            experience: e.experience || null,
-          })),
-        },
-      });
-      onSaved(updated);
-      onClose();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
   // ── Option lists ────────────────────────────────────────────────────────────
 
   const memberRoleOptions = useMemo(
@@ -223,201 +158,289 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
       open={open}
       onClose={onClose}
       title="Edit team member"
-      subtitle={displayUser ? `Updating ${displayUser.name}'s profile` : undefined}
+      subtitle={displayUser ? `Updating ${displayUser.first_name ?? displayUser.name}'s profile` : undefined}
     >
       {displayUser && (
-        <div className="flex flex-col gap-5">
+        <Formik
+          initialValues={{
+            firstName: displayUser.first_name ?? '',
+            lastName:  displayUser.last_name  ?? '',
+          }}
+          validationSchema={editUserSchema}
+          onSubmit={async (values, { setFieldError, setSubmitting }) => {
+            if (roles.length === 0 || status.length === 0) {
+              setFieldError('firstName', 'Role and status are required.');
+              setSubmitting(false);
+              return;
+            }
 
-          {/* Avatar preview */}
-          <div className="flex items-center gap-3 pb-4 border-b border-[#F2F4F7]">
-            <Avatar name={displayUser.name} size="lg" />
-            <div>
-              <p className="text-sm font-semibold text-[#181D27]">{displayUser.name}</p>
-              <p className="text-sm text-[#717680]">{displayUser.email}</p>
-            </div>
-          </div>
+            // Validate skill experience
+            const missing: Record<string, boolean> = {};
+            selectedSkills.forEach((e) => { if (!e.experience) missing[e.id] = true; });
+            if (Object.keys(missing).length > 0) {
+              setSkillErrors(missing);
+              setFieldError('firstName', 'Please enter an experience level for each skill.');
+              setSubmitting(false);
+              return;
+            }
 
-          {/* Error banner */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
-              {error}
-            </div>
-          )}
+            const tooLong: Record<string, boolean> = {};
+            selectedSkills.forEach((e) => {
+              if (e.experience) {
+                const n = Number(e.experience);
+                if (isNaN(n) || n < 1 || n > 50) tooLong[e.id] = true;
+              }
+            });
+            if (Object.keys(tooLong).length > 0) {
+              setSkillErrors(tooLong);
+              setFieldError('firstName', 'Invalid experience — must be a number between 1 and 50.');
+              setSubmitting(false);
+              return;
+            }
 
-          {/* Name */}
-          <Input
-            label="Name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Full name"
-          />
+            const memberRoleName = isMember && selectedRoleIds.length > 0
+              ? memberRoles.find((r) => r.id === selectedRoleIds[0])?.name
+              : undefined;
 
-          {/* Status */}
-          <MultiSelect
-            label="Status"
-            options={STATUS_OPTIONS}
-            value={status}
-            onChange={(vals) => { if (vals.length > 0) setStatus(vals.slice(-1)); }}
-            columns={1}
-          />
+            const firstName = values.firstName?.trim() ?? '';
+            const lastName  = values.lastName?.trim()  ?? '';
+            const fullName  = [firstName, lastName].filter(Boolean).join(' ') || displayUser.name;
 
-          {/* System Role */}
-          <MultiSelect
-            label="Role"
-            options={ROLE_OPTIONS}
-            value={roles}
-            onChange={(vals) => { if (vals.length > 0) setRoles(vals.slice(-1)); }}
-            columns={1}
-            singleSelect
-          />
+            setSkillErrors({});
+            try {
+              const updated = await updateUser.mutateAsync({
+                id: displayUser.id,
+                payload: {
+                  name:        fullName,
+                  first_name:  firstName || undefined,
+                  last_name:   lastName  || undefined,
+                  role:        roles[0] as 'admin' | 'member',
+                  member_role: memberRoleName ?? (isMember ? undefined : ''),
+                  status:      status[0] as User['status'],
+                  skills_with_experience: selectedSkills.map((e) => ({
+                    skill_id:   e.id,
+                    experience: e.experience || null,
+                  })),
+                },
+              });
+              onSaved(updated);
+              onClose();
+            } catch (e) {
+              setFieldError('firstName', (e as Error).message);
+            } finally {
+              setSubmitting(false);
+            }
+          }}
+          enableReinitialize
+        >
+          {({ values, errors, touched, handleChange, handleBlur, isSubmitting }) => (
+            <Form className="flex flex-col gap-5">
 
-          {/* Member Role — visible when role = member */}
-          {isMember && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-[#414651]">
-                Member Role
-                <span className="ml-1 text-[#717680] font-normal">(job title)</span>
-              </label>
-              {memberRolesLoading ? (
-                <p className="text-sm text-[#717680]">Loading…</p>
-              ) : (
-                <MultiSelect
-                  placeholder="Select a role"
-                  options={memberRoleOptions}
-                  value={selectedRoleIds}
-                  onChange={setSelectedRoleIds}
-                  columns={1}
-                  searchable
-                  searchPlaceholder="Search roles…"
-                />
-              )}
-              {!showRoleForm ? (
-                <button type="button" onClick={() => setShowRoleForm(true)}
-                  className="mt-1 inline-flex items-center gap-1.5 text-sm text-[#6941C6] hover:text-[#53389E] font-medium">
-                  <Plus width={13} height={13} /> Add new role
-                </button>
-              ) : (
-                <InlineAddPanel
-                  title="New member role"
-                  fields={[{ key: 'name', placeholder: 'Role name *' }]}
-                  error={roleAddError} saving={createMemberRole.isPending}
-                  onSave={handleAddRole}
-                  onCancel={() => { setShowRoleForm(false); setRoleAddError(''); }}
-                />
-              )}
-            </div>
-          )}
-
-          {/* Skills */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-[#414651]">Skills</label>
-            {skillsLoading ? (
-              <p className="text-sm text-[#717680]">Loading…</p>
-            ) : (
-              <MultiSelect
-                placeholder="Select skills"
-                options={skillOptions}
-                value={selectedSkillIds}
-                onChange={handleSkillIdsChange}
-                columns={2}
-                showBadges
-                searchable
-                searchPlaceholder="Search skills…"
-              />
-            )}
-
-            {/* Per-skill experience rows */}
-            {selectedSkills.length > 0 && (
-              <div className="mt-2 flex flex-col gap-2">
-                {selectedSkills.map((entry) => {
-                  const skill   = skills.find((s) => s.id === entry.id);
-                  const hasError = skillErrors[entry.id];
-                  return (
-                    <div
-                      key={entry.id}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors ${
-                        hasError ? 'border-red-300 bg-red-50' : 'border-[#E9EAEB] bg-[#FAFAFA]'
-                      }`}
-                    >
-                      {/* Skill name */}
-                      <span className="text-sm font-medium text-[#181D27] flex-1 truncate">
-                        {skill?.name ?? entry.id}
-                      </span>
-
-                      {/* Experience input */}
-                      <div className="flex flex-col gap-0.5">
-                        <input
-                          type="number"
-                          min={1}
-                          max={50}
-                          value={entry.experience}
-                          onChange={(e) => setExperience(entry.id, e.target.value)}
-                          placeholder="Years (1–50)"
-                          className={`text-sm border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] bg-white transition-colors w-32 ${
-                            hasError || (entry.experience && Number(entry.experience) > 50)
-                              ? 'border-red-300 text-red-600'
-                              : 'border-[#D5D7DA] text-[#414651]'
-                          }`}
-                        />
-                        {entry.experience && Number(entry.experience) > 50 && (
-                          <p className="text-[10px] text-right w-32 text-red-500">Invalid, max 50 years</p>
-                        )}
-                      </div>
-
-                      {/* Remove */}
-                      <button
-                        type="button"
-                        onClick={() => removeSkill(entry.id)}
-                        className="p-1 rounded hover:bg-red-100 text-[#717680] hover:text-red-600 transition-colors shrink-0"
-                        aria-label={`Remove ${skill?.name}`}
-                      >
-                        <Trash01 width={14} height={14} />
-                      </button>
-                    </div>
-                  );
-                })}
-                {Object.keys(skillErrors).length > 0 && (
-                  <p className="text-xs text-red-600">
-                    Experience level is required for all selected skills.
+              {/* Avatar preview */}
+              <div className="flex items-center gap-3 pb-4 border-b border-[#F2F4F7]">
+                <Avatar name={displayUser.first_name ?? displayUser.name} size="lg" />
+                <div>
+                  <p className="text-sm font-semibold text-[#181D27]">
+                    {[displayUser.first_name, displayUser.last_name].filter(Boolean).join(' ') || displayUser.name}
                   </p>
+                  <p className="text-sm text-[#717680]">{displayUser.email}</p>
+                </div>
+              </div>
+
+              {/* Error banner */}
+              {touched.firstName && errors.firstName && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+                  {errors.firstName}
+                </div>
+              )}
+
+              {/* First Name + Last Name */}
+              <div className="flex gap-3">
+                <Input
+                  label="First name"
+                  type="text"
+                  name="firstName"
+                  value={values.firstName ?? ''}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  placeholder="First name"
+                  error={touched.firstName && errors.firstName ? errors.firstName : undefined}
+                />
+                <Input
+                  label="Last name"
+                  type="text"
+                  name="lastName"
+                  value={values.lastName ?? ''}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                  placeholder="Last name"
+                  error={touched.lastName && errors.lastName ? errors.lastName : undefined}
+                />
+              </div>
+
+              {/* Status */}
+              <MultiSelect
+                label="Status"
+                options={STATUS_OPTIONS}
+                value={status}
+                onChange={(vals) => { if (vals.length > 0) setStatus(vals.slice(-1)); }}
+                columns={1}
+              />
+
+              {/* System Role */}
+              <MultiSelect
+                label="Role"
+                options={ROLE_OPTIONS}
+                value={roles}
+                onChange={(vals) => { if (vals.length > 0) setRoles(vals.slice(-1)); }}
+                columns={1}
+                singleSelect
+              />
+
+              {/* Member Role */}
+              {isMember && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-[#414651]">
+                    Member Role
+                    <span className="ml-1 text-[#717680] font-normal">(job title)</span>
+                  </label>
+                  {memberRolesLoading ? (
+                    <p className="text-sm text-[#717680]">Loading…</p>
+                  ) : (
+                    <MultiSelect
+                      placeholder="Select a role"
+                      options={memberRoleOptions}
+                      value={selectedRoleIds}
+                      onChange={setSelectedRoleIds}
+                      columns={1}
+                      searchable
+                      searchPlaceholder="Search roles…"
+                    />
+                  )}
+                  {!showRoleForm ? (
+                    <button type="button" onClick={() => setShowRoleForm(true)}
+                      className="mt-1 inline-flex items-center gap-1.5 text-sm text-[#6941C6] hover:text-[#53389E] font-medium">
+                      <Plus width={13} height={13} /> Add new role
+                    </button>
+                  ) : (
+                    <InlineAddPanel
+                      title="New member role"
+                      fields={[{ key: 'name', placeholder: 'Role name *' }]}
+                      error={roleAddError} saving={createMemberRole.isPending}
+                      onSave={handleAddRole}
+                      onCancel={() => { setShowRoleForm(false); setRoleAddError(''); }}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Skills */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-[#414651]">Skills</label>
+                {skillsLoading ? (
+                  <p className="text-sm text-[#717680]">Loading…</p>
+                ) : (
+                  <MultiSelect
+                    placeholder="Select skills"
+                    options={skillOptions}
+                    value={selectedSkillIds}
+                    onChange={handleSkillIdsChange}
+                    columns={2}
+                    showBadges
+                    searchable
+                    searchPlaceholder="Search skills…"
+                  />
+                )}
+
+                {selectedSkills.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    {selectedSkills.map((entry) => {
+                      const skill    = skills.find((s) => s.id === entry.id);
+                      const hasError = skillErrors[entry.id];
+                      return (
+                        <div
+                          key={entry.id}
+                          className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors ${
+                            hasError ? 'border-red-300 bg-red-50' : 'border-[#E9EAEB] bg-[#FAFAFA]'
+                          }`}
+                        >
+                          <span className="text-sm font-medium text-[#181D27] flex-1 truncate">
+                            {skill?.name ?? entry.id}
+                          </span>
+
+                          <div className="flex flex-col gap-0.5">
+                            <input
+                              type="number"
+                              min={1}
+                              max={50}
+                              value={entry.experience}
+                              onChange={(e) => setExperience(entry.id, e.target.value)}
+                              placeholder="Years (1–50)"
+                              className={`text-sm border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] bg-white transition-colors w-32 ${
+                                hasError || (entry.experience && Number(entry.experience) > 50)
+                                  ? 'border-red-300 text-red-600'
+                                  : 'border-[#D5D7DA] text-[#414651]'
+                              }`}
+                            />
+                            {entry.experience && Number(entry.experience) > 50 && (
+                              <p className="text-[10px] text-right w-32 text-red-500">Invalid, max 50 years</p>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => removeSkill(entry.id)}
+                            className="p-1 rounded hover:bg-red-100 text-[#717680] hover:text-red-600 transition-colors shrink-0"
+                            aria-label={`Remove ${skill?.name}`}
+                          >
+                            <Trash01 width={14} height={14} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {Object.keys(skillErrors).length > 0 && (
+                      <p className="text-xs text-red-600">
+                        Experience level is required for all selected skills.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {!showSkillForm ? (
+                  <button type="button" onClick={() => setShowSkillForm(true)}
+                    className="mt-1 inline-flex items-center gap-1.5 text-sm text-[#6941C6] hover:text-[#53389E] font-medium">
+                    <Plus width={13} height={13} /> Add new skill
+                  </button>
+                ) : (
+                  <InlineAddPanel
+                    title="New skill"
+                    fields={[
+                      { key: 'name',     placeholder: 'Skill name *' },
+                      { key: 'category', placeholder: 'Category (optional)' },
+                    ]}
+                    error={skillAddError} saving={createSkill.isPending}
+                    onSave={handleAddSkill}
+                    onCancel={() => { setShowSkillForm(false); setSkillAddError(''); }}
+                  />
                 )}
               </div>
-            )}
 
-            {!showSkillForm ? (
-              <button type="button" onClick={() => setShowSkillForm(true)}
-                className="mt-1 inline-flex items-center gap-1.5 text-sm text-[#6941C6] hover:text-[#53389E] font-medium">
-                <Plus width={13} height={13} /> Add new skill
-              </button>
-            ) : (
-              <InlineAddPanel
-                title="New skill"
-                fields={[
-                  { key: 'name',     placeholder: 'Skill name *' },
-                  { key: 'category', placeholder: 'Category (optional)' },
-                ]}
-                error={skillAddError} saving={createSkill.isPending}
-                onSave={handleAddSkill}
-                onCancel={() => { setShowSkillForm(false); setSkillAddError(''); }}
-              />
-            )}
-          </div>
+              {/* Actions */}
+              <div className="flex items-center gap-3 pt-2 mt-2 border-t border-[#F2F4F7]">
+                <button type="submit" disabled={isSubmitting || updateUser.isPending}
+                  className="inline-flex items-center gap-2 bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm">
+                  <Save01 width={16} height={16} />
+                  {isSubmitting || updateUser.isPending ? 'Saving…' : 'Save changes'}
+                </button>
+                <button type="button" onClick={onClose}
+                  className="inline-flex items-center gap-2 bg-white hover:bg-gray-50 border border-[#D5D7DA] text-[#414651] text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm">
+                  Cancel
+                </button>
+              </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-3 pt-2 mt-2 border-t border-[#F2F4F7]">
-            <button type="button" onClick={handleSave} disabled={updateUser.isPending}
-              className="inline-flex items-center gap-2 bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm">
-              <Save01 width={16} height={16} />
-              {updateUser.isPending ? 'Saving…' : 'Save changes'}
-            </button>
-            <button type="button" onClick={onClose}
-              className="inline-flex items-center gap-2 bg-white hover:bg-gray-50 border border-[#D5D7DA] text-[#414651] text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm">
-              Cancel
-            </button>
-          </div>
-
-        </div>
+            </Form>
+          )}
+        </Formik>
       )}
     </SlideOver>
   );
