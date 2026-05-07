@@ -287,11 +287,22 @@ export interface Project {
   start_date:      string | null;
   end_date:        string | null;
   priority:        'high' | 'medium' | 'low';
+  share_token:     string | null;
   created_at:      string;
   updated_at:      string;
   firm_name:       string | null;
   ticket_count:    number;
   members:         ProjectMember[];
+}
+
+export interface SharedProjectView {
+  id:              string;
+  name:            string;
+  description:     string | null;
+  workflow_status: 'todo' | 'in_progress' | 'in_review' | 'approved' | 'completed';
+  firm_name:       string | null;
+  members:         { id: string; name: string; avatar_url: string | null }[];
+  task_totals:     { total: number; todo: number; in_progress: number; in_review: number; completed: number };
 }
 
 export interface CreateProjectPayload {
@@ -335,6 +346,10 @@ export const projectsApi = {
     request<{ deleted: boolean; hasTickets: boolean; projectDeleted: boolean }>(
       'DELETE', `/projects/${id}`, { task_ids },
     ),
+  generateShareLink: (id: string) =>
+    request<{ data: { share_token: string } }>('POST', `/projects/${id}/share`).then((r) => r.data),
+  getSharedProject: (token: string) =>
+    request<{ data: SharedProjectView }>('GET', `/projects/shared/${token}`).then((r) => r.data),
 };
 
 export interface TaskAssignee {

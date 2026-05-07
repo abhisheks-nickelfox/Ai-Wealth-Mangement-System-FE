@@ -21,6 +21,7 @@ import FirmDetailPage from './pages/FirmDetailPage';
 import AddFirmPage from './pages/AddFirmPage';
 import EditFirmPage from './pages/EditFirmPage';
 import EditUserSettingsPage from './pages/EditUserSettingsPage';
+import SharedProjectPage from './pages/SharedProjectPage';
 
 // ── Redirects to /login when no token is present ─────────────────────────────
 
@@ -76,8 +77,9 @@ export default function App() {
           </Route>
 
           {/* Public onboarding — accessible without auth (invite link) */}
-          <Route path="/onboarding"       element={<OnboardingPage />} />
-          <Route path="/reset-password"   element={<ResetPasswordPage />} />
+          <Route path="/onboarding"                    element={<OnboardingPage />} />
+          <Route path="/reset-password"                element={<ResetPasswordPage />} />
+          <Route path="/shared/project/:token"         element={<SharedProjectPage />} />
 
           {/* Protected app shell */}
           <Route element={<ProtectedRoute />}>

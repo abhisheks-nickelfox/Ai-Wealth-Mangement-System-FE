@@ -3,6 +3,7 @@ import { Link01, Copy01, HelpCircle, ChevronDown, Plus } from '@untitled-ui/icon
 import Avatar from '../ui/Avatar';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
+import { projectsApi } from '../../lib/api';
 import type { User } from '../../lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -72,6 +73,7 @@ export default function ProjectDetailPanel({
   const [priority,    setPriority]    = useState<'high' | 'medium' | 'low'>('medium');
   const [saving,      setSaving]      = useState(false);
   const [copied,      setCopied]      = useState(false);
+  const [shareUrl,    setShareUrl]    = useState<string | null>(null);
 
   const [showStatus,   setShowStatus]   = useState(false);
   const [showPicker,   setShowPicker]   = useState(false);
@@ -90,12 +92,20 @@ export default function ProjectDetailPanel({
     }
   }, [project]);
 
+  // Generate / fetch share link when panel opens
+  useEffect(() => {
+    if (!open || !project) return;
+    setShareUrl(null);
+    projectsApi.generateShareLink(project.id).then(({ share_token }) => {
+      setShareUrl(`${window.location.origin}/shared/project/${share_token}`);
+    }).catch(() => {});
+  }, [open, project?.id]);
+
   if (!project) return null;
 
-  const shareLink = `${project.firmAbbr}.com/project/marketing-site`;
-
   const handleCopy = () => {
-    navigator.clipboard.writeText(`https://${shareLink}`).catch(() => {});
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -139,12 +149,17 @@ export default function ProjectDetailPanel({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-sm text-[#717680] min-w-0">
               <Link01 width={14} height={14} className="shrink-0 text-[#A4A7AE]" />
-              <span className="truncate text-[13px]">{shareLink}</span>
+              {shareUrl ? (
+                <span className="truncate text-[13px]">{shareUrl.replace(/^https?:\/\//, '')}</span>
+              ) : (
+                <span className="text-[13px] text-[#A4A7AE]">Generating link…</span>
+              )}
             </div>
             <button
               type="button"
               onClick={handleCopy}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#D5D7DA] rounded-lg text-[13px] text-[#344054] bg-white hover:bg-[#F9FAFB] transition-colors shrink-0"
+              disabled={!shareUrl}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#D5D7DA] rounded-lg text-[13px] text-[#344054] bg-white hover:bg-[#F9FAFB] transition-colors shrink-0 disabled:opacity-40"
             >
               <Copy01 width={13} height={13} />
               {copied ? 'Copied!' : 'Copy link'}
