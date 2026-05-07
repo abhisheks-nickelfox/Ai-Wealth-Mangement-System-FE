@@ -47,7 +47,15 @@ export function useUpdateTask() {
 export function useDiscardTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => tasksApi.transition(id, 'to_do'),
+    mutationFn: (id: string) => tasksApi.discard(id),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
+  });
+}
+
+export function useResolveTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => tasksApi.resolve(id),
     onSuccess:  () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
   });
 }

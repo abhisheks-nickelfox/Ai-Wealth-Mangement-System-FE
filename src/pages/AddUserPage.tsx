@@ -45,7 +45,7 @@ export default function AddUserPage() {
             <Form className="flex flex-col gap-6">
 
               {/* Root-level error from API */}
-              {touched.email && errors.email && !values.email && (
+              {touched.email && errors.email && (
                 <div className="mb-6 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
                   {errors.email}
                 </div>

@@ -70,8 +70,9 @@ export function useUpdateProject() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: UpdateProjectPayload }) =>
       projectsApi.update(id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['projects'] });
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all });
+      qc.invalidateQueries({ queryKey: queryKeys.projects.detail(id) });
     },
   });
 }

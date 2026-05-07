@@ -10,7 +10,7 @@ import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
 import FileUpload from '../ui/FileUpload';
 import type { Task, User } from '../../lib/api';
-import { useUpdateTask, useDiscardTask, useArchiveTask, useAssignApproveTask } from '../../hooks/useTasks';
+import { useUpdateTask, useDiscardTask, useArchiveTask, useAssignApproveTask, useResolveTask } from '../../hooks/useTasks';
 import { PriorityBadge, TaskStatusBadge } from './TaskBadges';
 import { formatDateInput } from '../../lib/transcriptUtils';
 import ApprovalConfirmModal from './ApprovalConfirmModal';
@@ -42,6 +42,7 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
   const discardTask     = useDiscardTask();
   const archiveTask     = useArchiveTask();
   const assignApprove   = useAssignApproveTask();
+  const resolveTask     = useResolveTask();
 
   useEffect(() => {
     if (task && open) {
@@ -76,6 +77,17 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
       onIgnored(task.id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to ignore task.');
+    }
+  }
+
+  async function handleResolve() {
+    if (!task) return;
+    setError('');
+    try {
+      const updated = await resolveTask.mutateAsync(task.id);
+      onSaved(updated);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to resolve task.');
     }
   }
 
@@ -285,11 +297,21 @@ export default function TaskDetailPanel({ task, open, onClose, users, onSaved, o
           </button>
           <button
             onClick={handleIgnore}
-            disabled={discardTask.isPending || !!task?.archived}
+            disabled={discardTask.isPending || !!task?.archived || !['to_do', 'draft', 'assigned'].includes(task?.status ?? '')}
+            title={!['to_do', 'draft', 'assigned'].includes(task?.status ?? '') ? 'Can only ignore tasks in to_do, draft, or assigned status' : undefined}
             className="px-3.5 py-2.5 text-sm font-semibold text-white bg-[#DC2626] hover:bg-[#B91C1C] disabled:opacity-60 rounded-lg transition-colors"
           >
             {discardTask.isPending ? 'Ignoring…' : 'Ignore'}
           </button>
+          {['in_progress', 'revisions'].includes(task?.status ?? '') && (
+            <button
+              onClick={handleResolve}
+              disabled={resolveTask.isPending || !!task?.archived}
+              className="px-3.5 py-2.5 text-sm font-semibold text-white bg-[#16A34A] hover:bg-[#15803D] disabled:opacity-60 rounded-lg transition-colors"
+            >
+              {resolveTask.isPending ? 'Resolving…' : 'Mark Complete'}
+            </button>
+          )}
           <button
             onClick={handleArchive}
             disabled={archiveTask.isPending}

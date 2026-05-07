@@ -168,11 +168,14 @@ export default function UsersPage() {
   // ── Search filter ─────────────────────────────────────────────────────────────
   const needle = search.trim().toLowerCase();
   const filteredUsers = needle
-    ? users.filter(
-        (u) =>
+    ? users.filter((u) => {
+        const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ').toLowerCase();
+        return (
+          fullName.includes(needle) ||
           u.name.toLowerCase().includes(needle) ||
-          u.email.toLowerCase().includes(needle),
-      )
+          u.email.toLowerCase().includes(needle)
+        );
+      })
     : users;
 
   function handleSearch(value: string) {
@@ -330,10 +333,9 @@ export default function UsersPage() {
                   pageMembers.map((user, idx) => {
                     const isEven    = idx % 2 === 0;
                     const isChecked = selected.has(user.id);
-                    // For invited users the name is the email until onboarding is done
-                    const displayName = (user.name && user.name !== user.email)
-                      ? user.name
-                      : user.email;
+                    // Prefer first+last name if set, fall back to name, then email
+                    const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ');
+                    const displayName = fullName || (user.name && user.name !== user.email ? user.name : user.email);
                     const displayRole = user.role.replace(/_/g, ' ');
                     const SKILL_PREVIEW = 3;
                     const visibleSkills = user.skills.slice(0, SKILL_PREVIEW);

@@ -31,8 +31,7 @@ export function useUpdateUser() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: UpdateUserPayload }) =>
       usersApi.update(id, payload),
-    onSuccess: (updatedUser, { id }) => {
-      qc.setQueryData(queryKeys.users.detail(id), updatedUser);
+    onSuccess: (_updatedUser, { id }) => {
       qc.invalidateQueries({ queryKey: queryKeys.users.all });
       qc.invalidateQueries({ queryKey: queryKeys.users.detail(id) });
     },
