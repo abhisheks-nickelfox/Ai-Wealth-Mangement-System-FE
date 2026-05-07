@@ -1087,6 +1087,15 @@ export default function SettingsPage() {
 
   async function handleSave() {
     if (!authUser) return;
+    const invalidExp = selectedSkills.filter((s) => {
+      if (!s.experience) return false;
+      const n = Number(s.experience);
+      return isNaN(n) || n < 1 || n > 50;
+    });
+    if (invalidExp.length > 0) {
+      notify('Invalid experience — must be a number between 1 and 50.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
@@ -1262,37 +1271,47 @@ export default function SettingsPage() {
                         {editingSkillId === id ? (
                           <>
                             <p className="text-base font-semibold text-[#414651]">{name}</p>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <input
-                                type="text"
-                                value={editExp}
-                                onChange={(e) => setEditExp(e.target.value.slice(0, 70))}
-                                placeholder="e.g. 2-5 years"
-                                autoFocus
-                                maxLength={70}
-                                className="text-xs border border-[#D5D7DA] rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#9E77ED] w-28"
-                              />
-                              <button
-                                onClick={() => {
-                                  setSelectedSkills((prev) =>
-                                    prev.map((s) => s.id === id ? { ...s, experience: editExp || null } : s),
-                                  );
-                                  setEditingSkillId(null);
-                                }}
-                                className="text-xs text-[#7F56D9] font-medium hover:underline"
-                              >
-                                Save
-                              </button>
-                              <button onClick={() => setEditingSkillId(null)} className="text-xs text-[#717680] hover:underline">
-                                Cancel
-                              </button>
+                            <div className="flex flex-col gap-0.5 mt-0.5">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={50}
+                                  value={editExp}
+                                  onChange={(e) => setEditExp(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+                                  placeholder="Years (1–50)"
+                                  autoFocus
+                                  className={`text-xs border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#9E77ED] w-28 ${
+                                    editExp && Number(editExp) > 50 ? 'border-red-400 text-red-600' : 'border-[#D5D7DA]'
+                                  }`}
+                                />
+                                <button
+                                  onClick={() => {
+                                    const n = Number(editExp);
+                                    if (!editExp || isNaN(n) || n < 1 || n > 50) return;
+                                    setSelectedSkills((prev) =>
+                                      prev.map((s) => s.id === id ? { ...s, experience: editExp } : s),
+                                    );
+                                    setEditingSkillId(null);
+                                  }}
+                                  className="text-xs text-[#7F56D9] font-medium hover:underline"
+                                >
+                                  Save
+                                </button>
+                                <button onClick={() => setEditingSkillId(null)} className="text-xs text-[#717680] hover:underline">
+                                  Cancel
+                                </button>
+                              </div>
+                              {editExp && Number(editExp) > 50 && (
+                                <p className="text-[10px] text-red-500">Invalid, max 50 years</p>
+                              )}
                             </div>
                           </>
                         ) : (
                           <>
                             <p className="text-base font-semibold text-[#414651] whitespace-nowrap">{name}</p>
                             <p className="text-sm text-[#535862] whitespace-nowrap">
-                              {experience ? `${experience} experience` : 'Add experience'}
+                              {experience ? `${experience} yr${Number(experience) === 1 ? '' : 's'} experience` : 'Add experience'}
                             </p>
                           </>
                         )}

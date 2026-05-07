@@ -76,7 +76,12 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
   }
 
   function saveEditSkill(skillId: string) {
-    setLocalSkills((p) => p.map((s) => s.id === skillId ? { ...s, experience: editSkillExp || null } : s));
+    const n = Number(editSkillExp);
+    if (!editSkillExp || isNaN(n) || n < 1 || n > 50) {
+      setToast({ message: 'Invalid experience — must be a number between 1 and 50.', isError: true });
+      return;
+    }
+    setLocalSkills((p) => p.map((s) => s.id === skillId ? { ...s, experience: editSkillExp } : s));
     setEditingSkillId(null);
   }
 
@@ -94,12 +99,24 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
       return;
     }
 
-    // Block save if any skill is missing an experience level
+    // Block save if any skill is missing or has invalid experience (must be 1–50 years)
     const missingExp = localSkills.filter((s) => !s.experience);
     if (missingExp.length > 0) {
       const names = missingExp.map((s) => s.name).join(', ');
       setToast({
-        message: `Experience level required for: ${names}. Click the edit icon on the skill card to set it.`,
+        message: `Experience required for: ${names}. Click the edit icon to set years (1–50).`,
+        isError: true,
+      });
+      return;
+    }
+    const invalidExp = localSkills.filter((s) => {
+      const n = Number(s.experience);
+      return isNaN(n) || n < 1 || n > 50;
+    });
+    if (invalidExp.length > 0) {
+      const names = invalidExp.map((s) => s.name).join(', ');
+      setToast({
+        message: `Invalid experience for: ${names}. Must be a number between 1 and 50.`,
         isError: true,
       });
       return;
@@ -306,12 +323,21 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
                         className="flex flex-col gap-2 bg-white border border-[#D5D7DA] rounded-lg p-3">
                         <span className="text-sm font-medium text-[#181D27]">{skill.name}</span>
                         <input
-                          type="text"
+                          type="number"
+                          min={1}
+                          max={50}
                           value={editSkillExp}
-                          onChange={(e) => setEditSkillExp(e.target.value)}
-                          placeholder="e.g. 2-5 years"
-                          className="text-sm border border-[#D5D7DA] rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full"
+                          onChange={(e) => setEditSkillExp(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+                          placeholder="Years (1–50)"
+                          className={`text-sm border rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full ${
+                            editSkillExp && Number(editSkillExp) > 50
+                              ? 'border-red-400 text-red-600'
+                              : 'border-[#D5D7DA]'
+                          }`}
                         />
+                        {editSkillExp && Number(editSkillExp) > 50 && (
+                          <p className="text-[10px] text-red-500">Invalid, max 50 years</p>
+                        )}
                         <div className="flex gap-2">
                           <Button size="sm" variant="primary" onClick={() => saveEditSkill(skill.id)}
                             className="flex-1">
@@ -328,7 +354,7 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-[#181D27] truncate">{skill.name}</p>
                           <p className="text-sm text-gray-500 mt-0.5">
-                            {skill.experience ?? '—'} experience
+                            {skill.experience ? `${skill.experience} yr${Number(skill.experience) === 1 ? '' : 's'} experience` : '— experience'}
                           </p>
                         </div>
                         <div className="flex items-center gap-1 ml-2 shrink-0">

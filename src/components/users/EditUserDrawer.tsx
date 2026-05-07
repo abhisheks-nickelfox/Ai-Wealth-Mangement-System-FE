@@ -106,7 +106,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
   }
 
   function setExperience(skillId: string, exp: string) {
-    const capped = exp.slice(0, 50);
+    const capped = exp.replace(/[^0-9]/g, '').slice(0, 2);
     setSelectedSkills((prev) =>
       prev.map((e) => (e.id === skillId ? { ...e, experience: capped } : e)),
     );
@@ -160,10 +160,15 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
     }
 
     const tooLong: Record<string, boolean> = {};
-    selectedSkills.forEach((e) => { if (e.experience && e.experience.trim().length > 50) tooLong[e.id] = true; });
+    selectedSkills.forEach((e) => {
+      if (e.experience) {
+        const n = Number(e.experience);
+        if (isNaN(n) || n < 1 || n > 50) tooLong[e.id] = true;
+      }
+    });
     if (Object.keys(tooLong).length > 0) {
       setSkillErrors(tooLong);
-      setError('Experience must be 50 characters or fewer.');
+      setError('Invalid experience — must be a number between 1 and 50.');
       return;
     }
 
@@ -343,21 +348,20 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
                       {/* Experience input */}
                       <div className="flex flex-col gap-0.5">
                         <input
-                          type="text"
+                          type="number"
+                          min={1}
+                          max={50}
                           value={entry.experience}
                           onChange={(e) => setExperience(entry.id, e.target.value)}
-                          placeholder="e.g. 2-5 years"
-                          maxLength={50}
+                          placeholder="Years (1–50)"
                           className={`text-sm border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] bg-white transition-colors w-32 ${
-                            hasError || entry.experience.length >= 50
+                            hasError || (entry.experience && Number(entry.experience) > 50)
                               ? 'border-red-300 text-red-600'
                               : 'border-[#D5D7DA] text-[#414651]'
                           }`}
                         />
-                        {entry.experience.length > 0 && (
-                          <p className={`text-[10px] text-right w-32 ${entry.experience.length >= 50 ? 'text-red-500' : 'text-gray-400'}`}>
-                            {entry.experience.length}/50
-                          </p>
+                        {entry.experience && Number(entry.experience) > 50 && (
+                          <p className="text-[10px] text-right w-32 text-red-500">Invalid, max 50 years</p>
                         )}
                       </div>
 

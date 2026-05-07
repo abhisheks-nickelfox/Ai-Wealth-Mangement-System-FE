@@ -41,9 +41,9 @@ export default function AddSkillsModal({
   const [errorMsg, setErrorMsg] = useState('');
 
   function updateRow(rowId: string, field: 'skillId' | 'experience', value: string) {
-    const capped = field === 'experience' ? value.slice(0, 50) : value;
-    setRows((prev) => prev.map((r) => (r.rowId === rowId ? { ...r, [field]: capped } : r)));
-    if (field === 'experience' && capped) {
+    const cleaned = field === 'experience' ? value.replace(/[^0-9]/g, '').slice(0, 2) : value;
+    setRows((prev) => prev.map((r) => (r.rowId === rowId ? { ...r, [field]: cleaned } : r)));
+    if (field === 'experience' && cleaned) {
       setErrorRowIds((prev) => { const n = new Set(prev); n.delete(rowId); return n; });
     }
   }
@@ -62,15 +62,18 @@ export default function AddSkillsModal({
     const missing = new Set(activeRows.filter((r) => !r.experience).map((r) => r.rowId));
     if (missing.size > 0) {
       setErrorRowIds(missing);
-      setErrorMsg('Please enter an experience level for every skill.');
+      setErrorMsg('Please enter years of experience for every skill.');
       return;
     }
-    const tooLong = new Set(
-      activeRows.filter((r) => r.experience.trim().length > 50).map((r) => r.rowId),
+    const invalid = new Set(
+      activeRows.filter((r) => {
+        const n = Number(r.experience);
+        return isNaN(n) || n < 1 || n > 50;
+      }).map((r) => r.rowId),
     );
-    if (tooLong.size > 0) {
-      setErrorRowIds(tooLong);
-      setErrorMsg('Experience must be 50 characters or fewer.');
+    if (invalid.size > 0) {
+      setErrorRowIds(invalid);
+      setErrorMsg('Invalid experience — must be a number between 1 and 50.');
       return;
     }
     setErrorRowIds(new Set());
@@ -135,21 +138,20 @@ export default function AddSkillsModal({
 
                 <div className="flex flex-col gap-0.5">
                   <input
-                    type="text"
+                    type="number"
+                    min={1}
+                    max={50}
                     value={row.experience}
                     onChange={(e) => updateRow(row.rowId, 'experience', e.target.value)}
-                    placeholder="e.g. 2-5 years"
-                    maxLength={50}
+                    placeholder="Years (1–50)"
                     className={`rounded-lg px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 w-full border transition-colors ${
-                      hasError || row.experience.length >= 50
+                      hasError || (row.experience && Number(row.experience) > 50)
                         ? 'border-red-400 text-red-600 focus:ring-red-300'
                         : 'border-[#D5D7DA] text-gray-500 focus:ring-[#9E77ED]'
                     }`}
                   />
-                  {row.experience.length > 0 && (
-                    <p className={`text-[10px] text-right ${row.experience.length >= 50 ? 'text-red-500' : 'text-gray-400'}`}>
-                      {row.experience.length}/50
-                    </p>
+                  {row.experience && Number(row.experience) > 50 && (
+                    <p className="text-[10px] text-right text-red-500">Invalid, max 50 years</p>
                   )}
                 </div>
 

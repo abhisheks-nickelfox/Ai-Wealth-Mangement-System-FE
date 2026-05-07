@@ -51,11 +51,12 @@ function getSkillsValidationError(skillRows: SkillRow[]): string {
     }
 
     if (!hasExperience) {
-      return 'Please enter experience for every skill before continuing.';
+      return 'Please enter years of experience for every skill.';
     }
 
-    if (row.experience.trim().length > 50) {
-      return 'Experience must be 50 characters or fewer.';
+    const expNum = Number(row.experience);
+    if (isNaN(expNum) || expNum < 1 || expNum > 50) {
+      return 'Invalid experience — must be a number between 1 and 50.';
     }
   }
 
@@ -535,17 +536,19 @@ export default function OnboardingPage() {
                   {/* Experience input */}
                   <div className="flex flex-col gap-0.5">
                     <input
-                      type="text"
+                      type="number"
+                      min={1}
+                      max={50}
                       value={row.experience}
-                      onChange={(e) => updateSkillRow(index, 'experience', e.target.value.slice(0, 50))}
-                      placeholder="e.g. 2-5 years"
-                      maxLength={50}
-                      className={`${dropdownCls} ${row.experience.length >= 50 ? 'border-red-400 focus:ring-red-300' : ''}`}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+                        updateSkillRow(index, 'experience', raw);
+                      }}
+                      placeholder="Years (1–50)"
+                      className={`${dropdownCls} ${row.experience && Number(row.experience) > 50 ? 'border-red-400 focus:ring-red-300' : ''}`}
                     />
-                    {row.experience.length > 0 && (
-                      <p className={`text-[10px] text-right ${row.experience.length >= 50 ? 'text-red-500' : 'text-gray-400'}`}>
-                        {row.experience.length}/50
-                      </p>
+                    {row.experience && Number(row.experience) > 50 && (
+                      <p className="text-[10px] text-right text-red-500">Invalid, max 50 years</p>
                     )}
                   </div>
 
