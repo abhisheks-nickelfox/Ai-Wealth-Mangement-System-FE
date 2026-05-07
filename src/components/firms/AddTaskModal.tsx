@@ -285,7 +285,7 @@ export default function AddTaskModal({
   }
 
   const handleCreate = async () => {
-    if (!title.trim() || !taskTypeId) return;
+    if (!title.trim() || !taskTypeId || !projectId) return;
     const selected = taskTypes.find((t) => t.id === taskTypeId);
     setSaving(true);
     try {
@@ -317,7 +317,7 @@ export default function AddTaskModal({
   };
 
   const selectedTaskType     = taskTypes.find((t) => t.id === taskTypeId);
-  const selectedProjectLabel = projects.find((p) => p.id === projectId)?.name ?? 'No Project';
+  const selectedProjectLabel = projects.find((p) => p.id === projectId)?.name ?? '';
   const selectedSubtypeLabel = SUBTASK_OPTIONS.find((o) => o.value === subtype)?.label ?? 'Task';
 
   return (
@@ -339,7 +339,7 @@ export default function AddTaskModal({
           <button
             type="button"
             onClick={handleCreate}
-            disabled={saving || !title.trim() || !taskTypeId}
+            disabled={saving || !title.trim() || !taskTypeId || !projectId}
             className="px-4 py-2.5 rounded-lg bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white text-sm font-semibold transition-colors"
           >
             {saving ? 'Creating…' : 'Create'}
@@ -432,30 +432,32 @@ export default function AddTaskModal({
             <button
               type="button"
               onClick={() => setShowProjectMenu((v) => !v)}
-              className="w-full flex items-center justify-between border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white hover:border-[#7F56D9] focus:ring-2 focus:ring-[#7F56D9] outline-none transition-colors"
+              className={`w-full flex items-center justify-between border rounded-lg px-3 py-2.5 text-sm bg-white hover:border-[#7F56D9] focus:ring-2 focus:ring-[#7F56D9] outline-none transition-colors ${
+                !projectId ? 'border-[#D5D7DA]' : 'border-[#D5D7DA]'
+              }`}
             >
-              <span className="truncate">{selectedProjectLabel}</span>
+              {selectedProjectLabel
+                ? <span className="truncate text-[#181D27]">{selectedProjectLabel}</span>
+                : <span className="text-[#A4A7AE]">Select a project</span>
+              }
               <ChevronDown width={16} height={16} className="text-[#717680] shrink-0 ml-2" />
             </button>
             {showProjectMenu && (
               <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 max-h-52 overflow-y-auto">
-                <button
-                  type="button"
-                  onClick={() => { setProjectId(''); setShowProjectMenu(false); }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] ${!projectId ? 'text-[#7F56D9] font-semibold' : 'text-[#344054]'}`}
-                >
-                  No Project
-                </button>
-                {projects.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => { setProjectId(p.id); setShowProjectMenu(false); }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] ${projectId === p.id ? 'text-[#7F56D9] font-semibold' : 'text-[#344054]'}`}
-                  >
-                    {p.name}
-                  </button>
-                ))}
+                {projects.length === 0 ? (
+                  <p className="px-3 py-2 text-sm text-[#717680]">No projects available</p>
+                ) : (
+                  projects.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => { setProjectId(p.id); setShowProjectMenu(false); }}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] ${projectId === p.id ? 'text-[#7F56D9] font-semibold' : 'text-[#344054]'}`}
+                    >
+                      {p.name}
+                    </button>
+                  ))
+                )}
               </div>
             )}
           </div>
