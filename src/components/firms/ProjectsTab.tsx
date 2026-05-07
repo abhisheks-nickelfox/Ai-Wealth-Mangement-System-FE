@@ -87,7 +87,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
   const createTask = useCreateTask();
-  const { toast: tabToast, notify: notifyTab } = useToast();
+  const { toast: tabToast, notify: notifyTab, dismiss: dismissTab } = useToast();
 
   // Fetch real projects for this firm
   const { data: projects = [] } = useProjects(firm?.id);
@@ -368,7 +368,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
 
   return (
     <div className="relative flex flex-col flex-1 min-h-0">
-      {tabToast && <Toast message={tabToast.message} onClose={() => {}} />}
+      {tabToast && <Toast message={tabToast.message} type={tabToast.type} onClose={dismissTab} />}
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-6 py-3 border-b border-[#E9EAEB] bg-white shrink-0 flex-wrap">
         {/* Search */}
