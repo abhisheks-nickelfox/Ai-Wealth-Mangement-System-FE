@@ -106,7 +106,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
   }
 
   function setExperience(skillId: string, exp: string) {
-    const capped = exp.slice(0, 70);
+    const capped = exp.slice(0, 50);
     setSelectedSkills((prev) =>
       prev.map((e) => (e.id === skillId ? { ...e, experience: capped } : e)),
     );
@@ -160,10 +160,10 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
     }
 
     const tooLong: Record<string, boolean> = {};
-    selectedSkills.forEach((e) => { if (e.experience && e.experience.trim().length > 70) tooLong[e.id] = true; });
+    selectedSkills.forEach((e) => { if (e.experience && e.experience.trim().length > 50) tooLong[e.id] = true; });
     if (Object.keys(tooLong).length > 0) {
       setSkillErrors(tooLong);
-      setError('Experience must be 70 characters or fewer.');
+      setError('Experience must be 50 characters or fewer.');
       return;
     }
 
@@ -347,16 +347,16 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
                           value={entry.experience}
                           onChange={(e) => setExperience(entry.id, e.target.value)}
                           placeholder="e.g. 2-5 years"
-                          maxLength={70}
+                          maxLength={50}
                           className={`text-sm border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] bg-white transition-colors w-32 ${
-                            hasError || entry.experience.length >= 70
+                            hasError || entry.experience.length >= 50
                               ? 'border-red-300 text-red-600'
                               : 'border-[#D5D7DA] text-[#414651]'
                           }`}
                         />
                         {entry.experience.length > 0 && (
-                          <p className={`text-[10px] text-right w-32 ${entry.experience.length >= 70 ? 'text-red-500' : 'text-gray-400'}`}>
-                            {entry.experience.length}/70
+                          <p className={`text-[10px] text-right w-32 ${entry.experience.length >= 50 ? 'text-red-500' : 'text-gray-400'}`}>
+                            {entry.experience.length}/50
                           </p>
                         )}
                       </div>

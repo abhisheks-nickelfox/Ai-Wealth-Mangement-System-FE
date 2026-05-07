@@ -41,7 +41,7 @@ export default function AddSkillsModal({
   const [errorMsg, setErrorMsg] = useState('');
 
   function updateRow(rowId: string, field: 'skillId' | 'experience', value: string) {
-    const capped = field === 'experience' ? value.slice(0, 70) : value;
+    const capped = field === 'experience' ? value.slice(0, 50) : value;
     setRows((prev) => prev.map((r) => (r.rowId === rowId ? { ...r, [field]: capped } : r)));
     if (field === 'experience' && capped) {
       setErrorRowIds((prev) => { const n = new Set(prev); n.delete(rowId); return n; });
@@ -66,11 +66,11 @@ export default function AddSkillsModal({
       return;
     }
     const tooLong = new Set(
-      activeRows.filter((r) => r.experience.trim().length > 70).map((r) => r.rowId),
+      activeRows.filter((r) => r.experience.trim().length > 50).map((r) => r.rowId),
     );
     if (tooLong.size > 0) {
       setErrorRowIds(tooLong);
-      setErrorMsg('Experience must be 70 characters or fewer.');
+      setErrorMsg('Experience must be 50 characters or fewer.');
       return;
     }
     setErrorRowIds(new Set());
@@ -139,16 +139,16 @@ export default function AddSkillsModal({
                     value={row.experience}
                     onChange={(e) => updateRow(row.rowId, 'experience', e.target.value)}
                     placeholder="e.g. 2-5 years"
-                    maxLength={70}
+                    maxLength={50}
                     className={`rounded-lg px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 w-full border transition-colors ${
-                      hasError || row.experience.length >= 70
+                      hasError || row.experience.length >= 50
                         ? 'border-red-400 text-red-600 focus:ring-red-300'
                         : 'border-[#D5D7DA] text-gray-500 focus:ring-[#9E77ED]'
                     }`}
                   />
                   {row.experience.length > 0 && (
-                    <p className={`text-[10px] text-right ${row.experience.length >= 70 ? 'text-red-500' : 'text-gray-400'}`}>
-                      {row.experience.length}/70
+                    <p className={`text-[10px] text-right ${row.experience.length >= 50 ? 'text-red-500' : 'text-gray-400'}`}>
+                      {row.experience.length}/50
                     </p>
                   )}
                 </div>

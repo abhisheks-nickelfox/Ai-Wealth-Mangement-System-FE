@@ -54,8 +54,8 @@ function getSkillsValidationError(skillRows: SkillRow[]): string {
       return 'Please enter experience for every skill before continuing.';
     }
 
-    if (row.experience.trim().length > 70) {
-      return 'Experience must be 70 characters or fewer.';
+    if (row.experience.trim().length > 50) {
+      return 'Experience must be 50 characters or fewer.';
     }
   }
 
@@ -537,14 +537,14 @@ export default function OnboardingPage() {
                     <input
                       type="text"
                       value={row.experience}
-                      onChange={(e) => updateSkillRow(index, 'experience', e.target.value.slice(0, 70))}
+                      onChange={(e) => updateSkillRow(index, 'experience', e.target.value.slice(0, 50))}
                       placeholder="e.g. 2-5 years"
-                      maxLength={70}
-                      className={`${dropdownCls} ${row.experience.length >= 70 ? 'border-red-400 focus:ring-red-300' : ''}`}
+                      maxLength={50}
+                      className={`${dropdownCls} ${row.experience.length >= 50 ? 'border-red-400 focus:ring-red-300' : ''}`}
                     />
                     {row.experience.length > 0 && (
-                      <p className={`text-[10px] text-right ${row.experience.length >= 70 ? 'text-red-500' : 'text-gray-400'}`}>
-                        {row.experience.length}/70
+                      <p className={`text-[10px] text-right ${row.experience.length >= 50 ? 'text-red-500' : 'text-gray-400'}`}>
+                        {row.experience.length}/50
                       </p>
                     )}
                   </div>
