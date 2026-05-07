@@ -13,8 +13,7 @@ import AvatarStack from '../ui/AvatarStack';
 import Avatar from '../ui/Avatar';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useUpdateProject } from '../../hooks/useFirms';
-import { TaskRow } from './TaskRow';
-import { StatusDot } from './TaskRow';
+import { TaskRow, StatusDot, COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU, PRIORITY_BADGE } from './TaskRow';
 import type { Task, User, Project, Firm } from '../../lib/api';
 
 // ── Status group definition (shared with ProjectsTab) ────────────────────────
@@ -24,6 +23,16 @@ export interface StatusGroup {
   label: string;
   statuses: string[];
 }
+
+// ── Workflow status badge ─────────────────────────────────────────────────────
+
+const WORKFLOW_BADGE: Record<string, { label: string; style: string }> = {
+  todo:        { label: 'To Do',       style: 'bg-gray-100 text-gray-500' },
+  in_progress: { label: 'In Progress', style: 'bg-purple-50 text-purple-600' },
+  in_review:   { label: 'In Review',   style: 'bg-yellow-50 text-yellow-700' },
+  approved:    { label: 'Approved',    style: 'bg-green-50 text-green-700' },
+  completed:   { label: 'Completed',   style: 'bg-gray-100 text-gray-600' },
+};
 
 // ── ProjectGroupRow ───────────────────────────────────────────────────────────
 
@@ -45,15 +54,19 @@ export interface ProjectGroupRowProps {
   onDeleteProject?: (projectId: string) => void;
 }
 
-export function ProjectGroupRow({ projectId, project, tasks, firm, usersMap, projects = [], groupStatus, onProjectClick, onEditTask, onDeleteTask, onAddTask, onOpenTaskDetail, onAssigneeChange, onProjectChange, onDeleteProject }: ProjectGroupRowProps) {
+export function ProjectGroupRow({
+  projectId, project, tasks, firm, usersMap, projects = [],
+  groupStatus, onProjectClick, onEditTask, onDeleteTask, onAddTask,
+  onOpenTaskDetail, onAssigneeChange, onProjectChange, onDeleteProject,
+}: ProjectGroupRowProps) {
   const [expanded,    setExpanded]    = useState(true);
   const [contextOpen, setContextOpen] = useState(false);
   const [pickerOpen,  setPickerOpen]  = useState(false);
-  const pickerRef    = useRef<HTMLDivElement>(null);
+  const pickerRef  = useRef<HTMLDivElement>(null);
   const updateProject = useUpdateProject();
   useClickOutside(pickerRef, () => setPickerOpen(false));
 
-  const label = project?.name ?? projectId ?? 'No Project';
+  const label = project?.name ?? projectId ?? 'Project';
   const currentMemberIds = useMemo(() => project?.members.map((m) => m.id) ?? [], [project]);
 
   async function toggleMember(userId: string) {
@@ -65,25 +78,27 @@ export function ProjectGroupRow({ projectId, project, tasks, firm, usersMap, pro
   }
 
   const memberAvatars = (project?.members ?? []).map((m) => ({ name: m.name, src: m.avatar_url ?? undefined }));
+  const workflowBadge = project ? (WORKFLOW_BADGE[project.workflow_status] ?? { label: project.workflow_status, style: 'bg-gray-100 text-gray-500' }) : null;
+  const priorityStyle = project ? (PRIORITY_BADGE[project.priority] ?? 'bg-gray-100 text-gray-500') : null;
 
   return (
     <>
-      {/* Project header */}
+      {/* Project header row */}
       <div
-        className="relative group/proj flex items-center gap-2 px-4 py-2.5 border-b border-[#E9EAEB] bg-[#F9FAFB] hover:bg-[#F2F4F7] transition-colors cursor-pointer pr-10"
+        className="group/proj flex items-center gap-2 pl-4 pr-2 py-2.5 border-b border-[#E9EAEB] bg-[#F9FAFB] hover:bg-[#F2F4F7] transition-colors cursor-pointer"
         onClick={() => setExpanded((v) => !v)}
       >
         {/* Expand chevron */}
         <span className="shrink-0 text-[#717680]">
           {expanded
-            ? <ChevronDown width={14} height={14} aria-hidden="true" />
+            ? <ChevronDown  width={14} height={14} aria-hidden="true" />
             : <ChevronRight width={14} height={14} aria-hidden="true" />}
         </span>
 
         {/* Status dot */}
         <span className="shrink-0"><StatusDot status={tasks[0]?.status ?? 'to_do'} /></span>
 
-        {/* Left: folder + name — grows to fill left half */}
+        {/* Folder + project name — flex-1 */}
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <FolderClosed width={15} height={15} className="text-[#7F56D9] shrink-0" aria-hidden="true" />
           <button
@@ -95,8 +110,12 @@ export function ProjectGroupRow({ projectId, project, tasks, firm, usersMap, pro
           </button>
         </div>
 
-        {/* Center: member avatars + picker */}
-        <div ref={pickerRef} className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+        {/* Assignee column: member avatars + picker */}
+        <div
+          ref={pickerRef}
+          className={`${COL_ASSIGNEE} relative flex justify-center`}
+          onClick={(e) => e.stopPropagation()}
+        >
           <AvatarStack
             avatars={memberAvatars}
             max={3}
@@ -125,21 +144,33 @@ export function ProjectGroupRow({ projectId, project, tasks, firm, usersMap, pro
           )}
         </div>
 
-        {/* Right: firm name — grows to fill right half */}
-        <div className="flex-1 flex justify-end min-w-0">
-          {firm && (
-            <span className="text-[13px] text-[#A4A7AE] font-normal truncate max-w-[140px]">
-              {firm.name}
+        {/* Due date column — projects have no deadline, show dash */}
+        <div className={`${COL_DATE} text-[12px] text-[#C8CAD0]`}>—</div>
+
+        {/* Priority column */}
+        <div className={COL_PRIORITY}>
+          {priorityStyle && project && (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold capitalize ${priorityStyle}`}>
+              {project.priority}
+            </span>
+          )}
+        </div>
+
+        {/* Status column */}
+        <div className={COL_STATUS}>
+          {workflowBadge && (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold truncate max-w-full ${workflowBadge.style}`}>
+              {workflowBadge.label}
             </span>
           )}
         </div>
 
         {/* Context menu */}
         <div
-          className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/proj:opacity-100 transition-opacity z-10"
+          className={`${COL_MENU} flex items-center justify-center`}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="relative">
+          <div className="relative opacity-0 group-hover/proj:opacity-100 transition-opacity">
             <button
               onClick={() => setContextOpen((v) => !v)}
               className="w-6 h-6 rounded flex items-center justify-center text-[#717680] hover:bg-[#E9EAEB] transition-colors"
@@ -188,7 +219,7 @@ export function ProjectGroupRow({ projectId, project, tasks, firm, usersMap, pro
             />
           ))}
           <button
-            className="flex items-center gap-2 pl-10 pr-4 py-2.5 w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors group/add"
+            className="flex items-center gap-2 pl-10 pr-2 py-2.5 w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
             onClick={() => onAddTask?.(projectId, groupStatus)}
           >
             <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
@@ -223,7 +254,11 @@ export interface StatusSectionProps {
   onDeleteProject?: (projectId: string) => void;
 }
 
-export function StatusSection({ group, tasks, emptyProjects = [], projectsMap, firm, usersMap, viewMode, onProjectClick, onEditTask, onDeleteTask, onAddProject, onAddTask, onOpenTaskDetail, onAssigneeChange, onProjectChange, onDeleteProject }: StatusSectionProps) {
+export function StatusSection({
+  group, tasks, emptyProjects = [], projectsMap, firm, usersMap, viewMode,
+  onProjectClick, onEditTask, onDeleteTask, onAddProject, onAddTask,
+  onOpenTaskDetail, onAssigneeChange, onProjectChange, onDeleteProject,
+}: StatusSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   const byProject = useMemo<Map<string | null, Task[]>>(() => {
@@ -236,7 +271,7 @@ export function StatusSection({ group, tasks, emptyProjects = [], projectsMap, f
     return map;
   }, [tasks]);
 
-  // In project view, hide tasks that have no project_id (legacy orphans — all tasks now require a project)
+  // In project view, hide tasks with no project_id (all tasks now require a project)
   const visibleByProject = useMemo(() => {
     if (viewMode !== 'project') return byProject;
     const m = new Map(byProject);
@@ -244,9 +279,10 @@ export function StatusSection({ group, tasks, emptyProjects = [], projectsMap, f
     return m;
   }, [byProject, viewMode]);
 
-  const hasContent = (viewMode === 'project'
+  const hasContent = viewMode === 'project'
     ? visibleByProject.size > 0 || emptyProjects.length > 0
-    : tasks.length > 0);
+    : tasks.length > 0;
+
   const totalCount = viewMode === 'project'
     ? Array.from(visibleByProject.values()).reduce((s, t) => s + t.length, 0) + emptyProjects.length
     : tasks.length;
@@ -262,7 +298,7 @@ export function StatusSection({ group, tasks, emptyProjects = [], projectsMap, f
         >
           {collapsed
             ? <ChevronRight width={14} height={14} className="shrink-0 text-[#717680]" aria-hidden="true" />
-            : <ChevronDown width={14} height={14} className="shrink-0 text-[#717680]" aria-hidden="true" />}
+            : <ChevronDown  width={14} height={14} className="shrink-0 text-[#717680]" aria-hidden="true" />}
           <span className="text-[13px] font-semibold text-[#181D27]">{group.label}</span>
           {totalCount > 0 && (
             <span className="text-[12px] text-[#717680]">{totalCount}</span>
@@ -279,10 +315,17 @@ export function StatusSection({ group, tasks, emptyProjects = [], projectsMap, f
         )}
       </div>
 
-      {/* Sub-label "Tasks" */}
+      {/* Column header row */}
       {!collapsed && hasContent && (
-        <div className="px-4 py-1 border-b border-[#E9EAEB] bg-white">
-          <span className="text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wide">{viewMode === 'project' ? 'Projects' : 'Tasks'}</span>
+        <div className="flex items-center pl-4 pr-2 py-1.5 border-b border-[#E9EAEB] bg-white">
+          <span className="flex-1 text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider">
+            {viewMode === 'project' ? 'Projects' : 'Tasks'}
+          </span>
+          <div className={`${COL_ASSIGNEE} text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider text-center`}>Assignee</div>
+          <div className={`${COL_DATE}     text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider`}>Due date</div>
+          <div className={`${COL_PRIORITY} text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider`}>Priority</div>
+          <div className={`${COL_STATUS}   text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider`}>Status</div>
+          <div className={COL_MENU} />
         </div>
       )}
 
@@ -366,7 +409,6 @@ export function StatusSection({ group, tasks, emptyProjects = [], projectsMap, f
               />
             ))
           )}
-
         </div>
       )}
     </section>

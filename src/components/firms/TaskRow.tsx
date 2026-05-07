@@ -13,7 +13,14 @@ import Avatar from '../ui/Avatar';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import type { Task, User, Project } from '../../lib/api';
 
-// ── Status dot SVG ────────────────────────────────────────────────────────────
+// ── Shared column widths (imported by ProjectGroupRow) ────────────────────────
+export const COL_ASSIGNEE = 'w-[140px] shrink-0';
+export const COL_DATE     = 'w-[110px] shrink-0';
+export const COL_PRIORITY = 'w-[100px] shrink-0';
+export const COL_STATUS   = 'w-[120px] shrink-0';
+export const COL_MENU     = 'w-8 shrink-0';
+
+// ── Status dot ────────────────────────────────────────────────────────────────
 
 const STATUS_DOT_COLOR: Record<string, string> = {
   to_do:           'stroke',
@@ -42,7 +49,46 @@ export function StatusDot({ status }: { status: string }) {
   );
 }
 
-// ── Task row ──────────────────────────────────────────────────────────────────
+// ── Badge helpers ─────────────────────────────────────────────────────────────
+
+export const PRIORITY_BADGE: Record<string, string> = {
+  urgent: 'bg-red-50 text-red-600',
+  high:   'bg-orange-50 text-orange-600',
+  normal: 'bg-yellow-50 text-yellow-700',
+  low:    'bg-green-50 text-green-600',
+};
+
+export const TASK_STATUS_BADGE: Record<string, { label: string; style: string }> = {
+  draft:             { label: 'Draft',       style: 'bg-gray-100 text-gray-500' },
+  to_do:             { label: 'To Do',       style: 'bg-gray-100 text-gray-500' },
+  assigned:          { label: 'Assigned',    style: 'bg-blue-50 text-blue-600' },
+  in_progress:       { label: 'In Progress', style: 'bg-purple-50 text-purple-600' },
+  revisions:         { label: 'Revisions',   style: 'bg-orange-50 text-orange-600' },
+  internal_review:   { label: 'In Review',   style: 'bg-yellow-50 text-yellow-700' },
+  client_review:     { label: 'Client Rev',  style: 'bg-indigo-50 text-indigo-600' },
+  compliance_review: { label: 'Compliance',  style: 'bg-amber-50 text-amber-700' },
+  approved:          { label: 'Approved',    style: 'bg-green-50 text-green-700' },
+  closed:            { label: 'Closed',      style: 'bg-gray-200 text-gray-600' },
+  completed:         { label: 'Completed',   style: 'bg-green-50 text-green-600' },
+  blocked:           { label: 'Blocked',     style: 'bg-red-50 text-red-600' },
+  discarded:         { label: 'Discarded',   style: 'bg-red-50 text-red-600' },
+};
+
+export function formatDeadline(deadline: string | null): { text: string; overdue: boolean } {
+  if (!deadline) return { text: '—', overdue: false };
+  const d = new Date(deadline + 'T00:00:00');
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (diff < 0)  return { text: `${Math.abs(diff)}d overdue`, overdue: true };
+  if (diff === 0) return { text: 'Today',    overdue: true };
+  if (diff === 1) return { text: 'Tomorrow', overdue: false };
+  return {
+    text: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    overdue: false,
+  };
+}
+
+// ── TaskRow ───────────────────────────────────────────────────────────────────
 
 export interface TaskRowProps {
   task: Task;
@@ -67,8 +113,6 @@ export function TaskRow({ task, usersMap, projects = [], indented = false, onEdi
   useClickOutside(pickerRef,        () => setPickerOpen(false));
   useClickOutside(projectPickerRef, () => setProjectPickerOpen(false));
 
-  const currentProject = projects.find((p) => p.id === task.project_id) ?? null;
-
   const currentAssignees = task.assignees && task.assignees.length > 0
     ? task.assignees
     : (task.assignee_id && usersMap.get(task.assignee_id)
@@ -76,10 +120,13 @@ export function TaskRow({ task, usersMap, projects = [], indented = false, onEdi
         : []);
 
   const currentAssigneeIds = currentAssignees.map((a) => a.id);
+  const { text: dateText, overdue } = formatDeadline(task.deadline ?? null);
+  const priorityStyle = PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500';
+  const statusInfo    = TASK_STATUS_BADGE[task.status] ?? { label: task.status, style: 'bg-gray-100 text-gray-500' };
 
   return (
     <div
-      className={`relative group flex items-center gap-2 border-b border-[#E9EAEB] hover:bg-[#F9FAFB] transition-colors py-2 pr-10 ${indented ? 'pl-10' : 'pl-4'}`}
+      className={`group flex items-center gap-2 border-b border-[#E9EAEB] hover:bg-[#F9FAFB] transition-colors py-2 pr-2 ${indented ? 'pl-10' : 'pl-4'}`}
       role="row"
     >
       {/* Expand chevron */}
@@ -91,7 +138,7 @@ export function TaskRow({ task, usersMap, projects = [], indented = false, onEdi
       {/* Task icon */}
       <Dataflow03 width={14} height={14} className="shrink-0 text-[#A4A7AE]" aria-hidden="true" />
 
-      {/* Left: title — fills left half */}
+      {/* Title — flex-1 */}
       <button
         type="button"
         onClick={() => onOpenDetail?.(task)}
@@ -100,13 +147,17 @@ export function TaskRow({ task, usersMap, projects = [], indented = false, onEdi
         {task.title}
       </button>
 
-      {/* Center: assignee picker — single <button> wrapper; "+" rendered as div (addAs="div") to avoid nested buttons */}
-      <div ref={pickerRef} className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+      {/* Assignee column */}
+      <div
+        ref={pickerRef}
+        className={`${COL_ASSIGNEE} relative flex justify-center`}
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           type="button"
           onClick={() => setPickerOpen((v) => !v)}
-          aria-label="Assign"
           className={`transition-opacity ${currentAssignees.length === 0 ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}
+          aria-label="Assign"
         >
           <AvatarStack
             avatars={currentAssignees.map((a: { id: string; name: string; avatar_url?: string | null }) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
@@ -137,50 +188,28 @@ export function TaskRow({ task, usersMap, projects = [], indented = false, onEdi
         )}
       </div>
 
-      {/* Right: project picker — flex-1 so it balances the title on the left */}
-      {onProjectChange && (
-        <div className="flex-1 flex justify-end min-w-0">
-        <div ref={projectPickerRef} className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            onClick={() => setProjectPickerOpen((v) => !v)}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors max-w-[110px] truncate ${
-              currentProject
-                ? 'bg-[#F4F3FF] text-[#6941C6]'
-                : 'opacity-40 group-hover:opacity-100 bg-[#F9FAFB] text-[#717680] hover:text-[#7F56D9] hover:bg-[#F4F3FF]'
-            }`}
-            title={currentProject ? currentProject.name : 'Assign project'}
-          >
-            <FolderClosed width={10} height={10} className="shrink-0" aria-hidden="true" />
-            <span className="truncate">{currentProject ? currentProject.name : 'Assign project'}</span>
-          </button>
-          {projectPickerOpen && (
-            <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[180px] max-h-52 overflow-y-auto">
-              {projects.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => { onProjectChange(task.id, p.id); setProjectPickerOpen(false); }}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
-                >
-                  <FolderClosed width={13} height={13} className="text-[#7F56D9] shrink-0" aria-hidden="true" />
-                  <span className="flex-1 text-[13px] text-[#181D27] truncate">{p.name}</span>
-                  {task.project_id === p.id && (
-                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-                      <path d="M2 6.5L5 9.5L11 3" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        </div>
-      )}
+      {/* Due date column */}
+      <div className={`${COL_DATE} text-[12px] ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
+        {dateText}
+      </div>
+
+      {/* Priority column */}
+      <div className={COL_PRIORITY}>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold capitalize ${priorityStyle}`}>
+          {task.priority}
+        </span>
+      </div>
+
+      {/* Status column */}
+      <div className={COL_STATUS}>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold truncate max-w-full ${statusInfo.style}`}>
+          {statusInfo.label}
+        </span>
+      </div>
 
       {/* Context menu */}
-      <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-        <div className="relative">
+      <div className={`${COL_MENU} flex items-center justify-center`} onClick={(e) => e.stopPropagation()}>
+        <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={(e) => { e.stopPropagation(); setContextOpen((v) => !v); }}
             className="w-6 h-6 rounded flex items-center justify-center text-[#717680] hover:bg-[#E9EAEB] transition-colors"
@@ -198,6 +227,11 @@ export function TaskRow({ task, usersMap, projects = [], indented = false, onEdi
                 icon: <Edit01 width={14} height={14} className="text-[#717680]" aria-hidden="true" />,
                 onClick: () => { setContextOpen(false); onEdit?.(task); },
               },
+              ...(onProjectChange ? [{
+                label: 'Move to project',
+                icon: <FolderClosed width={14} height={14} className="text-[#717680]" aria-hidden="true" />,
+                onClick: () => { setContextOpen(false); setProjectPickerOpen(true); },
+              }] : []),
               {
                 label: 'Delete',
                 icon: <Trash01 width={14} height={14} aria-hidden="true" />,
@@ -208,6 +242,31 @@ export function TaskRow({ task, usersMap, projects = [], indented = false, onEdi
           />
         </div>
       </div>
+
+      {/* Move-to-project picker (opened from context menu) */}
+      {projectPickerOpen && onProjectChange && (
+        <div
+          ref={projectPickerRef}
+          className="absolute right-8 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[190px] max-h-52 overflow-y-auto"
+        >
+          {projects.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => { onProjectChange(task.id, p.id); setProjectPickerOpen(false); }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+            >
+              <FolderClosed width={13} height={13} className="text-[#7F56D9] shrink-0" aria-hidden="true" />
+              <span className="flex-1 text-[13px] text-[#181D27] truncate">{p.name}</span>
+              {task.project_id === p.id && (
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                  <path d="M2 6.5L5 9.5L11 3" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

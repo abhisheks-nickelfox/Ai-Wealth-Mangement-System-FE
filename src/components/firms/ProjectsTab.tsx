@@ -450,6 +450,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
 
       {/* Scrollable sections body */}
       <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[1200px]">
 
         {STATUS_GROUPS.map((group) => {
           const groupTasks = tasksByGroup.get(group.id) ?? [];
@@ -515,6 +516,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
             />
           );
         })}
+        </div>
       </div>
 
       {/* Filter panel overlay */}
