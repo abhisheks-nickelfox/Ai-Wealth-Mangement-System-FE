@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Plus, FilterLines } from '@untitled-ui/icons-react';
 import Toast from '../ui/Toast';
@@ -11,8 +12,9 @@ import { StatusSection } from './ProjectGroupRow';
 import { FilterPanel } from './TaskFilterPanel';
 import AddProjectModal from './AddProjectModal';
 import AddTaskModal, { type TaskFormData } from './AddTaskModal';
-import TaskDetailPanel from './TaskDetailPanel';
 import ProjectDetailPanel, { type ProjectDetail } from './ProjectDetailPanel';
+import TaskDetailPanel from './TaskDetailPanel';
+import type { TaskDetailData } from './TaskDetailPanel';
 import DeleteProjectModal from './DeleteProjectModal';
 import { queryKeys } from '../../lib/queryKeys';
 import type { Firm, Task, TaskAssignee, User, Project } from '../../lib/api';
@@ -75,6 +77,7 @@ export interface ProjectsTabProps {
 }
 
 export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'project' | 'task'>('project');
   const [showAddProject, setShowAddProject] = useState(false);
@@ -82,11 +85,13 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
   const [showAddTask, setShowAddTask] = useState(false);
   const [addTaskDefaultProjectId, setAddTaskDefaultProjectId] = useState('');
   const [addTaskDefaultStatus, setAddTaskDefaultStatus] = useState<string | undefined>(undefined);
+  const [addTaskParentId, setAddTaskParentId] = useState<string | undefined>(undefined);
   const [selectedProject, setSelectedProject] = useState<ProjectDetail | null>(null);
   const qc = useQueryClient();
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
   const createTask = useCreateTask();
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const { toast: tabToast, notify: notifyTab, dismiss: dismissTab } = useToast();
 
   // Fetch real projects for this firm
@@ -96,9 +101,19 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const deleteTask = useDeleteTask();
 
-  // ── Task detail panel ──────────────────────────────────────────────────────
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const updateTask = useUpdateTask();
+
+  const handleSaveTask = async (taskId: string, data: TaskDetailData) => {
+    await updateTask.mutateAsync({ id: taskId, payload: {
+      title:        data.title,
+      description:  data.description,
+      priority:     data.priority,
+      assignee_ids: data.assignee_ids,
+      deadline:     data.deadline || undefined,
+      project_id:   data.project_id,
+    }});
+    setSelectedTask(null);
+  };
 
   // ── Project delete ─────────────────────────────────────────────────────────
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
@@ -118,18 +133,20 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
     if (!firm?.id) return;
     try {
       await createTask.mutateAsync({
-        firm_id:        firm.id,
-        title:          data.title,
-        description:    data.description || undefined,
-        type:           data.type as 'task' | 'design' | 'development' | 'account_management',
-        priority:       PRIORITY_MAP[data.priority] ?? 'normal',
-        project_id:     data.projectId          || undefined,
-        assignee_ids:   data.assigneeIds.length > 0 ? data.assigneeIds : undefined,
-        deadline:       data.endDate            || undefined,
-        initial_status: data.initialStatus      || undefined,
+        firm_id:         firm.id,
+        title:           data.title,
+        description:     data.description || undefined,
+        type:            data.type as 'task' | 'design' | 'development' | 'account_management',
+        priority:        PRIORITY_MAP[data.priority] ?? 'normal',
+        project_id:      data.projectId          || undefined,
+        assignee_ids:    data.assigneeIds.length > 0 ? data.assigneeIds : undefined,
+        deadline:        data.endDate            || undefined,
+        initial_status:  data.initialStatus      || undefined,
+        parent_task_id:  data.parentTaskId       || undefined,
       });
       setShowAddTask(false);
-      notifyTab('Task created successfully');
+      setAddTaskParentId(undefined);
+      notifyTab(data.parentTaskId ? 'Sub-task created successfully' : 'Task created successfully');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create task';
       notifyTab(msg);
@@ -141,25 +158,18 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
   const openAddTask = (projectId: string | null, status?: string) => {
     setAddTaskDefaultProjectId(projectId ?? '');
     setAddTaskDefaultStatus(status);
+    setAddTaskParentId(undefined);
     setShowAddTask(true);
   };
 
-  /** Saves edits from TaskDetailPanel. */
-  const handleSaveTask = async (taskId: string, data: import('./TaskDetailPanel').TaskDetailData) => {
-    try {
-      await updateTask.mutateAsync({ id: taskId, payload: {
-        title:        data.title,
-        description:  data.description,
-        priority:     data.priority,
-        assignee_ids: data.assignee_ids,
-        deadline:     data.deadline || undefined,
-        project_id:   data.project_id,
-      }});
-    } catch (err) {
-      notifyTab(err instanceof Error ? err.message : 'Failed to save task');
-      throw err;
-    }
+  /** Opens AddTaskModal pre-filled as a sub-task under the given parent. */
+  const openAddSubTask = (parentTask: import('../../lib/api').Task) => {
+    setAddTaskDefaultProjectId(parentTask.project_id ?? '');
+    setAddTaskDefaultStatus(undefined);
+    setAddTaskParentId(parentTask.id);
+    setShowAddTask(true);
   };
+
 
   /**
    * Toggles a single assignee on a task row inline picker.
@@ -450,7 +460,6 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
 
       {/* Scrollable sections body */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[1200px]">
 
         {STATUS_GROUPS.map((group) => {
           const groupTasks = tasksByGroup.get(group.id) ?? [];
@@ -513,10 +522,10 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
                 setAddProjectWorkflowStatus(GROUP_TO_WORKFLOW[groupId] ?? 'todo');
                 setShowAddProject(true);
               }}
+              onAddSubTask={openAddSubTask}
             />
           );
         })}
-        </div>
       </div>
 
       {/* Filter panel overlay */}
@@ -547,16 +556,17 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
       {/* Add Task modal */}
       <AddTaskModal
         open={showAddTask}
-        onClose={() => setShowAddTask(false)}
+        onClose={() => { setShowAddTask(false); setAddTaskParentId(undefined); }}
         firmName={firm?.name}
         users={users}
         projects={projects}
         defaultProjectId={addTaskDefaultProjectId}
         defaultStatus={addTaskDefaultStatus}
+        parentTaskId={addTaskParentId}
         onCreate={handleCreateTask}
       />
 
-      {/* Task Detail panel */}
+      {/* Task Detail drawer */}
       <TaskDetailPanel
         open={!!selectedTask}
         onClose={() => setSelectedTask(null)}
@@ -564,6 +574,11 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         users={users}
         projects={projects}
         onSave={handleSaveTask}
+        viewLabel={selectedTask?.parent_task_id ? 'View Sub Task' : 'View Task'}
+        onViewTask={selectedTask ? () => {
+          setSelectedTask(null);
+          navigate(`/firms/${firm?.id}/tasks/${selectedTask.id}`);
+        } : undefined}
       />
 
       {/* Project Detail panel */}
@@ -572,6 +587,10 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         onClose={() => setSelectedProject(null)}
         project={selectedProject}
         users={users}
+        onViewTask={(projectId) => {
+          setSelectedProject(null);
+          navigate(`/firms/${firm?.id}/projects/${projectId}`);
+        }}
         onSave={async (updated) => {
           if (!updated.id) return;
           await updateProject.mutateAsync({

@@ -27,6 +27,8 @@ interface AddTaskModalProps {
   defaultProjectId?: string;
   /** Pre-set the initial task status when opened from within a status section. */
   defaultStatus?: string;
+  /** When set, this modal creates a sub-task under this parent task ID. */
+  parentTaskId?: string;
   onCreate?: (data: TaskFormData) => Promise<void>;
 }
 
@@ -41,15 +43,10 @@ export interface TaskFormData {
   endDate: string;
   files: File[];
   initialStatus?: string;
+  parentTaskId?: string;
 }
 
 type TaskPriority = 'High' | 'Medium' | 'Low' | 'Urgent';
-type TaskSubtype  = 'task' | 'subtask';
-
-const SUBTASK_OPTIONS: { value: TaskSubtype; label: string }[] = [
-  { value: 'task',    label: 'Task' },
-  { value: 'subtask', label: 'Subtask' },
-];
 
 const PRIORITY_OPTIONS = ['Urgent', 'High', 'Medium', 'Low'] as const;
 const PRIORITY_DOT: Record<string, string> = {
@@ -231,6 +228,7 @@ export default function AddTaskModal({
   projects = [],
   defaultProjectId = '',
   defaultStatus,
+  parentTaskId,
   onCreate,
 }: AddTaskModalProps) {
   const { data: taskTypes = [] } = useTaskTypes();
@@ -239,7 +237,6 @@ export default function AddTaskModal({
   const [title,       setTitle]       = useState('');
   const [description, setDescription] = useState('');
   const [projectId,   setProjectId]   = useState(defaultProjectId);
-  const [subtype,     setSubtype]     = useState<TaskSubtype>('task');
   const [startDate,   setStartDate]   = useState('');
   const [endDate,     setEndDate]     = useState('');
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
@@ -249,7 +246,6 @@ export default function AddTaskModal({
 
   const [showTypeMenu,     setShowTypeMenu]     = useState(false);
   const [showProjectMenu,  setShowProjectMenu]  = useState(false);
-  const [showSubtypeMenu,  setShowSubtypeMenu]  = useState(false);
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
 
   // Sync projectId whenever the modal opens with a new default
@@ -259,12 +255,10 @@ export default function AddTaskModal({
 
   const typeRef     = useRef<HTMLDivElement>(null);
   const projectRef  = useRef<HTMLDivElement>(null);
-  const subtypeRef  = useRef<HTMLDivElement>(null);
   const priorityRef = useRef<HTMLDivElement>(null);
 
   useClickOutside(typeRef,     () => setShowTypeMenu(false));
   useClickOutside(projectRef,  () => setShowProjectMenu(false));
-  useClickOutside(subtypeRef,  () => setShowSubtypeMenu(false));
   useClickOutside(priorityRef, () => setShowPriorityMenu(false));
 
   const toggleAssignee = (id: string) =>
@@ -285,7 +279,7 @@ export default function AddTaskModal({
   }
 
   const handleCreate = async () => {
-    if (!title.trim() || !taskTypeId || !projectId) return;
+    if (!title.trim() || !taskTypeId || (!projectId && !parentTaskId)) return;
     const selected = taskTypes.find((t) => t.id === taskTypeId);
     setSaving(true);
     try {
@@ -300,6 +294,7 @@ export default function AddTaskModal({
         endDate,
         files:         files.map((f) => f.file),
         initialStatus: defaultStatus,
+        parentTaskId,
       });
       handleClose();
     } finally {
@@ -310,7 +305,7 @@ export default function AddTaskModal({
   const handleClose = () => {
     files.forEach((f) => { if (f.preview) URL.revokeObjectURL(f.preview); });
     setTaskTypeId(''); setTitle(''); setDescription('');
-    setProjectId(defaultProjectId); setSubtype('task'); setStartDate('');
+    setProjectId(defaultProjectId); setStartDate('');
     setEndDate(''); setAssigneeIds([]); setPriority('High');
     setFiles([]); setSaving(false);
     onClose();
@@ -318,14 +313,13 @@ export default function AddTaskModal({
 
   const selectedTaskType     = taskTypes.find((t) => t.id === taskTypeId);
   const selectedProjectLabel = projects.find((p) => p.id === projectId)?.name ?? '';
-  const selectedSubtypeLabel = SUBTASK_OPTIONS.find((o) => o.value === subtype)?.label ?? 'Task';
 
   return (
     <SlideOver
       open={open}
       onClose={handleClose}
-      title={title.trim() || 'Create a Task'}
-      subtitle={firmName ? firmName : 'Fill in the details below'}
+      title={title.trim() || (parentTaskId ? 'Create Sub-task' : 'Create a Task')}
+      subtitle={parentTaskId ? 'Creating a sub-task under the selected task' : (firmName ?? 'Fill in the details below')}
       width="max-w-[680px]"
       footer={
         <div className="flex items-center justify-end gap-3">
@@ -339,7 +333,7 @@ export default function AddTaskModal({
           <button
             type="button"
             onClick={handleCreate}
-            disabled={saving || !title.trim() || !taskTypeId || !projectId}
+            disabled={saving || !title.trim() || !taskTypeId || (!projectId && !parentTaskId)}
             className="px-4 py-2.5 rounded-lg bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white text-sm font-semibold transition-colors"
           >
             {saving ? 'Creating…' : 'Create'}
@@ -398,11 +392,11 @@ export default function AddTaskModal({
 
         {/* Task name */}
         <Input
-          label="Name of project"
+          label={parentTaskId ? 'Sub-task Name' : 'Task Name'}
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g. Design homepage hero section"
+          placeholder={parentTaskId ? 'e.g. Write copy for hero section' : 'e.g. Design homepage hero section'}
           required
         />
 
@@ -421,10 +415,8 @@ export default function AddTaskModal({
           />
         </div>
 
-        {/* Project + Tasks/Subtask — 2-col row */}
-        <div className="grid grid-cols-2 gap-4">
-
-          {/* Project */}
+        {/* Project — hidden when creating a sub-task (inherits parent's project) */}
+        {!parentTaskId && (
           <div ref={projectRef} className="relative">
             <label className="block text-sm font-medium text-[#344054] mb-1.5">
               Project <span className="text-red-500">*</span>
@@ -432,9 +424,7 @@ export default function AddTaskModal({
             <button
               type="button"
               onClick={() => setShowProjectMenu((v) => !v)}
-              className={`w-full flex items-center justify-between border rounded-lg px-3 py-2.5 text-sm bg-white hover:border-[#7F56D9] focus:ring-2 focus:ring-[#7F56D9] outline-none transition-colors ${
-                !projectId ? 'border-[#D5D7DA]' : 'border-[#D5D7DA]'
-              }`}
+              className="w-full flex items-center justify-between border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm bg-white hover:border-[#7F56D9] focus:ring-2 focus:ring-[#7F56D9] outline-none transition-colors"
             >
               {selectedProjectLabel
                 ? <span className="truncate text-[#181D27]">{selectedProjectLabel}</span>
@@ -461,36 +451,7 @@ export default function AddTaskModal({
               </div>
             )}
           </div>
-
-          {/* Tasks/Subtask */}
-          <div ref={subtypeRef} className="relative">
-            <label className="block text-sm font-medium text-[#344054] mb-1.5">
-              Tasks/Subtask <span className="text-red-500">*</span>
-            </label>
-            <button
-              type="button"
-              onClick={() => setShowSubtypeMenu((v) => !v)}
-              className="w-full flex items-center justify-between border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white hover:border-[#7F56D9] focus:ring-2 focus:ring-[#7F56D9] outline-none transition-colors"
-            >
-              <span>{selectedSubtypeLabel}</span>
-              <ChevronDown width={16} height={16} className="text-[#717680] shrink-0" />
-            </button>
-            {showSubtypeMenu && (
-              <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1">
-                {SUBTASK_OPTIONS.map((o) => (
-                  <button
-                    key={o.value}
-                    type="button"
-                    onClick={() => { setSubtype(o.value); setShowSubtypeMenu(false); }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] ${subtype === o.value ? 'text-[#7F56D9] font-semibold' : 'text-[#344054]'}`}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* Start date / End date / Assignee / Priority — 4-col row */}
         <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-4 items-end">

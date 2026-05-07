@@ -22,6 +22,8 @@ import AddFirmPage from './pages/AddFirmPage';
 import EditFirmPage from './pages/EditFirmPage';
 import EditUserSettingsPage from './pages/EditUserSettingsPage';
 import SharedProjectPage from './pages/SharedProjectPage';
+import TaskDetailPage from './pages/TaskDetailPage';
+import ProjectFullPage from './pages/ProjectFullPage';
 
 // ── Redirects to /login when no token is present ─────────────────────────────
 
@@ -94,6 +96,8 @@ export default function App() {
               <Route path="/transcripts/:id/tasks"       element={<TranscriptTasksPage />} />
               <Route path="/firms/new"                   element={<AddFirmPage />} />
               <Route path="/firms/:id/edit"              element={<EditFirmPage />} />
+              <Route path="/firms/:firmId/tasks/:taskId"          element={<TaskDetailPage />} />
+              <Route path="/firms/:firmId/projects/:projectId" element={<ProjectFullPage />} />
               <Route path="/firms/:id"                   element={<FirmDetailPage />} />
             </Route>
           </Route>

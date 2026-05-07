@@ -18,12 +18,14 @@ export interface TaskDetailData {
 }
 
 interface TaskDetailPanelProps {
-  open:      boolean;
-  onClose:   () => void;
-  task:      Task | null;
-  users:     User[];
-  projects?: Project[];
-  onSave?:   (taskId: string, data: TaskDetailData) => Promise<void>;
+  open:          boolean;
+  onClose:       () => void;
+  task:          Task | null;
+  users:         User[];
+  projects?:     Project[];
+  onSave?:       (taskId: string, data: TaskDetailData) => Promise<void>;
+  onViewTask?:   () => void;
+  viewLabel?:    string;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -62,6 +64,8 @@ export default function TaskDetailPanel({
   users,
   projects = [],
   onSave,
+  onViewTask,
+  viewLabel = 'View Task',
 }: TaskDetailPanelProps) {
   const [title,        setTitle]        = useState('');
   const [description,  setDescription]  = useState('');
@@ -363,7 +367,7 @@ export default function TaskDetailPanel({
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -371,6 +375,15 @@ export default function TaskDetailPanel({
             >
               Cancel
             </button>
+            {onViewTask && (
+              <button
+                type="button"
+                onClick={onViewTask}
+                className="px-4 py-2.5 rounded-lg bg-[#7F56D9] text-white text-sm font-semibold hover:bg-[#6941C6] transition-colors"
+              >
+                {viewLabel}
+              </button>
+            )}
           </div>
         </div>
 

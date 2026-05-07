@@ -1,11 +1,13 @@
 import { useState, useRef } from 'react';
 import {
   ChevronRight,
+  ChevronDown,
   FolderClosed,
   Dataflow03,
   DotsVertical,
   Edit01,
   Trash01,
+  Plus,
 } from '@untitled-ui/icons-react';
 import DropdownMenu from '../ui/DropdownMenu';
 import AvatarStack from '../ui/AvatarStack';
@@ -96,22 +98,31 @@ export interface TaskRowProps {
   usersMap: Map<string, User>;
   projects?: Project[];
   indented?: boolean;
+  depth?: number;
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
   onOpenDetail?: (task: Task) => void;
   onAssigneeChange?: (taskId: string, assigneeId: string | null) => void;
   onProjectChange?: (taskId: string, projectId: string | null) => void;
+  onAddSubTask?: (parentTask: Task) => void;
 }
 
-export function TaskRow({ task, usersMap, projects = [], indented = false, onEdit, onDelete, onOpenDetail, onAssigneeChange, onProjectChange }: TaskRowProps) {
+export function TaskRow({
+  task, usersMap, projects = [], indented = false, depth = 0,
+  onEdit, onDelete, onOpenDetail, onAssigneeChange, onProjectChange, onAddSubTask,
+}: TaskRowProps) {
   const [contextOpen,       setContextOpen]       = useState(false);
   const [pickerOpen,        setPickerOpen]        = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [subExpanded,       setSubExpanded]       = useState(true);
 
   const pickerRef        = useRef<HTMLDivElement>(null);
   const projectPickerRef = useRef<HTMLDivElement>(null);
   useClickOutside(pickerRef,        () => setPickerOpen(false));
   useClickOutside(projectPickerRef, () => setProjectPickerOpen(false));
+
+  const hasSubTasks = (task.subtasks?.length ?? 0) > 0;
+  const isSubTask   = depth > 0;
 
   const currentAssignees = task.assignees && task.assignees.length > 0
     ? task.assignees
@@ -124,60 +135,172 @@ export function TaskRow({ task, usersMap, projects = [], indented = false, onEdi
   const priorityStyle = PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500';
   const statusInfo    = TASK_STATUS_BADGE[task.status] ?? { label: task.status, style: 'bg-gray-100 text-gray-500' };
 
+  // Left indent: base 16px (pl-4) + 24px per depth level
+  const pl = indented ? `pl-[${40 + depth * 20}px]` : 'pl-4';
+
   return (
-    <div
-      className={`group flex items-center gap-2 border-b border-[#E9EAEB] hover:bg-[#F9FAFB] transition-colors py-2 pr-2 ${indented ? 'pl-10' : 'pl-4'}`}
-      role="row"
-    >
-      {/* Expand chevron */}
-      <ChevronRight width={13} height={13} className="shrink-0 text-[#C8CDD6]" aria-hidden="true" />
-
-      {/* Status dot */}
-      <span className="shrink-0"><StatusDot status={task.status} /></span>
-
-      {/* Task icon */}
-      <Dataflow03 width={14} height={14} className="shrink-0 text-[#A4A7AE]" aria-hidden="true" />
-
-      {/* Title — flex-1 */}
-      <button
-        type="button"
-        onClick={() => onOpenDetail?.(task)}
-        className="flex-1 min-w-0 text-[13px] text-[#181D27] truncate text-left hover:text-[#7F56D9] transition-colors"
-      >
-        {task.title}
-      </button>
-
-      {/* Assignee column */}
+    <>
       <div
-        ref={pickerRef}
-        className={`${COL_ASSIGNEE} relative flex justify-center`}
-        onClick={(e) => e.stopPropagation()}
+        className={`group flex items-center gap-2 border-b border-[#E9EAEB] hover:bg-[#F9FAFB] transition-colors py-2 pr-2 ${depth >= 1 ? 'pl-[58px]' : (indented ? 'pl-10' : 'pl-4')}`}
+        role="row"
       >
+        {/* Expand chevron — clickable when has sub-tasks, dim otherwise */}
         <button
           type="button"
-          onClick={() => setPickerOpen((v) => !v)}
-          className={`transition-opacity ${currentAssignees.length === 0 ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}
-          aria-label="Assign"
+          className="shrink-0"
+          onClick={(e) => { e.stopPropagation(); if (hasSubTasks) setSubExpanded((v) => !v); }}
+          aria-label={hasSubTasks ? (subExpanded ? 'Collapse sub-tasks' : 'Expand sub-tasks') : undefined}
         >
-          <AvatarStack
-            avatars={currentAssignees.map((a: { id: string; name: string; avatar_url?: string | null }) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
-            max={3}
-            showAddButton={true}
-            addAs="div"
-          />
+          {hasSubTasks
+            ? (subExpanded
+                ? <ChevronDown  width={13} height={13} className="text-[#717680]" />
+                : <ChevronRight width={13} height={13} className="text-[#717680]" />)
+            : <ChevronRight width={13} height={13} className="text-[#C8CDD6]" aria-hidden="true" />}
         </button>
-        {pickerOpen && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[200px] max-h-52 overflow-y-auto">
-            {Array.from(usersMap.values()).map((u) => (
+
+        {/* Status dot */}
+        <span className="shrink-0"><StatusDot status={task.status} /></span>
+
+        {/* Task icon — smaller for sub-tasks */}
+        <Dataflow03
+          width={isSubTask ? 12 : 14}
+          height={isSubTask ? 12 : 14}
+          className="shrink-0 text-[#A4A7AE]"
+          aria-hidden="true"
+        />
+
+        {/* Title */}
+        <button
+          type="button"
+          onClick={() => onOpenDetail?.(task)}
+          className="flex-1 min-w-0 text-[13px] text-[#181D27] truncate text-left hover:text-[#7F56D9] transition-colors"
+        >
+          {task.title}
+          {!isSubTask && hasSubTasks && (
+            <span className="ml-1.5 text-[11px] text-[#A4A7AE]">
+              {task.subtasks!.length}
+            </span>
+          )}
+        </button>
+
+        {/* Assignee column */}
+        <div
+          ref={pickerRef}
+          className={`${COL_ASSIGNEE} relative flex justify-center`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => setPickerOpen((v) => !v)}
+            className={`transition-opacity ${currentAssignees.length === 0 ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}
+            aria-label="Assign"
+          >
+            <AvatarStack
+              avatars={currentAssignees.map((a: { id: string; name: string; avatar_url?: string | null }) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
+              max={3}
+              showAddButton={true}
+              addAs="div"
+            />
+          </button>
+          {pickerOpen && (
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[200px] max-h-52 overflow-y-auto">
+              {Array.from(usersMap.values()).map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => { onAssigneeChange?.(task.id, u.id); setPickerOpen(false); }}
+                  className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                >
+                  <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+                  <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
+                  {currentAssigneeIds.includes(u.id) && (
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                      <path d="M2 6.5L5 9.5L11 3" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Due date column */}
+        <div className={`${COL_DATE} text-[12px] ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
+          {dateText}
+        </div>
+
+        {/* Priority column */}
+        <div className={COL_PRIORITY}>
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold capitalize ${priorityStyle}`}>
+            {task.priority}
+          </span>
+        </div>
+
+        {/* Status column */}
+        <div className={COL_STATUS}>
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold truncate max-w-full ${statusInfo.style}`}>
+            {statusInfo.label}
+          </span>
+        </div>
+
+        {/* Context menu */}
+        <div className={`${COL_MENU} flex items-center justify-center`} onClick={(e) => e.stopPropagation()}>
+          <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={(e) => { e.stopPropagation(); setContextOpen((v) => !v); }}
+              className="w-6 h-6 rounded flex items-center justify-center text-[#717680] hover:bg-[#E9EAEB] transition-colors"
+              aria-label="Task actions"
+            >
+              <DotsVertical width={14} height={14} aria-hidden="true" />
+            </button>
+            <DropdownMenu
+              open={contextOpen}
+              onClose={() => setContextOpen(false)}
+              align="right"
+              items={[
+                {
+                  label: 'Edit',
+                  icon: <Edit01 width={14} height={14} className="text-[#717680]" aria-hidden="true" />,
+                  onClick: () => { setContextOpen(false); onEdit?.(task); },
+                },
+                // Only top-level tasks can have sub-tasks (one level deep)
+                ...(!isSubTask && onAddSubTask ? [{
+                  label: 'Add Sub-task',
+                  icon: <Plus width={14} height={14} className="text-[#717680]" aria-hidden="true" />,
+                  onClick: () => { setContextOpen(false); onAddSubTask(task); },
+                }] : []),
+                ...(onProjectChange ? [{
+                  label: 'Move to project',
+                  icon: <FolderClosed width={14} height={14} className="text-[#717680]" aria-hidden="true" />,
+                  onClick: () => { setContextOpen(false); setProjectPickerOpen(true); },
+                }] : []),
+                {
+                  label: 'Delete',
+                  icon: <Trash01 width={14} height={14} aria-hidden="true" />,
+                  onClick: () => { setContextOpen(false); onDelete?.(task); },
+                  variant: 'danger' as const,
+                },
+              ]}
+            />
+          </div>
+        </div>
+
+        {/* Move-to-project picker */}
+        {projectPickerOpen && onProjectChange && (
+          <div
+            ref={projectPickerRef}
+            className="absolute right-8 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[190px] max-h-52 overflow-y-auto"
+          >
+            {projects.map((p) => (
               <button
-                key={u.id}
+                key={p.id}
                 type="button"
-                onClick={() => { onAssigneeChange?.(task.id, u.id); setPickerOpen(false); }}
-                className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                onClick={() => { onProjectChange(task.id, p.id); setProjectPickerOpen(false); }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
               >
-                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
-                <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
-                {currentAssigneeIds.includes(u.id) && (
+                <FolderClosed width={13} height={13} className="text-[#7F56D9] shrink-0" aria-hidden="true" />
+                <span className="flex-1 text-[13px] text-[#181D27] truncate">{p.name}</span>
+                {task.project_id === p.id && (
                   <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
                     <path d="M2 6.5L5 9.5L11 3" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
@@ -188,85 +311,57 @@ export function TaskRow({ task, usersMap, projects = [], indented = false, onEdi
         )}
       </div>
 
-      {/* Due date column */}
-      <div className={`${COL_DATE} text-[12px] ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
-        {dateText}
-      </div>
-
-      {/* Priority column */}
-      <div className={COL_PRIORITY}>
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold capitalize ${priorityStyle}`}>
-          {task.priority}
-        </span>
-      </div>
-
-      {/* Status column */}
-      <div className={COL_STATUS}>
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold truncate max-w-full ${statusInfo.style}`}>
-          {statusInfo.label}
-        </span>
-      </div>
-
-      {/* Context menu */}
-      <div className={`${COL_MENU} flex items-center justify-center`} onClick={(e) => e.stopPropagation()}>
-        <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={(e) => { e.stopPropagation(); setContextOpen((v) => !v); }}
-            className="w-6 h-6 rounded flex items-center justify-center text-[#717680] hover:bg-[#E9EAEB] transition-colors"
-            aria-label="Task actions"
-          >
-            <DotsVertical width={14} height={14} aria-hidden="true" />
-          </button>
-          <DropdownMenu
-            open={contextOpen}
-            onClose={() => setContextOpen(false)}
-            align="right"
-            items={[
-              {
-                label: 'Edit',
-                icon: <Edit01 width={14} height={14} className="text-[#717680]" aria-hidden="true" />,
-                onClick: () => { setContextOpen(false); onEdit?.(task); },
-              },
-              ...(onProjectChange ? [{
-                label: 'Move to project',
-                icon: <FolderClosed width={14} height={14} className="text-[#717680]" aria-hidden="true" />,
-                onClick: () => { setContextOpen(false); setProjectPickerOpen(true); },
-              }] : []),
-              {
-                label: 'Delete',
-                icon: <Trash01 width={14} height={14} aria-hidden="true" />,
-                onClick: () => { setContextOpen(false); onDelete?.(task); },
-                variant: 'danger' as const,
-              },
-            ]}
+      {/* Sub-task tree block — only for top-level tasks */}
+      {!isSubTask && onAddSubTask && (
+        <div className="relative">
+          {/* Vertical tree line connecting parent to children */}
+          <div
+            className="absolute top-0 bottom-[14px] w-px bg-[#E4E7EC]"
+            style={{ left: `${indented ? 46 : 22}px` }}
           />
-        </div>
-      </div>
 
-      {/* Move-to-project picker (opened from context menu) */}
-      {projectPickerOpen && onProjectChange && (
-        <div
-          ref={projectPickerRef}
-          className="absolute right-8 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[190px] max-h-52 overflow-y-auto"
-        >
-          {projects.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => { onProjectChange(task.id, p.id); setProjectPickerOpen(false); }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
-            >
-              <FolderClosed width={13} height={13} className="text-[#7F56D9] shrink-0" aria-hidden="true" />
-              <span className="flex-1 text-[13px] text-[#181D27] truncate">{p.name}</span>
-              {task.project_id === p.id && (
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-                  <path d="M2 6.5L5 9.5L11 3" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </button>
+          {/* Sub-task rows */}
+          {hasSubTasks && subExpanded && task.subtasks!.map((sub) => (
+            <div key={sub.id} className="relative">
+              {/* Horizontal connector */}
+              <div
+                className="absolute top-1/2 h-px bg-[#E4E7EC]"
+                style={{ left: `${indented ? 46 : 22}px`, width: '12px' }}
+              />
+              <TaskRow
+                task={sub}
+                firm={null}
+                usersMap={usersMap}
+                projects={projects}
+                indented
+                depth={depth + 1}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onOpenDetail={onOpenDetail}
+                onAssigneeChange={onAssigneeChange}
+              />
+            </div>
           ))}
+
+          {/* Add Sub-task row */}
+          <div className="relative">
+            <div
+              className="absolute top-1/2 h-px bg-[#E4E7EC]"
+              style={{ left: `${indented ? 46 : 22}px`, width: '12px' }}
+            />
+            <button
+              className="flex items-center gap-2 pr-2 py-[6px] w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
+              style={{ paddingLeft: `${indented ? 62 : 38}px` }}
+              onClick={() => onAddSubTask(task)}
+            >
+              <span className="w-[14px] h-[14px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
+                <Plus width={7} height={7} className="text-[#7F56D9]" aria-hidden="true" />
+              </span>
+              <span className="text-[11px] font-semibold text-[#7F56D9]">Add Sub-task</span>
+            </button>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

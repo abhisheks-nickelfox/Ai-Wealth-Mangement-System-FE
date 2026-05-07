@@ -364,6 +364,7 @@ export interface Task {
   session_id:      string | null;
   firm_id:         string;
   project_id:      string | null;
+  parent_task_id:  string | null;
   assignee_id:     string | null;
   title:           string;
   description:     string | null;
@@ -379,6 +380,7 @@ export interface Task {
   firms?:          { name: string };
   assignee?:       { name: string; email: string } | null;
   assignees?:      TaskAssignee[];
+  subtasks?:       Task[];
 }
 
 export const transcriptsApi = {
@@ -438,6 +440,7 @@ export interface CreateTaskPayload {
   deadline?:       string;
   estimated_hours?: number;
   initial_status?: string;
+  parent_task_id?: string;
 }
 
 export const tasksApi = {
@@ -465,6 +468,8 @@ export const tasksApi = {
     request<{ data: Task }>('PATCH', `/tasks/${id}/archive`, { archived }).then((r) => r.data),
   delete: (id: string) =>
     request<{ message: string }>('DELETE', `/tasks/${id}`),
+  listSubTasks: (parentId: string) =>
+    request<{ data: Task[] }>('GET', `/tasks/${parentId}/subtasks`).then((r) => r.data),
 };
 
 // ── Org Settings API ──────────────────────────────────────────────────────────
@@ -540,4 +545,51 @@ export const taskTypesApi = {
     request<{ data: TaskType }>('PATCH', `/task-types/${id}`, payload).then((r) => r.data),
   delete: (id: string) =>
     request<void>('DELETE', `/task-types/${id}`),
+};
+
+// ── Messages API ──────────────────────────────────────────────────────────────
+
+export interface MessageAuthor {
+  id:         string;
+  name:       string;
+  avatar_url: string | null;
+}
+
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  users: string[];
+}
+
+export interface Message {
+  id:         string;
+  scope:      string;
+  scope_id:   string;
+  user_id:    string;
+  parent_id:  string | null;
+  body:       string;
+  created_at: string;
+  updated_at: string;
+  user:       MessageAuthor;
+  reactions:  MessageReaction[];
+}
+
+export const messagesApi = {
+  list: (scope: string, scopeId: string) =>
+    request<{ data: Message[] }>('GET', `/messages?scope=${scope}&scope_id=${scopeId}`)
+      .then((r) => r.data),
+
+  create: (payload: { scope: string; scope_id: string; body: string; parent_id?: string }) =>
+    request<{ data: Message }>('POST', '/messages', payload).then((r) => r.data),
+
+  addReaction: (messageId: string, emoji: string) =>
+    request<{ data: MessageReaction[] }>('POST', `/messages/${messageId}/reactions`, { emoji })
+      .then((r) => r.data),
+
+  removeReaction: (messageId: string, emoji: string) =>
+    request<{ data: MessageReaction[] }>('DELETE', `/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`)
+      .then((r) => r.data),
+
+  delete: (messageId: string) =>
+    request<void>('DELETE', `/messages/${messageId}`),
 };

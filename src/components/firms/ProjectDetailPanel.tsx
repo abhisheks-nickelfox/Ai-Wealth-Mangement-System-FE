@@ -355,7 +355,7 @@ export default function ProjectDetailPanel({
               onClick={() => onViewTask?.(project.id)}
               className="px-4 py-2.5 rounded-lg bg-[#7F56D9] hover:bg-[#6941C6] text-white text-sm font-semibold transition-colors"
             >
-              View Task
+              View Project
             </button>
           </div>
         </div>

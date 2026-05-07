@@ -31,4 +31,7 @@ export const queryKeys = {
   prompts: {
     all: ['prompts'] as const,
   },
+  messages: {
+    byScope: (scope: string, scopeId: string) => ['messages', scope, scopeId] as const,
+  },
 };

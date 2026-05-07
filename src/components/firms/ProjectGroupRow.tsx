@@ -52,12 +52,13 @@ export interface ProjectGroupRowProps {
   onAssigneeChange?: (taskId: string, assigneeId: string | null) => void;
   onProjectChange?: (taskId: string, projectId: string | null) => void;
   onDeleteProject?: (projectId: string) => void;
+  onAddSubTask?: (parentTask: Task) => void;
 }
 
 export function ProjectGroupRow({
   projectId, project, tasks, firm, usersMap, projects = [],
   groupStatus, onProjectClick, onEditTask, onDeleteTask, onAddTask,
-  onOpenTaskDetail, onAssigneeChange, onProjectChange, onDeleteProject,
+  onOpenTaskDetail, onAssigneeChange, onProjectChange, onDeleteProject, onAddSubTask,
 }: ProjectGroupRowProps) {
   const [expanded,    setExpanded]    = useState(true);
   const [contextOpen, setContextOpen] = useState(false);
@@ -216,6 +217,7 @@ export function ProjectGroupRow({
               onOpenDetail={onOpenTaskDetail}
               onAssigneeChange={onAssigneeChange}
               onProjectChange={onProjectChange}
+              onAddSubTask={onAddSubTask}
             />
           ))}
           <button
@@ -252,12 +254,13 @@ export interface StatusSectionProps {
   onAssigneeChange?: (taskId: string, assigneeId: string | null) => void;
   onProjectChange?: (taskId: string, projectId: string | null) => void;
   onDeleteProject?: (projectId: string) => void;
+  onAddSubTask?: (parentTask: Task) => void;
 }
 
 export function StatusSection({
   group, tasks, emptyProjects = [], projectsMap, firm, usersMap, viewMode,
   onProjectClick, onEditTask, onDeleteTask, onAddProject, onAddTask,
-  onOpenTaskDetail, onAssigneeChange, onProjectChange, onDeleteProject,
+  onOpenTaskDetail, onAssigneeChange, onProjectChange, onDeleteProject, onAddSubTask,
 }: StatusSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -290,7 +293,7 @@ export function StatusSection({
   return (
     <section aria-label={group.label}>
       {/* Section header */}
-      <div className="flex items-center gap-2 pl-4 pr-6 py-2.5 bg-white border-b border-[#E9EAEB]">
+      <div className="flex items-center gap-2 pl-4 pr-2 py-2.5 bg-white border-b border-[#E9EAEB]">
         <button
           onClick={() => setCollapsed((v) => !v)}
           className="flex items-center gap-2 flex-1 text-left"
@@ -317,15 +320,15 @@ export function StatusSection({
 
       {/* Column header row */}
       {!collapsed && hasContent && (
-        <div className="flex items-center pl-4 pr-2 py-1.5 border-b border-[#E9EAEB] bg-white">
-          <span className="flex-1 text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider">
+        <div className="flex items-center gap-2 pl-4 pr-2 py-1.5 border-b border-[#E9EAEB] bg-white">
+          <span className="flex-1 min-w-0 text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider">
             {viewMode === 'project' ? 'Projects' : 'Tasks'}
           </span>
-          <div className={`${COL_ASSIGNEE} text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider text-center`}>Assignee</div>
-          <div className={`${COL_DATE}     text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider`}>Due date</div>
-          <div className={`${COL_PRIORITY} text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider`}>Priority</div>
-          <div className={`${COL_STATUS}   text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider`}>Status</div>
-          <div className={COL_MENU} />
+          <div className={`${COL_ASSIGNEE} text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider text-center shrink-0`}>Assignee</div>
+          <div className={`${COL_DATE}     text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider shrink-0`}>Due date</div>
+          <div className={`${COL_PRIORITY} text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider shrink-0`}>Priority</div>
+          <div className={`${COL_STATUS}   text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider shrink-0`}>Status</div>
+          <div className={`${COL_MENU} shrink-0`} />
         </div>
       )}
 
@@ -370,6 +373,7 @@ export function StatusSection({
                   onAssigneeChange={onAssigneeChange}
                   onProjectChange={onProjectChange}
                   onDeleteProject={onDeleteProject}
+                  onAddSubTask={onAddSubTask}
                 />
               ))}
               {Array.from(visibleByProject.entries()).map(([pid, projectTasks]) => (
@@ -390,24 +394,37 @@ export function StatusSection({
                   onAssigneeChange={onAssigneeChange}
                   onProjectChange={onProjectChange}
                   onDeleteProject={onDeleteProject}
+                  onAddSubTask={onAddSubTask}
                 />
               ))}
             </>
           ) : (
-            tasks.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                firm={firm}
-                usersMap={usersMap}
-                projects={projectsMap ? Array.from(projectsMap.values()) : []}
-                onEdit={onEditTask}
-                onDelete={onDeleteTask}
-                onOpenDetail={onOpenTaskDetail}
-                onAssigneeChange={onAssigneeChange}
-                onProjectChange={onProjectChange}
-              />
-            ))
+            <>
+              {tasks.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  firm={firm}
+                  usersMap={usersMap}
+                  projects={projectsMap ? Array.from(projectsMap.values()) : []}
+                  onEdit={onEditTask}
+                  onDelete={onDeleteTask}
+                  onOpenDetail={onOpenTaskDetail}
+                  onAssigneeChange={onAssigneeChange}
+                  onProjectChange={onProjectChange}
+                  onAddSubTask={onAddSubTask}
+                />
+              ))}
+              <button
+                className="flex items-center gap-2 pl-4 pr-2 py-2.5 w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
+                onClick={() => onAddTask?.(null, group.statuses[0])}
+              >
+                <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
+                  <Plus width={9} height={9} className="text-[#7F56D9]" aria-hidden="true" />
+                </span>
+                <span className="text-[13px] font-semibold text-[#7F56D9]">Add Task</span>
+              </button>
+            </>
           )}
         </div>
       )}
