@@ -500,7 +500,6 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
                   startDate:   matchedProject?.start_date ?? undefined,
                   endDate:     matchedProject?.end_date ?? undefined,
                   priority:    matchedProject?.priority ?? undefined,
-                  type:        matchedProject?.type ?? undefined,
                 });
               }}
               onEditTask={() => {}}
@@ -583,7 +582,6 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
               start_date:      updated.startDate || undefined,
               end_date:        updated.endDate || undefined,
               priority:        updated.priority,
-              type:            updated.type || undefined,
             },
           });
           setSelectedProject(null);

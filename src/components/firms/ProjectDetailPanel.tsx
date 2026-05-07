@@ -18,7 +18,6 @@ export interface ProjectDetail {
   startDate?:  string;
   endDate?:    string;
   priority?:   'high' | 'medium' | 'low';
-  type?:       string;
 }
 
 type ProjectStatus = 'In progress' | 'To Do' | 'In Review' | 'Approved' | 'Completed';
@@ -54,18 +53,6 @@ const PRIORITY_OPTIONS: { value: 'high' | 'medium' | 'low'; label: string; dot: 
   { value: 'low',    label: 'Low',    dot: 'bg-green-500'  },
 ];
 
-const PROJECT_TYPES = [
-  'Marketing Campaign',
-  'Brand Redesign',
-  'Social Media',
-  'SEO / Content',
-  'Paid Ads',
-  'Email Marketing',
-  'Web Development',
-  'Analytics',
-  'Other',
-];
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ProjectDetailPanel({
@@ -83,14 +70,12 @@ export default function ProjectDetailPanel({
   const [startDate,   setStartDate]   = useState('');
   const [endDate,     setEndDate]     = useState('');
   const [priority,    setPriority]    = useState<'high' | 'medium' | 'low'>('medium');
-  const [type,        setType]        = useState('');
   const [saving,      setSaving]      = useState(false);
   const [copied,      setCopied]      = useState(false);
 
   const [showStatus,   setShowStatus]   = useState(false);
   const [showPicker,   setShowPicker]   = useState(false);
   const [showPriority, setShowPriority] = useState(false);
-  const [showType,     setShowType]     = useState(false);
 
   // Sync form when project changes
   useEffect(() => {
@@ -102,7 +87,6 @@ export default function ProjectDetailPanel({
       setStartDate(project.startDate ?? '');
       setEndDate(project.endDate ?? '');
       setPriority(project.priority ?? 'medium');
-      setType(project.type ?? '');
     }
   }, [project]);
 
@@ -127,7 +111,7 @@ export default function ProjectDetailPanel({
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave?.({ ...project, name, description, status, memberIds, startDate, endDate, priority, type });
+      await onSave?.({ ...project, name, description, status, memberIds, startDate, endDate, priority });
       onClose();
     } finally {
       setSaving(false);
@@ -190,42 +174,6 @@ export default function ProjectDetailPanel({
             placeholder="A little about the project and its goals."
             className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white resize-none"
           />
-        </div>
-
-        {/* Project Type */}
-        <div className="relative">
-          <label className="block text-sm font-medium text-[#344054] mb-1.5">Project Type</label>
-          <button
-            type="button"
-            onClick={() => setShowType((v) => !v)}
-            className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white flex items-center gap-2"
-          >
-            <span className="flex-1 text-left text-[#181D27]">{type || <span className="text-[#A4A7AE]">Select type</span>}</span>
-            <ChevronDown width={15} height={15} className="text-[#717680] shrink-0" />
-          </button>
-          {showType && (
-            <div className="absolute top-full mt-1 left-0 right-0 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 max-h-48 overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => { setType(''); setShowType(false); }}
-                className="w-full text-left px-3 py-2 text-sm text-[#A4A7AE] hover:bg-[#F9FAFB]"
-              >
-                None
-              </button>
-              {PROJECT_TYPES.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => { setType(t); setShowType(false); }}
-                  className={`flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors ${
-                    type === t ? 'text-[#6941C6] font-medium' : 'text-[#344054]'
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Project status */}

@@ -287,7 +287,6 @@ export interface Project {
   start_date:      string | null;
   end_date:        string | null;
   priority:        'high' | 'medium' | 'low';
-  type:            string | null;
   created_at:      string;
   updated_at:      string;
   firm_name:       string | null;
@@ -304,7 +303,6 @@ export interface CreateProjectPayload {
   start_date?:     string;
   end_date?:       string;
   priority?:       Project['priority'];
-  type?:           string;
 }
 
 export interface UpdateProjectPayload {
@@ -315,7 +313,6 @@ export interface UpdateProjectPayload {
   start_date?:     string | null;
   end_date?:       string | null;
   priority?:       Project['priority'];
-  type?:           string | null;
 }
 
 export const projectsApi = {
