@@ -152,22 +152,10 @@ export function TaskRow({ task, usersMap, projects = [], indented = false, onEdi
             title={currentProject ? currentProject.name : 'Assign project'}
           >
             <FolderClosed width={10} height={10} className="shrink-0" aria-hidden="true" />
-            <span className="truncate">{currentProject ? currentProject.name : 'No Project'}</span>
+            <span className="truncate">{currentProject ? currentProject.name : 'Assign project'}</span>
           </button>
           {projectPickerOpen && (
             <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[180px] max-h-52 overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => { onProjectChange(task.id, null); setProjectPickerOpen(false); }}
-                className="flex items-center gap-2 w-full px-3 py-2 text-left text-[13px] text-[#717680] hover:bg-[#F9FAFB] transition-colors"
-              >
-                <span className="flex-1">No Project</span>
-                {!task.project_id && (
-                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-                    <path d="M2 6.5L5 9.5L11 3" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </button>
               {projects.map((p) => (
                 <button
                   key={p.id}

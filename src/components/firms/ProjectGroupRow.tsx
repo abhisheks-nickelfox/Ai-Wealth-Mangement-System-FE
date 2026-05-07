@@ -188,11 +188,13 @@ export function ProjectGroupRow({ projectId, project, tasks, firm, usersMap, pro
             />
           ))}
           <button
-            className="flex items-center gap-2 pl-10 pr-4 py-2 w-full text-left text-[13px] border-b border-[#E9EAEB] hover:bg-[#F0EDFF] transition-colors"
+            className="flex items-center gap-2 pl-10 pr-4 py-2.5 w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors group/add"
             onClick={() => onAddTask?.(projectId, groupStatus)}
           >
-            <Plus width={13} height={13} className="text-[#7F56D9] shrink-0" aria-hidden="true" />
-            <span className="text-[#7F56D9] font-medium">Add Task</span>
+            <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
+              <Plus width={9} height={9} className="text-[#7F56D9]" aria-hidden="true" />
+            </span>
+            <span className="text-[13px] font-semibold text-[#7F56D9]">Add Task</span>
           </button>
         </>
       )}
@@ -234,13 +236,25 @@ export function StatusSection({ group, tasks, emptyProjects = [], projectsMap, f
     return map;
   }, [tasks]);
 
-  const hasContent = tasks.length > 0 || (viewMode === 'project' && emptyProjects.length > 0);
-  const totalCount = tasks.length + (viewMode === 'project' ? emptyProjects.length : 0);
+  // In project view, hide tasks that have no project_id (legacy orphans — all tasks now require a project)
+  const visibleByProject = useMemo(() => {
+    if (viewMode !== 'project') return byProject;
+    const m = new Map(byProject);
+    m.delete(null);
+    return m;
+  }, [byProject, viewMode]);
+
+  const hasContent = (viewMode === 'project'
+    ? visibleByProject.size > 0 || emptyProjects.length > 0
+    : tasks.length > 0);
+  const totalCount = viewMode === 'project'
+    ? Array.from(visibleByProject.values()).reduce((s, t) => s + t.length, 0) + emptyProjects.length
+    : tasks.length;
 
   return (
     <section aria-label={group.label}>
       {/* Section header */}
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-white border-b border-[#E9EAEB]">
+      <div className="flex items-center gap-2 pl-4 pr-6 py-2.5 bg-white border-b border-[#E9EAEB]">
         <button
           onClick={() => setCollapsed((v) => !v)}
           className="flex items-center gap-2 flex-1 text-left"
@@ -276,7 +290,23 @@ export function StatusSection({ group, tasks, emptyProjects = [], projectsMap, f
       {!collapsed && (
         <div>
           {!hasContent ? (
-            <p className="text-[13px] text-[#A4A7AE] px-4 py-3 border-b border-[#E9EAEB]">No tasks</p>
+            <div className="flex flex-col border-b border-[#E9EAEB]">
+              <div className="flex flex-col items-center justify-center py-4 gap-0.5">
+                <p className="text-[13px] font-medium text-[#A4A7AE]">No tasks right now</p>
+                <p className="text-[12px] text-[#C8CAD0]">
+                  {viewMode === 'project' ? 'Add a project to get started' : 'No tasks in this section yet'}
+                </p>
+              </div>
+              <button
+                className="flex items-center gap-2 px-4 py-2.5 w-full text-left border-t border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
+                onClick={() => onAddTask?.(null, group.statuses[0])}
+              >
+                <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
+                  <Plus width={9} height={9} className="text-[#7F56D9]" aria-hidden="true" />
+                </span>
+                <span className="text-[13px] font-semibold text-[#7F56D9]">Add Task</span>
+              </button>
+            </div>
           ) : viewMode === 'project' ? (
             <>
               {emptyProjects.map((p) => (
@@ -299,7 +329,7 @@ export function StatusSection({ group, tasks, emptyProjects = [], projectsMap, f
                   onDeleteProject={onDeleteProject}
                 />
               ))}
-              {Array.from(byProject.entries()).map(([pid, projectTasks]) => (
+              {Array.from(visibleByProject.entries()).map(([pid, projectTasks]) => (
                 <ProjectGroupRow
                   key={pid ?? '__none__'}
                   projectId={pid}
@@ -337,14 +367,6 @@ export function StatusSection({ group, tasks, emptyProjects = [], projectsMap, f
             ))
           )}
 
-          {/* Add Task at section level */}
-          <button
-            className="flex items-center gap-2 px-4 py-2 w-full text-left text-[13px] text-[#717680] hover:bg-[#F9FAFB] transition-colors border-b border-[#E9EAEB]"
-            onClick={() => onAddTask?.(null, group.statuses[0])}
-          >
-            <Plus width={13} height={13} className="text-[#A4A7AE] shrink-0" aria-hidden="true" />
-            Add Task
-          </button>
         </div>
       )}
     </section>
