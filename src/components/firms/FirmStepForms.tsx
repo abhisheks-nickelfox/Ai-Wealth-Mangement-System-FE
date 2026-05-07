@@ -91,6 +91,8 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error, apiName
       errors.name = 'Firm name must be at least 2 characters.';
     } else if (name.length > 100) {
       errors.name = 'Firm name must be 100 characters or fewer.';
+    } else if (!/[a-zA-Z]/.test(name)) {
+      errors.name = 'Firm name must contain at least one letter.';
     }
 
     if (!state.location.trim()) {
@@ -249,6 +251,8 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
     const cName = state.contactName.trim();
     if (cName && cName.length < 2) {
       errors.name = 'Contact name must be at least 2 characters.';
+    } else if (cName && !/[a-zA-Z]/.test(cName)) {
+      errors.name = 'Contact name must contain at least one letter.';
     }
 
     const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

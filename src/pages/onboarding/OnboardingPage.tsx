@@ -159,7 +159,9 @@ export default function OnboardingPage() {
     setFirstNameError(''); setLastNameError(''); setPhoneError('');
     let valid = true;
     if (!firstName.trim()) { setFirstNameError('First name is required'); valid = false; }
-    if (!lastName.trim())  { setLastNameError('Last name is required');   valid = false; }
+    else if (!/[a-zA-Z]/.test(firstName)) { setFirstNameError('First name must contain at least one letter'); valid = false; }
+    if (!lastName.trim())  { setLastNameError('Last name is required'); valid = false; }
+    else if (!/[a-zA-Z]/.test(lastName))  { setLastNameError('Last name must contain at least one letter');  valid = false; }
     const phoneValidationError = getPhoneValidationError(phoneNumber, countryCode);
     if (phoneValidationError) {
       setPhoneError(phoneValidationError);
@@ -407,8 +409,11 @@ export default function OnboardingPage() {
                 label="First Name"
                 type="text"
                 value={firstName}
-                onChange={(e) => { setFirstName(e.target.value); if (e.target.value.trim()) setFirstNameError(''); }}
-                onBlur={() => { if (!firstName.trim()) setFirstNameError('First name is required'); }}
+                onChange={(e) => { setFirstName(e.target.value); if (/[a-zA-Z]/.test(e.target.value)) setFirstNameError(''); }}
+                onBlur={() => {
+                  if (!firstName.trim()) setFirstNameError('First name is required');
+                  else if (!/[a-zA-Z]/.test(firstName)) setFirstNameError('First name must contain at least one letter');
+                }}
                 placeholder="First name"
                 error={firstNameError || undefined}
                 required
@@ -417,8 +422,11 @@ export default function OnboardingPage() {
                 label="Last Name"
                 type="text"
                 value={lastName}
-                onChange={(e) => { setLastName(e.target.value); if (e.target.value.trim()) setLastNameError(''); }}
-                onBlur={() => { if (!lastName.trim()) setLastNameError('Last name is required'); }}
+                onChange={(e) => { setLastName(e.target.value); if (/[a-zA-Z]/.test(e.target.value)) setLastNameError(''); }}
+                onBlur={() => {
+                  if (!lastName.trim()) setLastNameError('Last name is required');
+                  else if (!/[a-zA-Z]/.test(lastName)) setLastNameError('Last name must contain at least one letter');
+                }}
                 placeholder="Last name"
                 error={lastNameError || undefined}
                 required
