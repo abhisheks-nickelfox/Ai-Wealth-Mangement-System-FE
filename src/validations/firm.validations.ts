@@ -11,6 +11,9 @@ export const firmStep1Schema = Yup.object({
     .required('Firm name is required'),
   location: Yup.string()
     .trim()
+    .min(2, 'Location must be at least 2 characters')
+    .max(100, 'Location must be 100 characters or fewer')
+    .matches(/[a-zA-Z]/, 'Location must contain at least one letter')
     .required('Location is required'),
   website: Yup.string()
     .trim()
@@ -18,6 +21,7 @@ export const firmStep1Schema = Yup.object({
     .required('Firm website is required'),
   description: Yup.string()
     .trim()
+    .min(10, 'Description must be at least 10 characters')
     .max(500, 'Description must be 500 characters or fewer')
     .required('Description is required'),
 });
@@ -31,6 +35,13 @@ export const firmStep2Schema = Yup.object({
       return val.trim().length >= 2;
     })
     .test('has-letter', 'Contact name must contain at least one letter', (val) => {
+      if (!val || !val.trim()) return true;
+      return /[a-zA-Z]/.test(val);
+    }),
+  contactRole: Yup.string()
+    .trim()
+    .optional()
+    .test('has-letter', 'Contact role must contain at least one letter', (val) => {
       if (!val || !val.trim()) return true;
       return /[a-zA-Z]/.test(val);
     }),

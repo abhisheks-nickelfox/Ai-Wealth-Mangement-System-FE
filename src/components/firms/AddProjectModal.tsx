@@ -283,11 +283,19 @@ export default function AddProjectModal({
     onClose();
   };
 
+  const [dateError, setDateError] = useState('');
+
   return (
     <Formik
       initialValues={{ name: '' }}
       validationSchema={createProjectSchema}
       onSubmit={async (values, { setSubmitting }) => {
+        setDateError('');
+        if (startDate && endDate && endDate < startDate) {
+          setDateError('End date must be on or after the start date.');
+          setSubmitting(false);
+          return;
+        }
         try {
           await onCreate?.({
             name:           values.name,
@@ -394,58 +402,59 @@ export default function AddProjectModal({
               </div>
 
               {/* Start date / End date / Assignee / Priority */}
-              <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-4 items-end">
+              <div className="flex flex-col gap-1.5">
+                <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-4 items-end">
 
-                <Input
-                  label="Start date"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  required
-                  rightIcon={<CalendarDate width={16} height={16} className="text-[#717680] pointer-events-none" />}
-                />
+                  <Input
+                    label="Start date"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => { setStartDate(e.target.value); setDateError(''); }}
+                    rightIcon={<CalendarDate width={16} height={16} className="text-[#717680] pointer-events-none" />}
+                  />
 
-                <Input
-                  label="End date"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  required
-                  rightIcon={<CalendarDate width={16} height={16} className="text-[#717680] pointer-events-none" />}
-                />
+                  <Input
+                    label="End date"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => { setEndDate(e.target.value); setDateError(''); }}
+                    rightIcon={<CalendarDate width={16} height={16} className="text-[#717680] pointer-events-none" />}
+                  />
 
-                <AssigneePicker users={users} selected={assigneeIds} onToggle={toggleAssignee} />
+                  <AssigneePicker users={users} selected={assigneeIds} onToggle={toggleAssignee} />
 
-                {/* Priority */}
-                <div ref={priorityRef} className="relative">
-                  <label className="block text-sm font-medium text-[#344054] mb-1.5">
-                    Priority <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowPriorityMenu((v) => !v)}
-                    className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] transition bg-white flex items-center gap-2 whitespace-nowrap"
-                  >
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[priority]}`} />
-                    {priority}
-                    <ChevronDown width={14} height={14} className="ml-auto text-[#717680]" />
-                  </button>
-                  {showPriorityMenu && (
-                    <div className="absolute bottom-full mb-1 left-0 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[130px]">
-                      {PRIORITY_OPTIONS.map((p) => (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => { setPriority(p); setShowPriorityMenu(false); }}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#344054] hover:bg-[#F9FAFB]"
-                        >
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[p]}`} />
-                          {p}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {/* Priority */}
+                  <div ref={priorityRef} className="relative">
+                    <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                      Priority <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPriorityMenu((v) => !v)}
+                      className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] transition bg-white flex items-center gap-2 whitespace-nowrap"
+                    >
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[priority]}`} />
+                      {priority}
+                      <ChevronDown width={14} height={14} className="ml-auto text-[#717680]" />
+                    </button>
+                    {showPriorityMenu && (
+                      <div className="absolute bottom-full mb-1 left-0 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[130px]">
+                        {PRIORITY_OPTIONS.map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => { setPriority(p); setShowPriorityMenu(false); }}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#344054] hover:bg-[#F9FAFB]"
+                          >
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[p]}`} />
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
+                {dateError && <p className="text-xs text-red-500">{dateError}</p>}
               </div>
 
               {/* Selected assignees chips */}

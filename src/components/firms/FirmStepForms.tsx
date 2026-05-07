@@ -237,6 +237,7 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
         }
         onChange({
           contactName:  values.contactName,
+          contactRole:  values.contactRole,
           contactEmail: values.contactEmail,
         });
         onSubmit();
@@ -268,6 +269,7 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
             onChange={(e) => { handleChange(e); onChange({ contactRole: e.target.value }); }}
             onBlur={handleBlur}
             placeholder="e.g. Marketing Manager (optional)"
+            error={touched.contactRole && errors.contactRole ? errors.contactRole : undefined}
           />
 
           <Input
