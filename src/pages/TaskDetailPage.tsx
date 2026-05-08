@@ -305,7 +305,7 @@ function SubTaskRow({
 
   return (
     <div
-      className="flex items-center px-3 py-4 border-b border-[#E9EAEB] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
+      className="flex items-center px-3 py-2.5 border-b border-[#E9EAEB] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
       onClick={onClick}
     >
       {/* Left: dot + icon + title */}
@@ -329,20 +329,20 @@ function SubTaskRow({
         })()}
       </div>
 
-      {/* Assignee — fixed 80 px, inline picker */}
+      {/* Assignee — fixed 120 px, inline picker */}
       <div
         ref={pickerRef}
-        className="w-[80px] flex justify-center shrink-0 relative"
+        className="w-[120px] flex justify-center items-center shrink-0 relative px-3"
         onClick={(e) => e.stopPropagation()}
       >
         <AvatarStack
           avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
-          max={2}
+          max={3}
           showAddButton={true}
           onAdd={() => setPickerOpen((v) => !v)}
         />
         {pickerOpen && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[180px] max-h-52 overflow-y-auto">
+          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-3 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-xl py-2.5 min-w-[230px] max-h-64 overflow-y-auto">
             {users.map((u) => (
               <button
                 key={u.id}
@@ -354,12 +354,12 @@ function SubTaskRow({
                     : [...current, u.id];
                   onUpdateAssignees?.(task.id, next);
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-[#F9FAFB] transition-colors"
               >
-                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
-                <span className="flex-1 text-[12px] text-[#181D27] truncate">{u.name}</span>
+                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="sm" />
+                <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
                 {assignees.some((a) => a.id === u.id) && (
-                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
                     <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
@@ -776,14 +776,14 @@ export default function TaskDetailPage() {
             {subTasks.length > 0 ? (
               <div className="rounded-lg border border-[#E9EAEB] overflow-hidden">
                 {/* Table header — column widths must match SubTaskRow exactly */}
-                <div className="flex items-center px-3 py-3 bg-[#F9FAFB] border-b border-[#E9EAEB]">
+                <div className="flex items-center px-3 py-2 bg-[#F9FAFB] border-b border-[#E9EAEB]">
                   <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
                     <div className="w-2 shrink-0" />
                     <div className="w-[13px] shrink-0" />
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE]">Task name</span>
                   </div>
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[100px] text-center shrink-0">Status</span>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[80px] text-center shrink-0">Assignee</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[120px] text-center shrink-0">Assignee</span>
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[80px] text-center shrink-0">Due Date</span>
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[64px] text-center shrink-0">Priority</span>
                 </div>

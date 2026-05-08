@@ -262,7 +262,7 @@ function NestedSubTaskRow({
 
   return (
     <div
-      className="flex items-center px-4 py-3.5 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group bg-[#FAFAFA]"
+      className="flex items-center px-4 py-2 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group bg-[#FAFAFA]"
       onClick={() => onOpen(task)}
     >
       {/* Left — indented */}
@@ -289,17 +289,17 @@ function NestedSubTaskRow({
       {/* Assignee — inline picker */}
       <div
         ref={pickerRef}
-        className="w-[80px] flex justify-center shrink-0 relative"
+        className="w-[120px] flex justify-center items-center shrink-0 relative px-3"
         onClick={(e) => e.stopPropagation()}
       >
         <AvatarStack
           avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
-          max={2}
+          max={3}
           showAddButton={true}
           onAdd={() => setPickerOpen((v) => !v)}
         />
         {pickerOpen && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[180px] max-h-52 overflow-y-auto">
+          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-3 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-xl py-2.5 min-w-[230px] max-h-64 overflow-y-auto">
             {users.map((u) => (
               <button
                 key={u.id}
@@ -311,12 +311,12 @@ function NestedSubTaskRow({
                     : [...current, u.id];
                   onUpdateAssignees?.(task.id, next);
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-[#F9FAFB] transition-colors"
               >
-                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
-                <span className="flex-1 text-[12px] text-[#181D27] truncate">{u.name}</span>
+                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="sm" />
+                <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
                 {assignees.some((a) => a.id === u.id) && (
-                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
                     <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
@@ -346,11 +346,13 @@ function SubTaskRow({
   users,
   onOpen,
   onUpdateAssignees,
+  onAddSubTask,
 }: {
   task: Task;
   users: User[];
   onOpen: (t: Task) => void;
   onUpdateAssignees?: (taskId: string, ids: string[]) => void;
+  onAddSubTask?: (parentId: string, parentDeadline?: string) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef                   = useRef<HTMLDivElement>(null);
@@ -362,16 +364,24 @@ function SubTaskRow({
 
   return (
     <div
-      className="flex items-center px-4 py-4 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
+      className="flex items-center px-4 py-2.5 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
       onClick={() => onOpen(task)}
     >
-      {/* Left: dot + icon + title */}
-      <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+      {/* Left: dot + icon + title + hover sub-task button */}
+      <div className="flex items-center gap-2 flex-1 min-w-0 pr-4">
         <StatusDot status={task.status} />
         <TaskIcon width={13} height={13} className="text-[#A4A7AE] shrink-0" />
         <span className="flex-1 min-w-0 text-[13px] text-[#344054] truncate group-hover:text-[#6941C6] transition-colors">
           {task.title}
         </span>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onAddSubTask?.(task.id, task.deadline ?? undefined); }}
+          className="opacity-0 group-hover:opacity-100 shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-[#A4A7AE] hover:text-[#6941C6] hover:bg-[#F4F3FF] transition-all"
+        >
+          <Plus width={10} height={10} />
+          Sub-task
+        </button>
       </div>
 
       {/* Status — fixed 100 px */}
@@ -386,20 +396,20 @@ function SubTaskRow({
         })()}
       </div>
 
-      {/* Assignee — fixed 80 px, inline picker */}
+      {/* Assignee — fixed 120 px, inline picker */}
       <div
         ref={pickerRef}
-        className="w-[80px] flex justify-center shrink-0 relative"
+        className="w-[120px] flex justify-center items-center shrink-0 relative px-3"
         onClick={(e) => e.stopPropagation()}
       >
         <AvatarStack
           avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
-          max={2}
+          max={3}
           showAddButton={true}
           onAdd={() => setPickerOpen((v) => !v)}
         />
         {pickerOpen && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[180px] max-h-52 overflow-y-auto">
+          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-3 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-xl py-2.5 min-w-[230px] max-h-64 overflow-y-auto">
             {users.map((u) => (
               <button
                 key={u.id}
@@ -411,12 +421,12 @@ function SubTaskRow({
                     : [...current, u.id];
                   onUpdateAssignees?.(task.id, next);
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-[#F9FAFB] transition-colors"
               >
-                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
-                <span className="flex-1 text-[12px] text-[#181D27] truncate">{u.name}</span>
+                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="sm" />
+                <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
                 {assignees.some((a) => a.id === u.id) && (
-                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
                     <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
@@ -770,14 +780,14 @@ export default function ProjectFullPage() {
           {projectTasks.length > 0 ? (
             <div className="rounded-xl border border-[#E9EAEB] overflow-hidden">
               {/* Table header — column widths must match SubTaskRow exactly */}
-              <div className="flex items-center px-4 py-3 bg-[#F9FAFB] border-b border-[#E9EAEB]">
+              <div className="flex items-center px-4 py-2 bg-[#F9FAFB] border-b border-[#E9EAEB]">
                 <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
                   <div className="w-2 shrink-0" />
                   <div className="w-[13px] shrink-0" />
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE]">Task name</span>
                 </div>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[100px] text-center shrink-0">Status</span>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[80px] text-center shrink-0">Assignee</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[120px] text-center shrink-0">Assignee</span>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[80px] text-center shrink-0">Due Date</span>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[64px] text-center shrink-0">Priority</span>
               </div>
@@ -785,7 +795,7 @@ export default function ProjectFullPage() {
               {projectTasks.map((task) => {
                 const subTasks = task.subtasks ?? [];
                 return (
-                  <div key={task.id} className="border-b border-[#F2F4F7] last:border-0">
+                  <div key={task.id}>
                     {/* Parent task row */}
                     <SubTaskRow
                       task={task}
@@ -794,6 +804,11 @@ export default function ProjectFullPage() {
                       onUpdateAssignees={(taskId, ids) =>
                         updateTask.mutateAsync({ id: taskId, payload: { assignee_ids: ids } }).catch(() => {})
                       }
+                      onAddSubTask={(parentId, parentDeadline) => {
+                        setSubTaskParentId(parentId);
+                        setSubTaskParentDeadline(parentDeadline);
+                        setShowAddSubTask(true);
+                      }}
                     />
 
                     {/* Nested sub-task rows */}
@@ -812,20 +827,6 @@ export default function ProjectFullPage() {
                         ))}
                       </div>
                     )}
-
-                    {/* Add sub-task button per task */}
-                    <div className="px-4 py-3 border-t border-[#F2F4F7] bg-[#FAFAFA]">
-                      <button
-                        type="button"
-                        onClick={() => { setSubTaskParentId(task.id); setSubTaskParentDeadline(task.deadline ?? undefined); setShowAddSubTask(true); }}
-                        className="group flex items-center gap-1.5 text-[12px] text-[#A4A7AE] hover:text-[#6941C6] transition-colors"
-                      >
-                        <span className="w-4 h-4 rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9] transition-colors">
-                          <Plus width={8} height={8} />
-                        </span>
-                        Add Sub-task
-                      </button>
-                    </div>
                   </div>
                 );
               })}
