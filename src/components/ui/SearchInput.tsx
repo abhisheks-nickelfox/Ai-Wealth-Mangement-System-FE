@@ -1,5 +1,4 @@
 import { SearchLg } from '@untitled-ui/icons-react';
-import CmdKIcon from '../icons/CmdKIcon';
 
 interface SearchInputProps {
   value: string;
@@ -22,9 +21,8 @@ export default function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="flex-1 text-sm text-[#181D27] placeholder-[#A4A7AE] bg-transparent outline-none"
+        className="flex-1 min-w-0 text-sm text-[#181D27] placeholder-[#A4A7AE] bg-transparent outline-none"
       />
-      <CmdKIcon className="shrink-0" />
     </div>
   );
 }

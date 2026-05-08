@@ -44,7 +44,7 @@ export interface ProjectGroupRowProps {
   usersMap: Map<string, User>;
   projects?: Project[];
   groupStatus: string;
-  onProjectClick?: (projectId: string | null, label: string) => void;
+  onProjectClick?: (projectId: string | null, label: string, groupStatus: string) => void;
   onEditTask?: (task: Task) => void;
   onDeleteTask?: (task: Task) => void;
   onAddTask?: (projectId: string | null, status: string) => void;
@@ -107,7 +107,7 @@ export function ProjectGroupRow({
           <button
             type="button"
             className="text-[13px] font-semibold text-[#181D27] truncate hover:text-[#7F56D9] hover:underline"
-            onClick={(e) => { e.stopPropagation(); onProjectClick?.(projectId, label); }}
+            onClick={(e) => { e.stopPropagation(); onProjectClick?.(projectId, label, groupStatus); }}
           >
             {label}
           </button>
@@ -196,7 +196,7 @@ export function ProjectGroupRow({
                 {
                   label: 'Edit',
                   icon: <Edit01 width={14} height={14} className="text-[#717680]" aria-hidden="true" />,
-                  onClick: () => { setContextOpen(false); onProjectClick?.(projectId, label); },
+                  onClick: () => { setContextOpen(false); onProjectClick?.(projectId, label, groupStatus); },
                 },
                 {
                   label: 'Delete',
@@ -254,7 +254,7 @@ export interface StatusSectionProps {
   firm: Firm | null;
   usersMap: Map<string, User>;
   viewMode: 'project' | 'task';
-  onProjectClick?: (projectId: string | null, label: string) => void;
+  onProjectClick?: (projectId: string | null, label: string, groupStatus: string) => void;
   onEditTask?: (task: Task) => void;
   onDeleteTask?: (task: Task) => void;
   onAddProject?: (workflowStatus: string) => void;
@@ -373,7 +373,7 @@ export function StatusSection({
                   firm={firm}
                   usersMap={usersMap}
                   projects={projectsMap ? Array.from(projectsMap.values()) : []}
-                  groupStatus={group.statuses[0]}
+                  groupStatus={group.id}
                   onProjectClick={onProjectClick}
                   onEditTask={onEditTask}
                   onDeleteTask={onDeleteTask}
@@ -394,7 +394,7 @@ export function StatusSection({
                   firm={firm}
                   usersMap={usersMap}
                   projects={projectsMap ? Array.from(projectsMap.values()) : []}
-                  groupStatus={group.statuses[0]}
+                  groupStatus={group.id}
                   onProjectClick={onProjectClick}
                   onEditTask={onEditTask}
                   onDeleteTask={onDeleteTask}

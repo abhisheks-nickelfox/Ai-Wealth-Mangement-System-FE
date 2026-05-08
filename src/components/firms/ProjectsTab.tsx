@@ -41,6 +41,7 @@ const DISPLAY_TO_WORKFLOW: Record<string, string> = {
   'In Review':   'in_review',
   'Approved':    'approved',
   'Completed':   'completed',
+  'Blocked':     'in_progress',
 };
 
 // Map section group IDs → project workflow_status values
@@ -595,11 +596,23 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
               onOpenTaskDetail={(task) => setSelectedTask(task)}
               onAssigneeChange={handleAssigneeChange}
               onProjectChange={handleProjectChange}
-              onProjectClick={(projectId, label) => {
+              onProjectClick={(projectId, label, clickedGroupStatus) => {
                 const matchedProject = projectRows.find(([id]) => id === projectId)?.[1].project ?? null;
                 const firmAbbr = firm?.name
                   ? firm.name.split(' ').map((w) => w[0]).join('').toUpperCase()
                   : 'AWP';
+
+                // Map task-group status → project workflow display status
+                const groupStatusToDisplay: Record<string, import('./ProjectDetailPanel').ProjectDetail['status']> = {
+                  todo:             'To Do',
+                  assigned:         'In progress',
+                  inprogress:       'In progress',
+                  revisions:        'In progress',
+                  inreview:         'In Review',
+                  clientreview:     'In Review',
+                  completed:        'Completed',
+                  blocked:          'Blocked',
+                };
                 const wfToDisplay: Record<string, import('./ProjectDetailPanel').ProjectDetail['status']> = {
                   todo:        'To Do',
                   in_progress: 'In progress',
@@ -607,11 +620,17 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
                   approved:    'Approved',
                   completed:   'Completed',
                 };
+                // Use the group the user clicked from, falling back to project's own workflow_status
+                const effectiveStatus =
+                  groupStatusToDisplay[clickedGroupStatus] ??
+                  wfToDisplay[matchedProject?.workflow_status ?? 'todo'] ??
+                  'To Do';
+
                 setSelectedProject({
                   id:          projectId ?? label,
                   name:        label,
                   description: matchedProject?.description ?? '',
-                  status:      wfToDisplay[matchedProject?.workflow_status ?? 'todo'] ?? 'In progress',
+                  status:      effectiveStatus,
                   memberIds:   matchedProject?.members.map((m) => m.id) ?? [],
                   firmName:    firm?.name ?? '',
                   firmAbbr,
@@ -703,8 +722,9 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         project={selectedProject}
         users={users}
         onViewTask={(projectId) => {
+          const statusParam = encodeURIComponent(selectedProject?.status ?? '');
           setSelectedProject(null);
-          navigate(`/firms/${firm?.id}/projects/${projectId}`);
+          navigate(`/firms/${firm?.id}/projects/${projectId}?status=${statusParam}`);
         }}
         onSave={async (updated) => {
           if (!updated.id) return;

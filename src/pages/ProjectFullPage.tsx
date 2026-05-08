@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ChevronRight,
@@ -14,11 +14,14 @@ import Avatar from '../components/ui/Avatar';
 import AvatarStack from '../components/ui/AvatarStack';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { useMessages, useSendMessage } from '../hooks/useMessages';
-import { useFirmDetail, useProjects } from '../hooks/useFirms';
+import { useFirmDetail, useProjects, useUpdateProject } from '../hooks/useFirms';
+import { useClickOutside } from '../hooks/useClickOutside';
 import { useTasksByFirm, useCreateTask, useUpdateTask } from '../hooks/useTasks';
 import { useUsers } from '../hooks/useUsers';
 import AddTaskModal from '../components/firms/AddTaskModal';
 import TaskDetailPanel from '../components/firms/TaskDetailPanel';
+import ProjectDetailPanel from '../components/firms/ProjectDetailPanel';
+import type { ProjectDetail } from '../components/firms/ProjectDetailPanel';
 import type { TaskFormData } from '../components/firms/AddTaskModal';
 import type { TaskDetailData } from '../components/firms/TaskDetailPanel';
 import {
@@ -31,7 +34,7 @@ import { projectsApi } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
 import TaskIcon from '../components/icons/TaskIcon';
 import ProjectIcon from '../components/icons/ProjectIcon';
-import type { Task, Message, Project } from '../lib/api';
+import type { Task, Message, Project, User } from '../lib/api';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -152,7 +155,7 @@ function ActivityPanel({ projectId }: { projectId: string }) {
   const groups = groupByDay(messages);
 
   return (
-    <aside className="w-[380px] shrink-0 flex flex-col border-l border-[#E9EAEB] bg-white h-full">
+    <aside className="w-[380px] shrink-0 flex flex-col border-l border-[#E9EAEB] bg-white h-full isolate">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
         <h2 className="text-[16px] font-semibold text-[#181D27]">Activity</h2>
@@ -237,45 +240,203 @@ function ActivityPanel({ projectId }: { projectId: string }) {
   );
 }
 
-// ── Sub-task row (matches screenshot format exactly) ──────────────────────────
+// ── Nested (indented) sub-task row ────────────────────────────────────────────
 
-function SubTaskRow({ task, onOpen }: { task: Task; onOpen: (t: Task) => void }) {
-  const { text: dateText, overdue } = formatDeadline(task.deadline ?? null);
-  const priorityStyle = PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500';
+function NestedSubTaskRow({
+  task,
+  users,
+  onOpen,
+  onUpdateAssignees,
+}: {
+  task: Task;
+  users: User[];
+  onOpen: (t: Task) => void;
+  onUpdateAssignees?: (taskId: string, ids: string[]) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef                   = useRef<HTMLDivElement>(null);
+  useClickOutside(pickerRef, () => setPickerOpen(false));
+
   const assignees = task.assignees ?? [];
+  const { text: dt, overdue: subOverdue } = formatDeadline(task.deadline ?? null);
 
   return (
     <div
-      className="flex items-center gap-3 px-4 py-2.5 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
+      className="flex items-center px-4 py-3.5 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group bg-[#FAFAFA]"
       onClick={() => onOpen(task)}
     >
-      <StatusDot status={task.status} />
-      <TaskIcon width={13} height={13} className="text-[#A4A7AE] shrink-0" />
-      <span className="flex-1 min-w-0 text-[13px] text-[#344054] truncate group-hover:text-[#6941C6] transition-colors">
-        {task.title}
-      </span>
-      {(() => {
-        const s = TASK_STATUS_BADGE[task.status];
-        return s ? (
-          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${s.style}`}>
-            {s.label}
-          </span>
-        ) : null;
-      })()}
-      <div className="flex items-center gap-1 shrink-0">
+      {/* Left — indented */}
+      <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+        <div className="w-4 shrink-0" />
+        <div className="w-px h-4 bg-[#E4E7EC] shrink-0" />
+        <StatusDot status={task.status} />
+        <TaskIcon width={12} height={12} className="text-[#C8CDD6] shrink-0" />
+        <span className="flex-1 min-w-0 text-[12px] text-[#535862] truncate group-hover:text-[#6941C6] transition-colors">
+          {task.title}
+        </span>
+      </div>
+      {/* Status */}
+      <div className="w-[100px] flex justify-center shrink-0">
+        {(() => {
+          const s = TASK_STATUS_BADGE[task.status];
+          return s ? (
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${s.style}`}>
+              {s.label}
+            </span>
+          ) : null;
+        })()}
+      </div>
+      {/* Assignee — inline picker */}
+      <div
+        ref={pickerRef}
+        className="w-[80px] flex justify-center shrink-0 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         <AvatarStack
           avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
-          max={3}
+          max={2}
           showAddButton={true}
-          addAs="div"
+          onAdd={() => setPickerOpen((v) => !v)}
         />
+        {pickerOpen && (
+          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[180px] max-h-52 overflow-y-auto">
+            {users.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => {
+                  const current = assignees.map((a) => a.id);
+                  const next = current.includes(u.id)
+                    ? current.filter((id) => id !== u.id)
+                    : [...current, u.id];
+                  onUpdateAssignees?.(task.id, next);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+              >
+                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+                <span className="flex-1 text-[12px] text-[#181D27] truncate">{u.name}</span>
+                {assignees.some((a) => a.id === u.id) && (
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      <span className={`text-[12px] shrink-0 w-[80px] text-center ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
+      {/* Due Date */}
+      <span className={`w-[80px] text-[11px] text-center shrink-0 ${subOverdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
+        {dt}
+      </span>
+      {/* Priority */}
+      <div className="w-[64px] flex justify-center shrink-0">
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize ${PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500'}`}>
+          {task.priority}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Parent task row ────────────────────────────────────────────────────────────
+
+function SubTaskRow({
+  task,
+  users,
+  onOpen,
+  onUpdateAssignees,
+}: {
+  task: Task;
+  users: User[];
+  onOpen: (t: Task) => void;
+  onUpdateAssignees?: (taskId: string, ids: string[]) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef                   = useRef<HTMLDivElement>(null);
+  useClickOutside(pickerRef, () => setPickerOpen(false));
+
+  const assignees     = task.assignees ?? [];
+  const { text: dateText, overdue } = formatDeadline(task.deadline ?? null);
+  const priorityStyle = PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500';
+
+  return (
+    <div
+      className="flex items-center px-4 py-4 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
+      onClick={() => onOpen(task)}
+    >
+      {/* Left: dot + icon + title */}
+      <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+        <StatusDot status={task.status} />
+        <TaskIcon width={13} height={13} className="text-[#A4A7AE] shrink-0" />
+        <span className="flex-1 min-w-0 text-[13px] text-[#344054] truncate group-hover:text-[#6941C6] transition-colors">
+          {task.title}
+        </span>
+      </div>
+
+      {/* Status — fixed 100 px */}
+      <div className="w-[100px] flex justify-center shrink-0">
+        {(() => {
+          const s = TASK_STATUS_BADGE[task.status];
+          return s ? (
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${s.style}`}>
+              {s.label}
+            </span>
+          ) : null;
+        })()}
+      </div>
+
+      {/* Assignee — fixed 80 px, inline picker */}
+      <div
+        ref={pickerRef}
+        className="w-[80px] flex justify-center shrink-0 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <AvatarStack
+          avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
+          max={2}
+          showAddButton={true}
+          onAdd={() => setPickerOpen((v) => !v)}
+        />
+        {pickerOpen && (
+          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[180px] max-h-52 overflow-y-auto">
+            {users.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => {
+                  const current = assignees.map((a) => a.id);
+                  const next = current.includes(u.id)
+                    ? current.filter((id) => id !== u.id)
+                    : [...current, u.id];
+                  onUpdateAssignees?.(task.id, next);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+              >
+                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+                <span className="flex-1 text-[12px] text-[#181D27] truncate">{u.name}</span>
+                {assignees.some((a) => a.id === u.id) && (
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Due Date — fixed 80 px */}
+      <span className={`w-[80px] text-[12px] text-center shrink-0 ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
         {dateText}
       </span>
-      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold capitalize shrink-0 ${priorityStyle}`}>
-        {task.priority}
-      </span>
+
+      {/* Priority — fixed 64 px */}
+      <div className="w-[64px] flex justify-center shrink-0">
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize ${priorityStyle}`}>
+          {task.priority}
+        </span>
+      </div>
     </div>
   );
 }
@@ -285,7 +446,13 @@ function SubTaskRow({ task, onOpen }: { task: Task; onOpen: (t: Task) => void })
 export default function ProjectFullPage() {
   const { firmId, projectId } = useParams<{ firmId: string; projectId: string }>();
   const navigate              = useNavigate();
-  const [actionsOpen,     setActionsOpen]     = useState(false);
+  const [searchParams]        = useSearchParams();
+  const statusOverride        = searchParams.get('status') ?? '';
+  const [actionsOpen,        setActionsOpen]        = useState(false);
+  const [showEditProject,    setShowEditProject]    = useState(false);
+  const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
+  const assigneePickerRef = useRef<HTMLDivElement>(null);
+  const updateProject = useUpdateProject();
   const [showAddSubTask,       setShowAddSubTask]       = useState(false);
   const [subTaskParentId,      setSubTaskParentId]      = useState<string | undefined>();
   const [subTaskParentDeadline, setSubTaskParentDeadline] = useState<string | undefined>();
@@ -305,6 +472,15 @@ export default function ProjectFullPage() {
 
   const projectTasks = allTasks.filter((t) => t.project_id === projectId && !t.parent_task_id);
 
+  useClickOutside(assigneePickerRef, () => setAssigneePickerOpen(false));
+
+  async function toggleProjectMember(userId: string) {
+    if (!project) return;
+    const current = project.members.map((m) => m.id);
+    const next = current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId];
+    await updateProject.mutateAsync({ id: project.id, payload: { member_ids: next } }).catch(() => {});
+  }
+
   async function handleSaveTask(taskId: string, data: TaskDetailData) {
     await updateTask.mutateAsync({ id: taskId, payload: {
       title: data.title, description: data.description, priority: data.priority,
@@ -321,6 +497,27 @@ export default function ProjectFullPage() {
     }
 
     setSelectedTask(null);
+  }
+
+  const displayToWorkflow: Record<string, string> = {
+    'To Do': 'todo', 'In progress': 'in_progress', 'In Review': 'in_review',
+    'Approved': 'approved', 'Completed': 'completed',
+  };
+
+  async function handleSaveProject(updated: ProjectDetail) {
+    await updateProject.mutateAsync({
+      id: updated.id,
+      payload: {
+        name:            updated.name,
+        description:     updated.description || undefined,
+        workflow_status: (displayToWorkflow[updated.status] ?? 'todo') as 'todo' | 'in_progress' | 'in_review' | 'approved' | 'completed',
+        member_ids:      updated.memberIds,
+        start_date:      updated.startDate || undefined,
+        end_date:        updated.endDate || undefined,
+        priority:        updated.priority,
+      },
+    });
+    setShowEditProject(false);
   }
 
   const priorityMap: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
@@ -408,7 +605,7 @@ export default function ProjectFullPage() {
             {actionsOpen && (
               <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[180px]">
                 {[
-                  { label: 'Edit', onClick: () => { setActionsOpen(false); navigate(`/firms/${firmId}`); } },
+                  { label: 'Edit', onClick: () => { setActionsOpen(false); setShowEditProject(true); } },
                   { label: 'Delete (with safety)', danger: true, onClick: () => setActionsOpen(false) },
                   { label: 'Convert to Template', onClick: () => setActionsOpen(false) },
                 ].map((item) => (
@@ -428,22 +625,42 @@ export default function ProjectFullPage() {
         {/* ── Metadata grid ── */}
         <div className="px-8 pb-6 grid grid-cols-3 gap-x-6 gap-y-5 border-b border-[#F2F4F7]">
           {/* Assignee */}
-          <div>
+          <div ref={assigneePickerRef} className="relative">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-2">Assignee</p>
-            {members.length > 0 ? (
-              <div className="flex items-center gap-1">
-                <AvatarStack
-                  avatars={members.map((m) => ({ name: m.name, src: m.avatar_url ?? undefined }))}
-                  max={3}
-                  showAddButton={true}
-                  addAs="div"
-                />
-                {members.length > 3 && (
-                  <span className="text-[12px] text-[#717680] font-medium">+{members.length - 3}</span>
-                )}
+            <AvatarStack
+              avatars={members.map((m) => ({ name: m.name, src: m.avatar_url ?? undefined }))}
+              max={3}
+              showAddButton={true}
+              onAdd={() => setAssigneePickerOpen((v) => !v)}
+            />
+            {members.length === 0 && (
+              <button
+                type="button"
+                onClick={() => setAssigneePickerOpen((v) => !v)}
+                className="text-[13px] text-[#A4A7AE] hover:text-[#7F56D9] transition-colors"
+              >
+                + Add assignee
+              </button>
+            )}
+            {assigneePickerOpen && (
+              <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[200px] max-h-60 overflow-y-auto">
+                {users.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => toggleProjectMember(u.id)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                  >
+                    <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+                    <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
+                    {members.some((m) => m.id === u.id) && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <span className="text-[13px] text-[#A4A7AE]">Unassigned</span>
             )}
           </div>
 
@@ -451,7 +668,7 @@ export default function ProjectFullPage() {
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-2">Status</p>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#F9FAFB] border border-[#E9EAEB] text-[12px] font-medium text-[#344054]">
-              {WORKFLOW_LABEL[project.workflow_status]}
+              {statusOverride || WORKFLOW_LABEL[project.workflow_status]}
               <ArrowRight width={12} height={12} className="text-[#A4A7AE]" />
             </div>
           </div>
@@ -551,63 +768,53 @@ export default function ProjectFullPage() {
           </div>
 
           {projectTasks.length > 0 ? (
-            <div className="flex flex-col gap-2">
+            <div className="rounded-xl border border-[#E9EAEB] overflow-hidden">
+              {/* Table header — column widths must match SubTaskRow exactly */}
+              <div className="flex items-center px-4 py-3 bg-[#F9FAFB] border-b border-[#E9EAEB]">
+                <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+                  <div className="w-2 shrink-0" />
+                  <div className="w-[13px] shrink-0" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE]">Task name</span>
+                </div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[100px] text-center shrink-0">Status</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[80px] text-center shrink-0">Assignee</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[80px] text-center shrink-0">Due Date</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[64px] text-center shrink-0">Priority</span>
+              </div>
+
               {projectTasks.map((task) => {
                 const subTasks = task.subtasks ?? [];
                 return (
-                  <div key={task.id} className="rounded-xl border border-[#E9EAEB] overflow-hidden">
+                  <div key={task.id} className="border-b border-[#F2F4F7] last:border-0">
                     {/* Parent task row */}
-                    <SubTaskRow task={task} onOpen={setSelectedTask} />
+                    <SubTaskRow
+                      task={task}
+                      users={users}
+                      onOpen={setSelectedTask}
+                      onUpdateAssignees={(taskId, ids) =>
+                        updateTask.mutateAsync({ id: taskId, payload: { assignee_ids: ids } }).catch(() => {})
+                      }
+                    />
 
                     {/* Nested sub-task rows */}
                     {subTasks.length > 0 && (
                       <div className="border-t border-[#F2F4F7]">
                         {subTasks.map((sub) => (
-                          <div
+                          <NestedSubTaskRow
                             key={sub.id}
-                            className="flex items-center gap-3 px-4 py-2 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group bg-[#FAFAFA]"
-                            onClick={() => setSelectedTask(sub)}
-                          >
-                            <div className="w-4 shrink-0" />
-                            <div className="w-px h-4 bg-[#E4E7EC] shrink-0" />
-                            <StatusDot status={sub.status} />
-                            <TaskIcon width={12} height={12} className="text-[#C8CDD6] shrink-0" />
-                            <span className="flex-1 min-w-0 text-[12px] text-[#535862] truncate group-hover:text-[#6941C6] transition-colors">
-                              {sub.title}
-                            </span>
-                            {(() => {
-                              const s = TASK_STATUS_BADGE[sub.status];
-                              return s ? (
-                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${s.style}`}>
-                                  {s.label}
-                                </span>
-                              ) : null;
-                            })()}
-                            {(sub.assignees ?? []).length > 0 && (
-                              <AvatarStack
-                                avatars={(sub.assignees ?? []).map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
-                                max={3}
-                                showAddButton={false}
-                              />
-                            )}
-                            {(() => {
-                              const { text: dt, overdue } = formatDeadline(sub.deadline ?? null);
-                              return (
-                                <span className={`text-[11px] shrink-0 w-[80px] text-center ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
-                                  {dt}
-                                </span>
-                              );
-                            })()}
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize shrink-0 ${PRIORITY_BADGE[sub.priority] ?? 'bg-gray-100 text-gray-500'}`}>
-                              {sub.priority}
-                            </span>
-                          </div>
+                            task={sub}
+                            users={users}
+                            onOpen={setSelectedTask}
+                            onUpdateAssignees={(taskId, ids) =>
+                              updateTask.mutateAsync({ id: taskId, payload: { assignee_ids: ids } }).catch(() => {})
+                            }
+                          />
                         ))}
                       </div>
                     )}
 
                     {/* Add sub-task button per task */}
-                    <div className="px-4 py-2 border-t border-[#F2F4F7] bg-[#FAFAFA]">
+                    <div className="px-4 py-3 border-t border-[#F2F4F7] bg-[#FAFAFA]">
                       <button
                         type="button"
                         onClick={() => { setSubTaskParentId(task.id); setSubTaskParentDeadline(task.deadline ?? undefined); setShowAddSubTask(true); }}
@@ -676,6 +883,36 @@ export default function ProjectFullPage() {
         parentTaskDeadline={subTaskParentDeadline}
         onCreate={handleCreateSubTask}
       />
+
+      {/* Edit project panel */}
+      {project && (
+        <ProjectDetailPanel
+          open={showEditProject}
+          onClose={() => setShowEditProject(false)}
+          users={users}
+          project={(() => {
+            const wfMap: Record<string, string> = {
+              todo: 'To Do', in_progress: 'In progress', in_review: 'In Review',
+              approved: 'Approved', completed: 'Completed',
+            };
+            const abbr = (firm?.name ?? project.name)
+              .split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 3);
+            return {
+              id:          project.id,
+              name:        project.name,
+              description: project.description ?? '',
+              status:      (wfMap[project.workflow_status] ?? 'To Do') as ProjectDetail['status'],
+              memberIds:   project.members.map((m) => m.id),
+              firmName:    firm?.name ?? '',
+              firmAbbr:    abbr,
+              startDate:   project.start_date ?? '',
+              endDate:     project.end_date ?? '',
+              priority:    project.priority ?? 'low',
+            };
+          })()}
+          onSave={handleSaveProject}
+        />
+      )}
     </div>
   );
 }

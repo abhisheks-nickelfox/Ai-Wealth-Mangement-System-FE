@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useClickOutside } from '../hooks/useClickOutside';
 import {
   ChevronRight,
   ArrowNarrowLeft,
@@ -21,8 +22,9 @@ import { queryKeys } from '../lib/queryKeys';
 import { useMessages, useSendMessage } from '../hooks/useMessages';
 import { useFirmDetail, useProjects } from '../hooks/useFirms';
 import { useUsers } from '../hooks/useUsers';
-import { useCreateTask } from '../hooks/useTasks';
+import { useCreateTask, useUpdateTask } from '../hooks/useTasks';
 import TaskDetailPanel from '../components/firms/TaskDetailPanel';
+import type { TaskDetailData } from '../components/firms/TaskDetailPanel';
 import AddTaskModal from '../components/firms/AddTaskModal';
 import type { TaskFormData } from '../components/firms/AddTaskModal';
 import {
@@ -282,40 +284,102 @@ function ActivityPanel({ taskId }: ActivityPanelProps) {
 
 // ── Sub-task row ──────────────────────────────────────────────────────────────
 
-function SubTaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
+function SubTaskRow({
+  task,
+  users,
+  onClick,
+  onUpdateAssignees,
+}: {
+  task: Task;
+  users: import('../lib/api').User[];
+  onClick: () => void;
+  onUpdateAssignees?: (taskId: string, ids: string[]) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef                   = useRef<HTMLDivElement>(null);
+  useClickOutside(pickerRef, () => setPickerOpen(false));
+
+  const assignees     = task.assignees ?? [];
   const { text: dateText, overdue } = formatDeadline(task.deadline ?? null);
   const priorityStyle = PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500';
-  const assignees = task.assignees ?? [];
 
   return (
     <div
-      className="flex items-center gap-3 px-3 py-2.5 border-b border-[#E9EAEB] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
+      className="flex items-center px-3 py-4 border-b border-[#E9EAEB] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
       onClick={onClick}
     >
-      <StatusDot status={task.status} />
-      <TaskIcon width={13} height={13} className="text-[#A4A7AE] shrink-0" />
-      <span className="flex-1 min-w-0 text-[13px] text-[#181D27] truncate group-hover:text-[#6941C6] transition-colors">{task.title}</span>
-      {(() => {
-        const s = TASK_STATUS_BADGE[task.status];
-        return s ? (
-          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${s.style}`}>
-            {s.label}
-          </span>
-        ) : null;
-      })()}
-      {assignees.length > 0 && (
+      {/* Left: dot + icon + title */}
+      <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+        <StatusDot status={task.status} />
+        <TaskIcon width={13} height={13} className="text-[#A4A7AE] shrink-0" />
+        <span className="flex-1 min-w-0 text-[13px] text-[#181D27] truncate group-hover:text-[#6941C6] transition-colors">
+          {task.title}
+        </span>
+      </div>
+
+      {/* Status — fixed 100 px */}
+      <div className="w-[100px] flex justify-center shrink-0">
+        {(() => {
+          const s = TASK_STATUS_BADGE[task.status];
+          return s ? (
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${s.style}`}>
+              {s.label}
+            </span>
+          ) : null;
+        })()}
+      </div>
+
+      {/* Assignee — fixed 80 px, inline picker */}
+      <div
+        ref={pickerRef}
+        className="w-[80px] flex justify-center shrink-0 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         <AvatarStack
           avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
-          max={3}
-          showAddButton={false}
+          max={2}
+          showAddButton={true}
+          onAdd={() => setPickerOpen((v) => !v)}
         />
-      )}
-      <span className={`text-[11px] shrink-0 ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
+        {pickerOpen && (
+          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[180px] max-h-52 overflow-y-auto">
+            {users.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => {
+                  const current = assignees.map((a) => a.id);
+                  const next = current.includes(u.id)
+                    ? current.filter((id) => id !== u.id)
+                    : [...current, u.id];
+                  onUpdateAssignees?.(task.id, next);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+              >
+                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+                <span className="flex-1 text-[12px] text-[#181D27] truncate">{u.name}</span>
+                {assignees.some((a) => a.id === u.id) && (
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                    <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Due Date — fixed 80 px */}
+      <span className={`w-[80px] text-[11px] text-center shrink-0 ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
         {dateText}
       </span>
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize shrink-0 ${priorityStyle}`}>
-        {task.priority}
-      </span>
+
+      {/* Priority — fixed 64 px */}
+      <div className="w-[64px] flex justify-center shrink-0">
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize ${priorityStyle}`}>
+          {task.priority}
+        </span>
+      </div>
     </div>
   );
 }
@@ -338,9 +402,13 @@ function MetaCell({ label, children }: { label: string; children: React.ReactNod
 export default function TaskDetailPage() {
   const { firmId, taskId } = useParams<{ firmId: string; taskId: string }>();
   const navigate           = useNavigate();
-  const [actionsOpen,    setActionsOpen]    = useState(false);
-  const [selectedSubTask, setSelectedSubTask] = useState<import('../lib/api').Task | null>(null);
-  const [showAddSubTask,  setShowAddSubTask]  = useState(false);
+  const [actionsOpen,        setActionsOpen]        = useState(false);
+  const [showEditTask,       setShowEditTask]       = useState(false);
+  const [selectedSubTask,    setSelectedSubTask]    = useState<import('../lib/api').Task | null>(null);
+  const [showAddSubTask,     setShowAddSubTask]     = useState(false);
+  const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
+  const assigneePickerRef = useRef<HTMLDivElement>(null);
+  useClickOutside(assigneePickerRef, () => setAssigneePickerOpen(false));
 
   const { data: firm,  isLoading: firmLoading  } = useFirmDetail(firmId!);
   const { data: task,  isLoading: taskLoading  } = useQuery<Task>({
@@ -351,6 +419,7 @@ export default function TaskDetailPage() {
   const { data: projects = [] } = useProjects(firmId);
   const { data: users    = [] } = useUsers();
   const createTask              = useCreateTask();
+  const updateTask              = useUpdateTask();
 
   const isSubTask   = !!task?.parent_task_id;
   const taskProject = task?.project_id ? projects.find((p) => p.id === task.project_id) ?? null : null;
@@ -380,6 +449,29 @@ export default function TaskDetailPage() {
   const priorityMap: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
     Low: 'low', Medium: 'normal', High: 'high', Urgent: 'urgent',
   };
+
+  async function handleSaveTask(taskIdToSave: string, data: TaskDetailData) {
+    await updateTask.mutateAsync({
+      id: taskIdToSave,
+      payload: {
+        title:        data.title,
+        description:  data.description,
+        priority:     data.priority,
+        assignee_ids: data.assignee_ids,
+        deadline:     data.deadline || undefined,
+        project_id:   data.project_id,
+      },
+    });
+  }
+
+  async function toggleTaskAssignee(userId: string) {
+    if (!task) return;
+    const current = (task.assignees ?? []).map((a) => a.id);
+    const next = current.includes(userId)
+      ? current.filter((id) => id !== userId)
+      : [...current, userId];
+    await updateTask.mutateAsync({ id: task.id, payload: { assignee_ids: next } }).catch(() => {});
+  }
 
   async function handleCreateSubTask(data: TaskFormData) {
     await createTask.mutateAsync({
@@ -514,7 +606,7 @@ export default function TaskDetailPage() {
                   {
                     label: 'Edit',
                     icon: <Edit01 width={14} height={14} className="text-[#717680]" aria-hidden="true" />,
-                    onClick: () => setActionsOpen(false),
+                    onClick: () => { setActionsOpen(false); setShowEditTask(true); },
                   },
                   {
                     label: 'Convert to Template',
@@ -551,20 +643,52 @@ export default function TaskDetailPage() {
         {/* ── Metadata grid ── */}
         <div className="px-8 py-5 border-y border-[#E9EAEB] grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-5">
           {/* Assignee */}
-          <MetaCell label="Assignee">
-            {assignees.length > 0 ? (
-              <AvatarStack
-                avatars={assignees.map((a) => ({
-                  name: a.name,
-                  src: 'avatar_url' in a && a.avatar_url ? a.avatar_url : undefined,
-                }))}
-                max={4}
-                showAddButton={false}
-              />
-            ) : (
-              <span className="text-[#A4A7AE]">Unassigned</span>
-            )}
-          </MetaCell>
+          <div className="flex flex-col gap-1.5" ref={assigneePickerRef}>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE]">
+              Assignee
+            </span>
+            <div className="relative">
+              {assignees.length > 0 ? (
+                <AvatarStack
+                  avatars={assignees.map((a) => ({
+                    name: a.name,
+                    src: 'avatar_url' in a && a.avatar_url ? a.avatar_url : undefined,
+                  }))}
+                  max={4}
+                  showAddButton={true}
+                  onAdd={() => setAssigneePickerOpen((v) => !v)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAssigneePickerOpen((v) => !v)}
+                  className="text-[13px] text-[#A4A7AE] hover:text-[#7F56D9] transition-colors"
+                >
+                  + Add assignee
+                </button>
+              )}
+              {assigneePickerOpen && (
+                <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[200px] max-h-60 overflow-y-auto">
+                  {users.map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => toggleTaskAssignee(u.id)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                    >
+                      <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+                      <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
+                      {assignees.some((a) => a.id === u.id) && (
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                          <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Status */}
           <MetaCell label="Status">
@@ -651,8 +775,28 @@ export default function TaskDetailPage() {
 
             {subTasks.length > 0 ? (
               <div className="rounded-lg border border-[#E9EAEB] overflow-hidden">
+                {/* Table header — column widths must match SubTaskRow exactly */}
+                <div className="flex items-center px-3 py-3 bg-[#F9FAFB] border-b border-[#E9EAEB]">
+                  <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+                    <div className="w-2 shrink-0" />
+                    <div className="w-[13px] shrink-0" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE]">Task name</span>
+                  </div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[100px] text-center shrink-0">Status</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[80px] text-center shrink-0">Assignee</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[80px] text-center shrink-0">Due Date</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[64px] text-center shrink-0">Priority</span>
+                </div>
                 {subTasks.map((sub) => (
-                  <SubTaskRow key={sub.id} task={sub} onClick={() => setSelectedSubTask(sub)} />
+                  <SubTaskRow
+                    key={sub.id}
+                    task={sub}
+                    users={users}
+                    onClick={() => setSelectedSubTask(sub)}
+                    onUpdateAssignees={(taskId, ids) =>
+                      updateTask.mutateAsync({ id: taskId, payload: { assignee_ids: ids } }).catch(() => {})
+                    }
+                  />
                 ))}
               </div>
             ) : (
@@ -677,6 +821,19 @@ export default function TaskDetailPage() {
       <ActivityPanel taskId={taskId!} />
     </div>
 
+    {/* Edit main task slide-over */}
+    <TaskDetailPanel
+      open={showEditTask}
+      onClose={() => setShowEditTask(false)}
+      task={task ?? null}
+      firmId={firmId}
+      users={users}
+      projects={projects}
+      onSave={handleSaveTask}
+      viewLabel="View Task"
+      onViewTask={() => setShowEditTask(false)}
+    />
+
     {/* Sub-task slide-over */}
     <TaskDetailPanel
       open={!!selectedSubTask}
@@ -684,6 +841,9 @@ export default function TaskDetailPage() {
       task={selectedSubTask}
       firmId={firmId}
       users={users}
+      projects={projects}
+      parentTaskDeadline={task?.deadline ?? undefined}
+      onSave={handleSaveTask}
       onViewTask={() => {
         setSelectedSubTask(null);
         navigate(`/firms/${firmId}/tasks/${selectedSubTask?.id}`);

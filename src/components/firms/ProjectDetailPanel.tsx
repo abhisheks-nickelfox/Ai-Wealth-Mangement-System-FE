@@ -21,7 +21,7 @@ export interface ProjectDetail {
   priority?:   'high' | 'medium' | 'low';
 }
 
-type ProjectStatus = 'In progress' | 'To Do' | 'In Review' | 'Approved' | 'Completed';
+type ProjectStatus = 'In progress' | 'To Do' | 'In Review' | 'Approved' | 'Completed' | 'Blocked';
 
 interface ProjectDetailPanelProps {
   open:         boolean;
@@ -38,6 +38,7 @@ const STATUS_OPTIONS: ProjectStatus[] = [
   'In Review',
   'Approved',
   'Completed',
+  'Blocked',
 ];
 
 const STATUS_DOT: Record<ProjectStatus, string> = {
@@ -46,6 +47,7 @@ const STATUS_DOT: Record<ProjectStatus, string> = {
   'In Review':   'bg-[#F79009]',
   'Approved':    'bg-[#6941C6]',
   'Completed':   'bg-[#181D27]',
+  'Blocked':     'bg-red-500',
 };
 
 const PRIORITY_OPTIONS: { value: 'high' | 'medium' | 'low'; label: string; dot: string }[] = [
