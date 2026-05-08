@@ -78,6 +78,7 @@ export default function ProjectDetailPanel({
   const [showStatus,   setShowStatus]   = useState(false);
   const [showPicker,   setShowPicker]   = useState(false);
   const [showPriority, setShowPriority] = useState(false);
+  const [dateError,    setDateError]    = useState('');
 
   // Sync form when project changes
   useEffect(() => {
@@ -119,6 +120,10 @@ export default function ProjectDetailPanel({
   };
 
   const handleSave = async () => {
+    setDateError('');
+    if (!startDate) { setDateError('Start date is required.'); return; }
+    if (!endDate)   { setDateError('End date is required.'); return; }
+    if (endDate < startDate) { setDateError('End date must be on or after start date.'); return; }
     setSaving(true);
     try {
       await onSave?.({ ...project, name, description, status, memberIds, startDate, endDate, priority });
@@ -254,19 +259,28 @@ export default function ProjectDetailPanel({
         </div>
 
         {/* Start date / End date */}
-        <div className="grid grid-cols-2 gap-3">
-          <Input
-            label="Start Date"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
-          <Input
-            label="End Date"
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-          />
+        <div className="flex flex-col gap-1.5">
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Start Date"
+              type="date"
+              value={startDate}
+              onChange={(e) => { setStartDate(e.target.value); setDateError(''); }}
+              required
+              error={!startDate && dateError ? 'Start date is required' : undefined}
+            />
+            <Input
+              label="End Date"
+              type="date"
+              value={endDate}
+              onChange={(e) => { setEndDate(e.target.value); setDateError(''); }}
+              required
+              error={!endDate && dateError ? 'End date is required' : undefined}
+            />
+          </div>
+          {dateError && startDate && endDate && (
+            <p className="text-xs text-red-500">{dateError}</p>
+          )}
         </div>
 
         {/* Team members */}

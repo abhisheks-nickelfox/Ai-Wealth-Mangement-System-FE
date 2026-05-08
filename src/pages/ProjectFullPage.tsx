@@ -286,8 +286,9 @@ export default function ProjectFullPage() {
   const { firmId, projectId } = useParams<{ firmId: string; projectId: string }>();
   const navigate              = useNavigate();
   const [actionsOpen,     setActionsOpen]     = useState(false);
-  const [showAddSubTask,  setShowAddSubTask]  = useState(false);
-  const [subTaskParentId, setSubTaskParentId] = useState<string | undefined>();
+  const [showAddSubTask,       setShowAddSubTask]       = useState(false);
+  const [subTaskParentId,      setSubTaskParentId]      = useState<string | undefined>();
+  const [subTaskParentDeadline, setSubTaskParentDeadline] = useState<string | undefined>();
   const [selectedTask,    setSelectedTask]    = useState<Task | null>(null);
 
   const { data: firm    }               = useFirmDetail(firmId!);
@@ -309,6 +310,16 @@ export default function ProjectFullPage() {
       title: data.title, description: data.description, priority: data.priority,
       assignee_ids: data.assignee_ids, deadline: data.deadline || undefined, project_id: data.project_id,
     }});
+
+    // Clamp sub-task deadlines that now exceed the updated task deadline
+    if (data.deadline) {
+      const task = allTasks.find((t) => t.id === taskId);
+      const subUpdates = (task?.subtasks ?? [])
+        .filter((s) => s.deadline && s.deadline > data.deadline!)
+        .map((s) => updateTask.mutateAsync({ id: s.id, payload: { deadline: data.deadline } }));
+      await Promise.all(subUpdates);
+    }
+
     setSelectedTask(null);
   }
 
@@ -599,7 +610,7 @@ export default function ProjectFullPage() {
                     <div className="px-4 py-2 border-t border-[#F2F4F7] bg-[#FAFAFA]">
                       <button
                         type="button"
-                        onClick={() => { setSubTaskParentId(task.id); setShowAddSubTask(true); }}
+                        onClick={() => { setSubTaskParentId(task.id); setSubTaskParentDeadline(task.deadline ?? undefined); setShowAddSubTask(true); }}
                         className="group flex items-center gap-1.5 text-[12px] text-[#A4A7AE] hover:text-[#6941C6] transition-colors"
                       >
                         <span className="w-4 h-4 rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9] transition-colors">
@@ -640,6 +651,11 @@ export default function ProjectFullPage() {
         users={users}
         projects={projects}
         firmId={firmId}
+        parentTaskDeadline={
+          selectedTask?.parent_task_id
+            ? allTasks.find((t) => t.id === selectedTask.parent_task_id)?.deadline ?? undefined
+            : undefined
+        }
         onSave={handleSaveTask}
         viewLabel={selectedTask?.parent_task_id ? 'View Sub Task' : 'View Task'}
         onViewTask={selectedTask ? () => {
@@ -651,12 +667,13 @@ export default function ProjectFullPage() {
       {/* Add task modal */}
       <AddTaskModal
         open={showAddSubTask}
-        onClose={() => { setShowAddSubTask(false); setSubTaskParentId(undefined); }}
+        onClose={() => { setShowAddSubTask(false); setSubTaskParentId(undefined); setSubTaskParentDeadline(undefined); }}
         firmName={firm?.name}
         users={users}
         projects={projects}
         defaultProjectId={projectId}
         parentTaskId={subTaskParentId}
+        parentTaskDeadline={subTaskParentDeadline}
         onCreate={handleCreateSubTask}
       />
     </div>

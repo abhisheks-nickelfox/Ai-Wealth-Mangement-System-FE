@@ -57,8 +57,8 @@ export function applyInterceptors(instance: AxiosInstance): void {
         return Promise.reject(new Error(msg));
       }
 
-      // No response — server unreachable / no internet
-      const msg = 'Unable to connect. Please check your internet connection.';
+      // No response — backend not running or network issue
+      const msg = 'Unable to reach the server. Make sure the backend is running.';
       emitApiError(msg);
       return Promise.reject(new Error(msg));
     },

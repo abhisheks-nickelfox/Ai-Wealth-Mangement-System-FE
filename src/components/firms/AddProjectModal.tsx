@@ -23,6 +23,7 @@ interface AddProjectModalProps {
   firmName?: string;
   users?: User[];
   defaultWorkflowStatus?: string;
+  existingProjectNames?: string[];
   onCreate?: (data: ProjectFormData) => Promise<void>;
 }
 
@@ -60,6 +61,7 @@ export default function AddProjectModal({
   firmName = '',
   users = [],
   defaultWorkflowStatus = 'todo',
+  existingProjectNames = [],
   onCreate,
 }: AddProjectModalProps) {
   const [template,    setTemplate]    = useState('No Templates Required');
@@ -108,10 +110,28 @@ export default function AddProjectModal({
     <Formik
       initialValues={{ name: '' }}
       validationSchema={createProjectSchema}
+      validate={(values) => {
+        const errs: { name?: string } = {};
+        const trimmed = values.name.trim().toLowerCase();
+        if (trimmed && existingProjectNames.some((n) => n.trim().toLowerCase() === trimmed)) {
+          errs.name = 'A project with this name already exists for this firm';
+        }
+        return errs;
+      }}
       onSubmit={async (values, { setSubmitting }) => {
         setDateError('');
         setApiError('');
-        if (startDate && endDate && endDate < startDate) {
+        if (!startDate) {
+          setDateError('Start date is required.');
+          setSubmitting(false);
+          return;
+        }
+        if (!endDate) {
+          setDateError('End date is required.');
+          setSubmitting(false);
+          return;
+        }
+        if (endDate < startDate) {
           setDateError('End date must be on or after the start date.');
           setSubmitting(false);
           return;
@@ -240,6 +260,8 @@ export default function AddProjectModal({
                     value={startDate}
                     onChange={(e) => { setStartDate(e.target.value); setDateError(''); }}
                     rightIcon={<CalendarDate width={16} height={16} className="text-[#717680] pointer-events-none" />}
+                    required
+                    error={!startDate && dateError ? 'Required' : undefined}
                   />
 
                   <Input
@@ -248,6 +270,8 @@ export default function AddProjectModal({
                     value={endDate}
                     onChange={(e) => { setEndDate(e.target.value); setDateError(''); }}
                     rightIcon={<CalendarDate width={16} height={16} className="text-[#717680] pointer-events-none" />}
+                    required
+                    error={!endDate && dateError ? 'Required' : undefined}
                   />
 
                   <AssigneePicker users={users} selected={assigneeIds} onToggle={toggleAssignee} />

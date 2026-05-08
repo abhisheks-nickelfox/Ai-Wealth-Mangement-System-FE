@@ -13,7 +13,7 @@ import Avatar from '../ui/Avatar';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useUpdateProject } from '../../hooks/useFirms';
 import ProjectIcon from '../icons/ProjectIcon';
-import { TaskRow, StatusDot, COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU, PRIORITY_BADGE } from './TaskRow';
+import { TaskRow, StatusDot, COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU, PRIORITY_BADGE, formatDeadline } from './TaskRow';
 import type { Task, User, Project, Firm } from '../../lib/api';
 
 // ── Status group definition (shared with ProjectsTab) ────────────────────────
@@ -145,8 +145,15 @@ export function ProjectGroupRow({
           )}
         </div>
 
-        {/* Due date column — projects have no deadline, show dash */}
-        <div className={`${COL_DATE} text-[12px] text-[#C8CAD0]`}>—</div>
+        {/* Due date column — project end_date */}
+        {(() => {
+          const { text, overdue } = formatDeadline(project?.end_date ?? null);
+          return (
+            <div className={`${COL_DATE} text-[12px] shrink-0 ${overdue ? 'text-red-500 font-medium' : project?.end_date ? 'text-[#344054]' : 'text-[#C8CAD0]'}`}>
+              {text}
+            </div>
+          );
+        })()}
 
         {/* Priority column */}
         <div className={COL_PRIORITY}>

@@ -37,6 +37,8 @@ export interface AddTaskModalProps {
   defaultStatus?: string;
   /** When set, this modal creates a sub-task under this parent task ID. */
   parentTaskId?: string;
+  /** Deadline of the parent task — sub-task end date must not exceed it. */
+  parentTaskDeadline?: string;
   onCreate?: (data: TaskFormData) => Promise<void>;
 }
 
@@ -75,6 +77,7 @@ export default function AddTaskModal({
   defaultProjectId = '',
   defaultStatus,
   parentTaskId,
+  parentTaskDeadline,
   onCreate,
 }: AddTaskModalProps) {
   const { data: taskTypes = [] } = useTaskTypes();
@@ -146,13 +149,29 @@ export default function AddTaskModal({
       innerRef={formikRef}
       initialValues={taskInitialValues(defaultProjectId)}
       validationSchema={schema}
+      validate={(values) => {
+        const errs: Partial<Record<keyof typeof values, string>> = {};
+        if (values.endDate) {
+          if (values.projectId) {
+            const proj = projects.find((p) => p.id === values.projectId);
+            if (proj?.end_date && values.endDate > proj.end_date) {
+              errs.endDate = `End date cannot exceed project due date (${proj.end_date})`;
+            }
+          }
+          if (parentTaskDeadline && values.endDate > parentTaskDeadline) {
+            errs.endDate = `Sub-task due date cannot exceed parent task due date (${parentTaskDeadline})`;
+          }
+        }
+        return errs;
+      }}
       validateOnBlur
       validateOnChange={false}
       onSubmit={handleSubmit}
     >
       {({ values, errors, touched, isSubmitting, setFieldValue, resetForm }) => {
         const selectedTaskType    = taskTypes.find((t) => t.id === values.taskTypeId);
-        const selectedProjectName = projects.find((p) => p.id === values.projectId)?.name ?? '';
+        const selectedProject     = projects.find((p) => p.id === values.projectId);
+        const selectedProjectName = selectedProject?.name ?? '';
 
         return (
           <SlideOver
@@ -338,7 +357,9 @@ export default function AddTaskModal({
               <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-4 items-start">
 
                 <div>
-                  <label className="block text-sm font-medium text-[#344054] mb-1.5">Start date</label>
+                  <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                    Start date <span className="text-red-500">*</span>
+                  </label>
                   <Field name="startDate">
                     {({ field }: import('formik').FieldProps) => (
                       <Input
@@ -352,16 +373,32 @@ export default function AddTaskModal({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-[#344054] mb-1.5">End date</label>
+                  <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                    End date <span className="text-red-500">*</span>
+                    {(() => {
+                      const cap = parentTaskDeadline
+                        ? (selectedProject?.end_date && selectedProject.end_date < parentTaskDeadline ? selectedProject.end_date : parentTaskDeadline)
+                        : selectedProject?.end_date;
+                      return cap ? (
+                        <span className="ml-1 text-[11px] font-normal text-[#A4A7AE]">(max {cap})</span>
+                      ) : null;
+                    })()}
+                  </label>
                   <Field name="endDate">
-                    {({ field }: import('formik').FieldProps) => (
+                    {({ field }: import('formik').FieldProps) => {
+                      const maxDate = parentTaskDeadline
+                        ? (selectedProject?.end_date && selectedProject.end_date < parentTaskDeadline ? selectedProject.end_date : parentTaskDeadline)
+                        : selectedProject?.end_date;
+                      return (
                       <Input
                         {...field}
                         type="date"
+                        max={maxDate ?? undefined}
                         error={touched.endDate && errors.endDate ? errors.endDate : undefined}
                         rightIcon={<CalendarDate width={16} height={16} className="text-[#717680] pointer-events-none" />}
                       />
-                    )}
+                      );
+                    }}
                   </Field>
                 </div>
 

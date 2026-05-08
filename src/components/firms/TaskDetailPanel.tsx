@@ -23,15 +23,16 @@ export interface TaskDetailData {
 }
 
 interface TaskDetailPanelProps {
-  open:          boolean;
-  onClose:       () => void;
-  task:          Task | null;
-  users:         User[];
-  projects?:     Project[];
-  firmId?:       string;
-  onSave?:       (taskId: string, data: TaskDetailData) => Promise<void>;
-  onViewTask?:   () => void;
-  viewLabel?:    string;
+  open:                boolean;
+  onClose:             () => void;
+  task:                Task | null;
+  users:               User[];
+  projects?:           Project[];
+  firmId?:             string;
+  parentTaskDeadline?: string;
+  onSave?:             (taskId: string, data: TaskDetailData) => Promise<void>;
+  onViewTask?:         () => void;
+  viewLabel?:          string;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ export default function TaskDetailPanel({
   users,
   projects = [],
   firmId,
+  parentTaskDeadline,
   onSave,
   onViewTask,
   viewLabel = 'View Task',
@@ -81,7 +83,8 @@ export default function TaskDetailPanel({
   const [assigneeIds,  setAssigneeIds]  = useState<string[]>([]);
   const [deadline,     setDeadline]     = useState('');
   const [projectId,    setProjectId]    = useState<string | null>(null);
-  const [saving,       setSaving]       = useState(false);
+  const [saving,        setSaving]       = useState(false);
+  const [deadlineError, setDeadlineError] = useState('');
 
   const [showPriority, setShowPriority] = useState(false);
   const [showPicker,   setShowPicker]   = useState(false);
@@ -127,6 +130,22 @@ export default function TaskDetailPanel({
 
   const handleSave = async () => {
     if (!title.trim()) return;
+
+    if (deadline) {
+      if (parentTaskDeadline && deadline > parentTaskDeadline) {
+        setDeadlineError(`Sub-task due date cannot exceed the parent task due date (${parentTaskDeadline})`);
+        return;
+      }
+      if (projectId) {
+        const proj = projects.find((p) => p.id === projectId);
+        if (proj?.end_date && deadline > proj.end_date) {
+          setDeadlineError(`Task due date cannot exceed the project end date (${proj.end_date})`);
+          return;
+        }
+      }
+    }
+    setDeadlineError('');
+
     setSaving(true);
     try {
       await onSave?.(task.id, { title, description, priority, assignee_ids: assigneeIds, deadline, project_id: projectId });
@@ -283,12 +302,22 @@ export default function TaskDetailPanel({
         )}
 
         {/* Deadline */}
-        <Input
-          label="Deadline"
-          type="date"
-          value={deadline}
-          onChange={(e) => setDeadline(e.target.value)}
-        />
+        <div>
+          <Input
+            label="Deadline"
+            type="date"
+            value={deadline}
+            onChange={(e) => { setDeadline(e.target.value); setDeadlineError(''); }}
+            max={(() => {
+              const projEnd = projects.find((p) => p.id === projectId)?.end_date;
+              if (parentTaskDeadline && projEnd) return projEnd < parentTaskDeadline ? projEnd : parentTaskDeadline;
+              return parentTaskDeadline ?? projEnd ?? undefined;
+            })()}
+          />
+          {deadlineError && (
+            <p className="mt-1 text-xs text-red-500">{deadlineError}</p>
+          )}
+        </div>
 
         {/* Assignees — multi-select */}
         <div>

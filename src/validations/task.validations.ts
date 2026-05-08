@@ -30,10 +30,11 @@ export const createTaskSchema = (requireProject: boolean) =>
       .oneOf([...TASK_PRIORITIES], 'Select a valid priority')
       .required('Priority is required'),
 
-    startDate: Yup.string().optional(),
+    startDate: Yup.string()
+      .required('Start date is required'),
 
     endDate: Yup.string()
-      .optional()
+      .required('End date (due date) is required')
       .test(
         'end-after-start',
         'End date must be on or after start date',

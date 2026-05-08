@@ -85,7 +85,8 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
   const [showAddTask, setShowAddTask] = useState(false);
   const [addTaskDefaultProjectId, setAddTaskDefaultProjectId] = useState('');
   const [addTaskDefaultStatus, setAddTaskDefaultStatus] = useState<string | undefined>(undefined);
-  const [addTaskParentId, setAddTaskParentId] = useState<string | undefined>(undefined);
+  const [addTaskParentId,       setAddTaskParentId]       = useState<string | undefined>(undefined);
+  const [addTaskParentDeadline, setAddTaskParentDeadline] = useState<string | undefined>(undefined);
   const [selectedProject, setSelectedProject] = useState<ProjectDetail | null>(null);
   const qc = useQueryClient();
   const createProject = useCreateProject();
@@ -96,6 +97,18 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
 
   // Fetch real projects for this firm
   const { data: projects = [] } = useProjects(firm?.id);
+
+  // ── Date conflict state (move-to-project) ─────────────────────────────────
+  interface ConflictInfo {
+    taskId: string;
+    taskTitle: string;
+    taskDeadline: string;       // task's current deadline (YYYY-MM-DD)
+    targetProject: Project;     // project being moved into
+    newTaskDate: string;        // editable in the modal
+    newProjectDate: string;     // editable in the modal
+  }
+  const [dateConflict, setDateConflict] = useState<ConflictInfo | null>(null);
+  const [conflictSaving, setConflictSaving] = useState(false);
 
   // ── Delete task state ──────────────────────────────────────────────────────
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
@@ -112,6 +125,16 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
       deadline:     data.deadline || undefined,
       project_id:   data.project_id,
     }});
+
+    // Clamp sub-task deadlines that now exceed the updated task deadline
+    if (data.deadline) {
+      const task = tasks.find((t) => t.id === taskId);
+      const subUpdates = (task?.subtasks ?? [])
+        .filter((s) => s.deadline && s.deadline > data.deadline!)
+        .map((s) => updateTask.mutateAsync({ id: s.id, payload: { deadline: data.deadline } }));
+      await Promise.all(subUpdates);
+    }
+
     setSelectedTask(null);
   };
 
@@ -146,6 +169,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
       });
       setShowAddTask(false);
       setAddTaskParentId(undefined);
+      setAddTaskParentDeadline(undefined);
       notifyTab(data.parentTaskId ? 'Sub-task created successfully' : 'Task created successfully');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create task';
@@ -167,6 +191,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
     setAddTaskDefaultProjectId(parentTask.project_id ?? '');
     setAddTaskDefaultStatus(undefined);
     setAddTaskParentId(parentTask.id);
+    setAddTaskParentDeadline(parentTask.deadline ?? undefined);
     setShowAddTask(true);
   };
 
@@ -177,10 +202,73 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
    * adds if not present, removes if already present.
    */
   const handleProjectChange = async (taskId: string, projectId: string | null) => {
+    const targetProject = projects.find((p) => p.id === projectId);
+    const task = tasks.find((t) => t.id === taskId);
+
+    if (!targetProject?.end_date) {
+      try {
+        await updateTask.mutateAsync({ id: taskId, payload: { project_id: projectId } });
+      } catch (err) {
+        notifyTab(err instanceof Error ? err.message : 'Failed to update project');
+      }
+      return;
+    }
+
+    // Check if task deadline OR any sub-task deadline exceeds the target project end_date
+    const taskConflicts = task?.deadline && task.deadline > targetProject.end_date;
+    const subConflicts = (task?.subtasks ?? []).some(
+      (s) => s.deadline && s.deadline > targetProject.end_date,
+    );
+
+    if (taskConflicts || subConflicts) {
+      setDateConflict({
+        taskId,
+        taskTitle: task!.title,
+        taskDeadline: task?.deadline ?? targetProject.end_date,
+        targetProject,
+        newTaskDate: task?.deadline && task.deadline > targetProject.end_date
+          ? task.deadline
+          : targetProject.end_date,
+        newProjectDate: targetProject.end_date,
+      });
+      return;
+    }
+
     try {
       await updateTask.mutateAsync({ id: taskId, payload: { project_id: projectId } });
     } catch (err) {
       notifyTab(err instanceof Error ? err.message : 'Failed to update project');
+    }
+  };
+
+  const handleConflictConfirm = async () => {
+    if (!dateConflict) return;
+    setConflictSaving(true);
+    try {
+      const { taskId, targetProject, newTaskDate, newProjectDate } = dateConflict;
+
+      // Update task: assign to project + clamp deadline
+      await updateTask.mutateAsync({ id: taskId, payload: {
+        project_id: targetProject.id,
+        deadline: newTaskDate,
+      }});
+
+      // Clamp any sub-task deadlines that exceed newTaskDate
+      const task = tasks.find((t) => t.id === taskId);
+      const subUpdates = (task?.subtasks ?? [])
+        .filter((s) => s.deadline && s.deadline > newTaskDate)
+        .map((s) => updateTask.mutateAsync({ id: s.id, payload: { deadline: newTaskDate } }));
+      await Promise.all(subUpdates);
+
+      // Update project end_date if user changed it
+      if (newProjectDate !== targetProject.end_date) {
+        await updateProject.mutateAsync({ id: targetProject.id, payload: { end_date: newProjectDate } });
+      }
+      setDateConflict(null);
+    } catch (err) {
+      notifyTab(err instanceof Error ? err.message : 'Failed to resolve conflict');
+    } finally {
+      setConflictSaving(false);
     }
   };
 
@@ -238,6 +326,10 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
     }
   };
 
+  const PROJ_PRIORITY_MAP: Record<string, 'high' | 'medium' | 'low'> = {
+    High: 'high', Medium: 'medium', Low: 'low',
+  };
+
   const handleCreateProject = async (data: import('./AddProjectModal').ProjectFormData) => {
     if (!firm?.id) return;
     await createProject.mutateAsync({
@@ -246,6 +338,9 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
       description:     data.description || undefined,
       member_ids:      data.assigneeIds,
       workflow_status: data.workflowStatus as import('../../lib/api').Project['workflow_status'],
+      start_date:      data.startDate || undefined,
+      end_date:        data.endDate   || undefined,
+      priority:        PROJ_PRIORITY_MAP[data.priority] ?? 'medium',
     });
   };
 
@@ -569,19 +664,21 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         firmName={firm?.name}
         users={users}
         defaultWorkflowStatus={addProjectWorkflowStatus}
+        existingProjectNames={projects.map((p) => p.name)}
         onCreate={handleCreateProject}
       />
 
       {/* Add Task modal */}
       <AddTaskModal
         open={showAddTask}
-        onClose={() => { setShowAddTask(false); setAddTaskParentId(undefined); }}
+        onClose={() => { setShowAddTask(false); setAddTaskParentId(undefined); setAddTaskParentDeadline(undefined); }}
         firmName={firm?.name}
         users={users}
         projects={projects}
         defaultProjectId={addTaskDefaultProjectId}
         defaultStatus={addTaskDefaultStatus}
         parentTaskId={addTaskParentId}
+        parentTaskDeadline={addTaskParentDeadline}
         onCreate={handleCreateTask}
       />
 
@@ -592,6 +689,11 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         task={selectedTask}
         users={users}
         projects={projects}
+        parentTaskDeadline={
+          selectedTask?.parent_task_id
+            ? tasks.find((t) => t.id === selectedTask.parent_task_id)?.deadline ?? undefined
+            : undefined
+        }
         onSave={handleSaveTask}
         viewLabel={selectedTask?.parent_task_id ? 'View Sub Task' : 'View Task'}
         onViewTask={selectedTask ? () => {
@@ -624,6 +726,25 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
               priority:        updated.priority,
             },
           });
+
+          // If end_date was reduced, clamp any task/subtask deadlines that now exceed it
+          if (updated.endDate) {
+            const newEndDate = updated.endDate;
+            const projectTasks = tasks.filter((t) => t.project_id === updated.id);
+            const clamped: Promise<unknown>[] = [];
+            for (const t of projectTasks) {
+              if (t.deadline && t.deadline > newEndDate) {
+                clamped.push(updateTask.mutateAsync({ id: t.id, payload: { deadline: newEndDate } }));
+              }
+              for (const sub of t.subtasks ?? []) {
+                if (sub.deadline && sub.deadline > newEndDate) {
+                  clamped.push(updateTask.mutateAsync({ id: sub.id, payload: { deadline: newEndDate } }));
+                }
+              }
+            }
+            await Promise.all(clamped);
+          }
+
           setSelectedProject(null);
         }}
       />
@@ -643,6 +764,71 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         onConfirm={handleDeleteTaskConfirm}
         onClose={() => setTaskToDelete(null)}
       />
+
+      {/* Date conflict modal — shown when moving a task whose deadline > project end_date */}
+      {dateConflict && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6 flex flex-col gap-5">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-[16px] font-semibold text-[#181D27]">Date Conflict</h2>
+              <p className="text-[13px] text-[#535862]">
+                <span className="font-medium text-[#181D27]">"{dateConflict.taskTitle}"</span> has a due date of{' '}
+                <span className="text-red-500 font-medium">{dateConflict.taskDeadline}</span>, which exceeds the project end date of{' '}
+                <span className="font-medium">{dateConflict.targetProject.end_date}</span>. Update the dates to proceed.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                  Task due date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={dateConflict.newTaskDate}
+                  max={dateConflict.newProjectDate}
+                  onChange={(e) => setDateConflict((prev) => prev ? { ...prev, newTaskDate: e.target.value } : null)}
+                  className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent"
+                />
+                {dateConflict.newTaskDate > dateConflict.newProjectDate && (
+                  <p className="mt-1 text-xs text-red-500">Task due date must not exceed project end date</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                  Project end date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={dateConflict.newProjectDate}
+                  min={dateConflict.newTaskDate}
+                  onChange={(e) => setDateConflict((prev) => prev ? { ...prev, newProjectDate: e.target.value } : null)}
+                  className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDateConflict(null)}
+                className="px-4 py-2.5 rounded-lg border border-[#D5D7DA] bg-white text-sm font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={conflictSaving || dateConflict.newTaskDate > dateConflict.newProjectDate}
+                onClick={handleConflictConfirm}
+                className="px-4 py-2.5 rounded-lg bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+              >
+                {conflictSaving ? 'Saving…' : 'Update & Move'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete project modal — with task selection */}
       <DeleteProjectModal
