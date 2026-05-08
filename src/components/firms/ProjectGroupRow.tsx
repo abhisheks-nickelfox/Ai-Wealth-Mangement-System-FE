@@ -78,6 +78,8 @@ export function ProjectGroupRow({
     await updateProject.mutateAsync({ id: projectId, payload: { member_ids: next } }).catch(() => {});
   }
 
+  console.log('[ProjectGroupRow]', project?.name, { end_date: project?.end_date, start_date: project?.start_date, priority: project?.priority });
+
   const memberAvatars = (project?.members ?? []).map((m) => ({ name: m.name, src: m.avatar_url ?? undefined }));
   const workflowBadge = project ? (WORKFLOW_BADGE[project.workflow_status] ?? { label: project.workflow_status, style: 'bg-gray-100 text-gray-500' }) : null;
   const priorityStyle = project ? (PRIORITY_BADGE[project.priority] ?? 'bg-gray-100 text-gray-500') : null;
