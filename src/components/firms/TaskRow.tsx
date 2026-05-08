@@ -135,8 +135,6 @@ export function TaskRow({
   const priorityStyle = PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500';
   const statusInfo    = TASK_STATUS_BADGE[task.status] ?? { label: task.status, style: 'bg-gray-100 text-gray-500' };
 
-  // Left indent: base 16px (pl-4) + 24px per depth level
-  const pl = indented ? `pl-[${40 + depth * 20}px]` : 'pl-4';
 
   return (
     <>

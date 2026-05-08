@@ -24,7 +24,6 @@ import TaskDetailPanel from '../components/firms/TaskDetailPanel';
 import type { TaskFormData } from '../components/firms/AddTaskModal';
 import type { TaskDetailData } from '../components/firms/TaskDetailPanel';
 import {
-  TASK_STATUS_BADGE,
   PRIORITY_BADGE,
   StatusDot,
   formatDeadline,
