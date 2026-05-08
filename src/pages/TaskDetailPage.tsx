@@ -39,6 +39,22 @@ import TaskIcon from '../components/icons/TaskIcon';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Calculates a fixed-position { top, left } for a dropdown below an anchor rect,
+ *  clamping horizontally to stay inside the viewport and flipping above if needed. */
+function calcPickerPos(rect: DOMRect, dropdownW = 230, dropdownH = 280) {
+  const gap = 6;
+  const margin = 8;
+  // Prefer right-aligned with anchor; clamp so it doesn't overflow left or right
+  let left = rect.right - dropdownW;
+  if (left < margin) left = margin;
+  if (left + dropdownW > window.innerWidth - margin) left = window.innerWidth - dropdownW - margin;
+  // Prefer below; flip above if not enough room
+  const top = rect.bottom + gap + dropdownH > window.innerHeight - margin
+    ? rect.top - gap - dropdownH
+    : rect.bottom + gap;
+  return { top, left };
+}
+
 function formatTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
@@ -299,8 +315,15 @@ function SubTaskRow({
   onUpdateAssignees?: (taskId: string, ids: string[]) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const pickerRef                   = useRef<HTMLDivElement>(null);
-  useClickOutside(pickerRef, () => setPickerOpen(false));
+  const [pickerPos,  setPickerPos]  = useState<{ top: number; left: number } | null>(null);
+  const anchorRef                   = useRef<HTMLDivElement>(null);
+
+  function openPicker(e: React.MouseEvent) {
+    e.stopPropagation();
+    const rect = anchorRef.current?.getBoundingClientRect();
+    if (rect) setPickerPos(calcPickerPos(rect, 230, 280));
+    setPickerOpen((v) => !v);
+  }
 
   const assignees     = task.assignees ?? [];
   const { text: dateText, overdue } = formatDeadline(task.deadline ?? null);
@@ -332,43 +355,50 @@ function SubTaskRow({
         })()}
       </div>
 
-      {/* Assignee — fixed 120 px, inline picker */}
+      {/* Assignee — fixed 120 px, fixed-position picker */}
       <div
-        ref={pickerRef}
-        className="w-[120px] flex justify-center items-center shrink-0 relative px-3"
+        ref={anchorRef}
+        className="w-[120px] flex justify-center items-center shrink-0 px-3"
         onClick={(e) => e.stopPropagation()}
       >
         <AvatarStack
           avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
           max={3}
           showAddButton={true}
-          onAdd={() => setPickerOpen((v) => !v)}
+          onAdd={openPicker}
         />
-        {pickerOpen && (
-          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-3 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-xl py-2.5 min-w-[230px] max-h-64 overflow-y-auto">
-            {users.map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                onClick={() => {
-                  const current = assignees.map((a) => a.id);
-                  const next = current.includes(u.id)
-                    ? current.filter((id) => id !== u.id)
-                    : [...current, u.id];
-                  onUpdateAssignees?.(task.id, next);
-                }}
-                className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-[#F9FAFB] transition-colors"
-              >
-                <Avatar name={u.name} src={u.avatar_url ?? undefined} size="sm" />
-                <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
-                {assignees.some((a) => a.id === u.id) && (
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
-                    <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </button>
-            ))}
-          </div>
+        {pickerOpen && pickerPos && (
+          <>
+            <div className="fixed inset-0 z-[998]" onClick={() => setPickerOpen(false)} />
+            <div
+              style={{ position: 'fixed', top: pickerPos.top, left: pickerPos.left, zIndex: 999 }}
+              className="bg-white border border-[#E9EAEB] rounded-xl shadow-xl py-2.5 min-w-[230px] max-h-64 overflow-y-auto"
+            >
+              {users.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const current = assignees.map((a) => a.id);
+                    const next = current.includes(u.id)
+                      ? current.filter((id) => id !== u.id)
+                      : [...current, u.id];
+                    onUpdateAssignees?.(task.id, next);
+                  }}
+                  className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-[#F9FAFB] transition-colors"
+                >
+                  <Avatar name={u.name} src={u.avatar_url ?? undefined} size="sm" />
+                  <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
+                  {assignees.some((a) => a.id === u.id) && (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
+                      <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -384,6 +414,76 @@ function SubTaskRow({
         </span>
       </div>
     </div>
+  );
+}
+
+// ── Attachment helpers ────────────────────────────────────────────────────────
+
+interface Attachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+  uploading: boolean;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function FileTypeIcon({ type, name }: { type: string; name: string }) {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  if (type.startsWith('image/')) {
+    return (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <rect width="20" height="20" rx="4" fill="#ECFDF3"/>
+        <path d="M4 14l4-4 2.5 2.5L14 8l2 2v4H4z" fill="#17B26A" opacity=".3"/>
+        <circle cx="7" cy="7.5" r="1.5" fill="#17B26A"/>
+        <rect x="3" y="3" width="14" height="14" rx="2" stroke="#17B26A" strokeWidth="1.2" fill="none"/>
+      </svg>
+    );
+  }
+  if (type === 'application/pdf' || ext === 'pdf') {
+    return (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <rect width="20" height="20" rx="4" fill="#FEF3F2"/>
+        <path d="M5 3h7l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" fill="#FEE4E2" stroke="#F04438" strokeWidth="1.2"/>
+        <path d="M12 3v4h4" stroke="#F04438" strokeWidth="1.2"/>
+        <path d="M7 11h6M7 13.5h4" stroke="#F04438" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    );
+  }
+  if (['doc','docx','odt','rtf','txt'].includes(ext)) {
+    return (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <rect width="20" height="20" rx="4" fill="#EFF8FF"/>
+        <path d="M5 3h7l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" fill="#D1E9FF" stroke="#2E90FA" strokeWidth="1.2"/>
+        <path d="M12 3v4h4" stroke="#2E90FA" strokeWidth="1.2"/>
+        <path d="M7 11h6M7 13.5h4" stroke="#2E90FA" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    );
+  }
+  if (['xls','xlsx','csv'].includes(ext)) {
+    return (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <rect width="20" height="20" rx="4" fill="#F0FDF4"/>
+        <path d="M5 3h7l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" fill="#DCFCE7" stroke="#16A34A" strokeWidth="1.2"/>
+        <path d="M12 3v4h4" stroke="#16A34A" strokeWidth="1.2"/>
+        <path d="M7 10h6v5H7z" stroke="#16A34A" strokeWidth="1.2"/>
+        <path d="M10 10v5M7 12.5h6" stroke="#16A34A" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    );
+  }
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <rect width="20" height="20" rx="4" fill="#F4F3FF"/>
+      <path d="M5 3h7l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" fill="#EDE9FE" stroke="#7F56D9" strokeWidth="1.2"/>
+      <path d="M12 3v4h4" stroke="#7F56D9" strokeWidth="1.2"/>
+      <path d="M7 11h6M7 13.5h4" stroke="#7F56D9" strokeWidth="1.2" strokeLinecap="round"/>
+    </svg>
   );
 }
 
@@ -410,6 +510,36 @@ export default function TaskDetailPage() {
   const [selectedSubTask,    setSelectedSubTask]    = useState<import('../lib/api').Task | null>(null);
   const [showAddSubTask,     setShowAddSubTask]     = useState(false);
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
+  const [attachments,        setAttachments]        = useState<Attachment[]>([]);
+  const [dragOver,           setDragOver]           = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleFiles(files: FileList | null) {
+    if (!files) return;
+    const incoming = Array.from(files).map((f) => ({
+      id: `${Date.now()}-${Math.random()}`,
+      name: f.name,
+      size: f.size,
+      type: f.type,
+      url: URL.createObjectURL(f),
+      uploading: true,
+    }));
+    setAttachments((prev) => [...prev, ...incoming]);
+    // Simulate upload completion after 1.2 s
+    setTimeout(() => {
+      setAttachments((prev) =>
+        prev.map((a) => incoming.some((i) => i.id === a.id) ? { ...a, uploading: false } : a),
+      );
+    }, 1200);
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((prev) => {
+      const found = prev.find((a) => a.id === id);
+      if (found) URL.revokeObjectURL(found.url);
+      return prev.filter((a) => a.id !== id);
+    });
+  }
   const assigneePickerRef = useRef<HTMLDivElement>(null);
   useClickOutside(assigneePickerRef, () => setAssigneePickerOpen(false));
 

@@ -570,7 +570,52 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
       {/* Scrollable sections body */}
       <div className="flex-1 overflow-y-auto">
 
-        {STATUS_GROUPS.map((group) => {
+        {/* No-projects empty state — shown before any project is created */}
+        {projects.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full gap-4 py-24">
+            <div className="w-12 h-12 rounded-xl bg-[#F4F3FF] flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M3 7C3 5.89543 3.89543 5 5 5H9.58579C9.851 5 10.1054 5.10536 10.2929 5.29289L11.7071 6.70711C11.8946 6.89464 12.149 7 12.4142 7H19C20.1046 7 21 7.89543 21 9V17C21 18.1046 20.1046 19 19 19H5C3.89543 19 3 18.1046 3 17V7Z" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M12 11V15M10 13H14" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div className="flex flex-col items-center gap-1 text-center">
+              <p className="text-[15px] font-semibold text-[#181D27]">No projects yet</p>
+              <p className="text-[13px] text-[#717680]">Create your first project to start organizing tasks</p>
+            </div>
+            <button
+              onClick={() => setShowAddProject(true)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-[#7F56D9] hover:bg-[#6941C6] text-white text-[13px] font-semibold transition-colors"
+            >
+              <Plus width={14} height={14} aria-hidden="true" />
+              Add Project
+            </button>
+          </div>
+        )}
+
+        {/* No-tasks empty state — task view, projects exist but no tasks yet */}
+        {viewMode === 'task' && projects.length > 0 && tasks.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full gap-4 py-24">
+            <div className="w-12 h-12 rounded-xl bg-[#F4F3FF] flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V7C19 5.89543 18.1046 5 17 5H15M9 5C9 5.55228 9.44772 6 10 6H14C14.5523 6 15 5.55228 15 5M9 5C9 4.44772 9.44772 4 10 4H14C14.5523 4 15 4.44772 15 5M12 12H15M12 16H15M9 12H9.01M9 16H9.01" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div className="flex flex-col items-center gap-1 text-center">
+              <p className="text-[15px] font-semibold text-[#181D27]">No tasks yet</p>
+              <p className="text-[13px] text-[#717680]">Add your first task to get started</p>
+            </div>
+            <button
+              onClick={() => openAddTask(null)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-[#7F56D9] hover:bg-[#6941C6] text-white text-[13px] font-semibold transition-colors"
+            >
+              <Plus width={14} height={14} aria-hidden="true" />
+              Add Task
+            </button>
+          </div>
+        )}
+
+        {projects.length > 0 && (viewMode === 'project' || tasks.length > 0) && STATUS_GROUPS.map((group) => {
           const groupTasks = tasksByGroup.get(group.id) ?? [];
           // Empty projects (no tasks) land in the section matching their workflow_status
           const emptyProjects = viewMode === 'project'

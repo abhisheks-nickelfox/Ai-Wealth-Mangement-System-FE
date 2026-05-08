@@ -10,8 +10,18 @@ import {
 import DropdownMenu from '../ui/DropdownMenu';
 import AvatarStack from '../ui/AvatarStack';
 import Avatar from '../ui/Avatar';
-import { useClickOutside } from '../../hooks/useClickOutside';
 import { useUpdateProject } from '../../hooks/useFirms';
+
+function calcPickerPos(rect: DOMRect, dropdownW = 200, dropdownH = 260) {
+  const gap = 6; const margin = 8;
+  let left = rect.right - dropdownW;
+  if (left < margin) left = margin;
+  if (left + dropdownW > window.innerWidth - margin) left = window.innerWidth - dropdownW - margin;
+  const top = rect.bottom + gap + dropdownH > window.innerHeight - margin
+    ? rect.top - gap - dropdownH
+    : rect.bottom + gap;
+  return { top, left };
+}
 import ProjectIcon from '../icons/ProjectIcon';
 import { TaskRow, StatusDot, COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU, PRIORITY_BADGE, formatDeadline } from './TaskRow';
 import type { Task, User, Project, Firm } from '../../lib/api';
@@ -63,9 +73,16 @@ export function ProjectGroupRow({
   const [expanded,    setExpanded]    = useState(true);
   const [contextOpen, setContextOpen] = useState(false);
   const [pickerOpen,  setPickerOpen]  = useState(false);
-  const pickerRef  = useRef<HTMLDivElement>(null);
+  const [pickerPos,   setPickerPos]   = useState<{ top: number; left: number } | null>(null);
+  const anchorRef  = useRef<HTMLDivElement>(null);
   const updateProject = useUpdateProject();
-  useClickOutside(pickerRef, () => setPickerOpen(false));
+
+  function openMemberPicker(e: React.MouseEvent) {
+    e.stopPropagation();
+    const rect = anchorRef.current?.getBoundingClientRect();
+    if (rect) setPickerPos(calcPickerPos(rect, 200, 260));
+    setPickerOpen((v) => !v);
+  }
 
   const label = project?.name ?? projectId ?? 'Project';
   const currentMemberIds = useMemo(() => project?.members.map((m) => m.id) ?? [], [project]);
@@ -115,7 +132,7 @@ export function ProjectGroupRow({
 
         {/* Assignee column: member avatars + picker */}
         <div
-          ref={pickerRef}
+          ref={anchorRef}
           className={`${COL_ASSIGNEE} relative flex justify-center`}
           onClick={(e) => e.stopPropagation()}
         >
@@ -123,27 +140,33 @@ export function ProjectGroupRow({
             avatars={memberAvatars}
             max={3}
             showAddButton={true}
-            onAdd={() => setPickerOpen((v) => !v)}
+            onAdd={openMemberPicker}
           />
-          {pickerOpen && (
-            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[200px] max-h-60 overflow-y-auto">
-              {Array.from(usersMap.values()).map((u) => (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => toggleMember(u.id)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
-                >
-                  <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
-                  <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
-                  {currentMemberIds.includes(u.id) && (
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                      <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
+          {pickerOpen && pickerPos && (
+            <>
+              <div className="fixed inset-0 z-[998]" onClick={() => setPickerOpen(false)} />
+              <div
+                style={{ position: 'fixed', top: pickerPos.top, left: pickerPos.left, zIndex: 999 }}
+                className="bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[200px] max-h-60 overflow-y-auto"
+              >
+                {Array.from(usersMap.values()).map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggleMember(u.id); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                  >
+                    <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+                    <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
+                    {currentMemberIds.includes(u.id) && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                        <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
 

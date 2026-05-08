@@ -15,6 +15,17 @@ import ProjectIcon from '../icons/ProjectIcon';
 import TaskIcon from '../icons/TaskIcon';
 import type { Task, User, Project } from '../../lib/api';
 
+function calcPickerPos(rect: DOMRect, dropdownW = 200, dropdownH = 260) {
+  const gap = 6; const margin = 8;
+  let left = rect.right - dropdownW;
+  if (left < margin) left = margin;
+  if (left + dropdownW > window.innerWidth - margin) left = window.innerWidth - dropdownW - margin;
+  const top = rect.bottom + gap + dropdownH > window.innerHeight - margin
+    ? rect.top - gap - dropdownH
+    : rect.bottom + gap;
+  return { top, left };
+}
+
 // ── Shared column widths (imported by ProjectGroupRow) ────────────────────────
 export const COL_ASSIGNEE = 'w-[140px] shrink-0';
 export const COL_DATE     = 'w-[110px] shrink-0';
@@ -107,13 +118,20 @@ export function TaskRow({
 }: TaskRowProps) {
   const [contextOpen,       setContextOpen]       = useState(false);
   const [pickerOpen,        setPickerOpen]        = useState(false);
+  const [pickerPos,         setPickerPos]         = useState<{ top: number; left: number } | null>(null);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [subExpanded,       setSubExpanded]       = useState(true);
 
-  const pickerRef        = useRef<HTMLDivElement>(null);
-  const projectPickerRef = useRef<HTMLDivElement>(null);
-  useClickOutside(pickerRef,        () => setPickerOpen(false));
+  const assigneeAnchorRef = useRef<HTMLDivElement>(null);
+  const projectPickerRef  = useRef<HTMLDivElement>(null);
   useClickOutside(projectPickerRef, () => setProjectPickerOpen(false));
+
+  function openAssigneePicker(e: React.MouseEvent) {
+    e.stopPropagation();
+    const rect = assigneeAnchorRef.current?.getBoundingClientRect();
+    if (rect) setPickerPos(calcPickerPos(rect, 200, 260));
+    setPickerOpen((v) => !v);
+  }
 
   const hasSubTasks = (task.subtasks?.length ?? 0) > 0;
   const isSubTask   = depth > 0;
@@ -177,13 +195,13 @@ export function TaskRow({
 
         {/* Assignee column */}
         <div
-          ref={pickerRef}
+          ref={assigneeAnchorRef}
           className={`${COL_ASSIGNEE} relative flex justify-center`}
           onClick={(e) => e.stopPropagation()}
         >
           <button
             type="button"
-            onClick={() => setPickerOpen((v) => !v)}
+            onClick={openAssigneePicker}
             className={`transition-opacity ${currentAssignees.length === 0 ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}
             aria-label="Assign"
           >
@@ -194,25 +212,31 @@ export function TaskRow({
               addAs="div"
             />
           </button>
-          {pickerOpen && (
-            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[200px] max-h-52 overflow-y-auto">
-              {Array.from(usersMap.values()).map((u) => (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => { onAssigneeChange?.(task.id, u.id); setPickerOpen(false); }}
-                  className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
-                >
-                  <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
-                  <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
-                  {currentAssigneeIds.includes(u.id) && (
-                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-                      <path d="M2 6.5L5 9.5L11 3" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
+          {pickerOpen && pickerPos && (
+            <>
+              <div className="fixed inset-0 z-[998]" onClick={() => setPickerOpen(false)} />
+              <div
+                style={{ position: 'fixed', top: pickerPos.top, left: pickerPos.left, zIndex: 999 }}
+                className="bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[200px] max-h-52 overflow-y-auto"
+              >
+                {Array.from(usersMap.values()).map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onAssigneeChange?.(task.id, u.id); setPickerOpen(false); }}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                  >
+                    <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+                    <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
+                    {currentAssigneeIds.includes(u.id) && (
+                      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                        <path d="M2 6.5L5 9.5L11 3" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
