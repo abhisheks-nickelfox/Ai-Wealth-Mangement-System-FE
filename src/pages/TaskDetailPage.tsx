@@ -16,9 +16,11 @@ import Avatar from '../components/ui/Avatar';
 import AvatarStack from '../components/ui/AvatarStack';
 import DropdownMenu from '../components/ui/DropdownMenu';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
-import { useTasksByFirm } from '../hooks/useTasks';
+import { useQuery } from '@tanstack/react-query';
+import { tasksApi } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 import { useMessages, useSendMessage } from '../hooks/useMessages';
-import { useFirmDetail } from '../hooks/useFirms';
+import { useFirmDetail, useProjects } from '../hooks/useFirms';
 import {
   TASK_STATUS_BADGE,
   PRIORITY_BADGE,
@@ -274,16 +276,19 @@ function ActivityPanel({ taskId }: ActivityPanelProps) {
 
 // ── Sub-task row ──────────────────────────────────────────────────────────────
 
-function SubTaskRow({ task }: { task: Task }) {
+function SubTaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
   const { text: dateText, overdue } = formatDeadline(task.deadline ?? null);
   const priorityStyle = PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500';
   const assignees = task.assignees ?? [];
 
   return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-[#E9EAEB] last:border-0">
+    <div
+      className="flex items-center gap-3 px-3 py-2.5 border-b border-[#E9EAEB] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
+      onClick={onClick}
+    >
       <StatusDot status={task.status} />
       <Dataflow03 width={13} height={13} className="text-[#A4A7AE] shrink-0" aria-hidden="true" />
-      <span className="flex-1 min-w-0 text-[13px] text-[#181D27] truncate">{task.title}</span>
+      <span className="flex-1 min-w-0 text-[13px] text-[#181D27] truncate group-hover:text-[#6941C6] transition-colors">{task.title}</span>
       {assignees.length > 0 && (
         <AvatarStack
           avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
@@ -322,10 +327,24 @@ export default function TaskDetailPage() {
   const [actionsOpen, setActionsOpen] = useState(false);
 
   const { data: firm,  isLoading: firmLoading  } = useFirmDetail(firmId!);
-  const { data: tasks = [], isLoading: tasksLoading } = useTasksByFirm(firmId!);
+  const { data: task,  isLoading: taskLoading  } = useQuery<Task>({
+    queryKey: queryKeys.tasks.detail(taskId!),
+    queryFn:  () => tasksApi.get(taskId!),
+    enabled:  !!taskId,
+  });
+  const { data: projects = [] } = useProjects(firmId);
 
-  const task: Task | null = tasks.find((t) => t.id === taskId) ?? null;
-  const loading = firmLoading || tasksLoading;
+  const isSubTask   = !!task?.parent_task_id;
+  const taskProject = task?.project_id ? projects.find((p) => p.id === task.project_id) ?? null : null;
+
+  // Fetch parent task for breadcrumb when viewing a sub-task
+  const { data: parentTask } = useQuery<Task>({
+    queryKey: queryKeys.tasks.detail(task?.parent_task_id ?? ''),
+    queryFn:  () => tasksApi.get(task!.parent_task_id!),
+    enabled:  isSubTask,
+  });
+
+  const loading = firmLoading || taskLoading;
 
   const statusInfo  = task ? (TASK_STATUS_BADGE[task.status]  ?? { label: task.status,  style: 'bg-gray-100 text-gray-500' }) : null;
   const priorityStyle = task ? (PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500') : null;
@@ -381,16 +400,56 @@ export default function TaskDetailPage() {
         {/* Header */}
         <div className="px-8 pt-7 pb-0">
           {/* Breadcrumb */}
-          <nav className="flex items-center gap-1.5 text-[12px] text-[#717680] mb-5" aria-label="Breadcrumb">
+          <nav className="flex items-center gap-1.5 text-[12px] text-[#717680] mb-5 flex-wrap" aria-label="Breadcrumb">
+            <button
+              type="button"
+              onClick={() => navigate('/firms')}
+              className="hover:text-[#7F56D9] transition-colors font-medium"
+            >
+              Firms
+            </button>
+            <ChevronRight width={12} height={12} className="text-[#C8CDD6]" aria-hidden="true" />
             <button
               type="button"
               onClick={() => navigate(`/firms/${firmId}`)}
-              className="hover:text-[#7F56D9] transition-colors font-medium"
+              className="hover:text-[#7F56D9] transition-colors font-medium truncate max-w-[140px]"
             >
-              {firm?.name ?? 'Firms'}
+              {firm?.name ?? '...'}
             </button>
+            {taskProject && (
+              <>
+                <ChevronRight width={12} height={12} className="text-[#C8CDD6]" aria-hidden="true" />
+                <button
+                  type="button"
+                  onClick={() => navigate(`/firms/${firmId}`)}
+                  className="hover:text-[#7F56D9] transition-colors font-medium"
+                >
+                  Projects
+                </button>
+                <ChevronRight width={12} height={12} className="text-[#C8CDD6]" aria-hidden="true" />
+                <button
+                  type="button"
+                  onClick={() => navigate(`/firms/${firmId}/projects/${taskProject.id}`)}
+                  className="hover:text-[#7F56D9] transition-colors font-medium truncate max-w-[140px]"
+                >
+                  {taskProject.name}
+                </button>
+              </>
+            )}
+            {isSubTask && parentTask && (
+              <>
+                <ChevronRight width={12} height={12} className="text-[#C8CDD6]" aria-hidden="true" />
+                <button
+                  type="button"
+                  onClick={() => navigate(`/firms/${firmId}/tasks/${parentTask.id}`)}
+                  className="hover:text-[#7F56D9] transition-colors font-medium truncate max-w-[140px]"
+                >
+                  {parentTask.title}
+                </button>
+              </>
+            )}
             <ChevronRight width={12} height={12} className="text-[#C8CDD6]" aria-hidden="true" />
-            <span className="truncate max-w-[320px] text-[#414651] font-medium">{task.title}</span>
+            <span className="truncate max-w-[200px] text-[#414651] font-semibold">{task.title}</span>
           </nav>
 
           {/* Title row */}
@@ -538,40 +597,41 @@ export default function TaskDetailPage() {
           </div>
         </section>
 
-        {/* ── Sub Tasks ── */}
-        <section className="px-8 py-5" aria-labelledby="subtasks-heading">
-          <div className="flex items-center gap-2 mb-3">
-            <h2 id="subtasks-heading" className="text-[12px] font-semibold uppercase tracking-wider text-[#A4A7AE]">
-              Sub Tasks
-            </h2>
-            {subTasks.length > 0 && (
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#F4F3FF] text-[10px] font-bold text-[#7F56D9]">
-                {subTasks.length}
-              </span>
-            )}
-          </div>
-
-          {subTasks.length > 0 ? (
-            <div className="rounded-lg border border-[#E9EAEB] overflow-hidden">
-              {subTasks.map((sub) => (
-                <SubTaskRow key={sub.id} task={sub} />
-              ))}
+        {/* ── Sub Tasks — only shown for top-level tasks, not sub-tasks ── */}
+        {!isSubTask && (
+          <section className="px-8 py-5" aria-labelledby="subtasks-heading">
+            <div className="flex items-center gap-2 mb-3">
+              <h2 id="subtasks-heading" className="text-[12px] font-semibold uppercase tracking-wider text-[#A4A7AE]">
+                Sub Tasks
+              </h2>
+              {subTasks.length > 0 && (
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#F4F3FF] text-[10px] font-bold text-[#7F56D9]">
+                  {subTasks.length}
+                </span>
+              )}
             </div>
-          ) : (
-            <p className="text-[13px] text-[#A4A7AE] mb-3">No sub-tasks yet.</p>
-          )}
 
-          {/* Add Sub-task button */}
-          <button
-            type="button"
-            className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[#7F56D9] text-[#7F56D9] text-[13px] font-semibold hover:bg-[#F4F3FF] transition-colors"
-          >
-            <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
-              <Plus width={9} height={9} aria-hidden="true" />
-            </span>
-            Add Sub-task
-          </button>
-        </section>
+            {subTasks.length > 0 ? (
+              <div className="rounded-lg border border-[#E9EAEB] overflow-hidden">
+                {subTasks.map((sub) => (
+                  <SubTaskRow key={sub.id} task={sub} onClick={() => navigate(`/firms/${firmId}/tasks/${sub.id}`)} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] text-[#A4A7AE] mb-3">No sub-tasks yet.</p>
+            )}
+
+            <button
+              type="button"
+              className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[#7F56D9] text-[#7F56D9] text-[13px] font-semibold hover:bg-[#F4F3FF] transition-colors"
+            >
+              <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
+                <Plus width={9} height={9} aria-hidden="true" />
+              </span>
+              Add Sub-task
+            </button>
+          </section>
+        )}
       </div>
 
       {/* ── Right column: activity panel ── */}

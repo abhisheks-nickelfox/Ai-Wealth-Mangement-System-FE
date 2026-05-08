@@ -340,7 +340,7 @@ export const projectsApi = {
   archive: (id: string) =>
     request<{ data: Project }>('PATCH', `/projects/${id}/archive`).then((r) => r.data),
   getTasks: (id: string) =>
-    request<{ data: { id: string; title: string; status: string; priority: string }[] }>('GET', `/projects/${id}/tasks`)
+    request<{ data: { id: string; title: string; status: string; priority: string; parent_task_id: string | null }[] }>('GET', `/projects/${id}/tasks`)
       .then((r) => r.data),
   delete: (id: string, task_ids: string[] = []) =>
     request<{ deleted: boolean; hasTickets: boolean; projectDeleted: boolean }>(
@@ -444,6 +444,8 @@ export interface CreateTaskPayload {
 }
 
 export const tasksApi = {
+  get: (id: string) =>
+    request<{ data: Task }>('GET', `/tasks/${id}`).then((r) => r.data),
   create: (payload: CreateTaskPayload) =>
     request<{ data: Task }>('POST', '/tasks', payload).then((r) => r.data),
   list: (params?: { firm_id?: string; session_id?: string; status?: string }) => {

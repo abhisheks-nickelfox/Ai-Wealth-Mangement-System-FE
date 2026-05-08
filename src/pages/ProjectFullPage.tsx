@@ -161,21 +161,24 @@ function ActivityPanel({ projectId }: { projectId: string }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 px-4 pb-3 shrink-0">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all ${
-              activeTab === tab.id
-                ? 'bg-[#F4F3FF] text-[#6941C6]'
-                : 'text-[#717680] hover:text-[#414651] hover:bg-[#F9FAFB]'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="px-4 pb-3 shrink-0">
+        <div className="flex items-center rounded-lg border border-[#D5D7DA] overflow-hidden">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 py-2 text-[12px] font-semibold transition-all border-r last:border-r-0 border-[#D5D7DA] ${
+                activeTab === tab.id
+                  ? 'bg-white text-[#181D27]'
+                  : 'bg-white text-[#717680] hover:text-[#414651] hover:bg-[#F9FAFB]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
+      <div className="h-px bg-[#E9EAEB] shrink-0" />
 
       {activeTab === 'recent' ? (
         <>
@@ -343,17 +346,21 @@ export default function ProjectFullPage() {
       <div className="flex-1 min-w-0 flex flex-col overflow-y-auto bg-white">
 
         {/* Breadcrumb */}
-        <div className="flex items-center gap-1.5 px-8 pt-6 pb-0">
+        <div className="flex items-center gap-1.5 px-8 pt-6 pb-0 flex-wrap">
           <button onClick={() => navigate('/firms')} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors">
             Firms
           </button>
           <ChevronRight width={12} height={12} className="text-[#C8CDD6]" />
-          <button onClick={() => navigate(`/firms/${firmId}`)} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors">
-            ...
+          <button onClick={() => navigate(`/firms/${firmId}`)} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors truncate max-w-[160px]">
+            {firm?.name ?? '...'}
           </button>
           <ChevronRight width={12} height={12} className="text-[#C8CDD6]" />
-          <span className="text-[12px] font-semibold text-[#6941C6] truncate max-w-[280px]">
-            {project.name}{firm?.name ? ` For ${firm.name.split(' ').map(w => w[0]).join('').slice(0,3)}` : ''}
+          <button onClick={() => navigate(`/firms/${firmId}`)} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors">
+            Projects
+          </button>
+          <ChevronRight width={12} height={12} className="text-[#C8CDD6]" />
+          <span className="text-[12px] font-semibold text-[#6941C6] truncate max-w-[200px]">
+            {project.name}
           </span>
         </div>
 
@@ -362,7 +369,7 @@ export default function ProjectFullPage() {
           <div>
             <div className="flex items-center gap-2.5 mb-1">
               <FolderClosed width={20} height={20} className="text-[#A4A7AE] shrink-0" />
-              <h1 className="text-[20px] font-semibold text-[#181D27] leading-tight">{project.name}{firm?.name ? ` For ${firm.name.split(' ').slice(0,2).join(' ')}` : ''}</h1>
+              <h1 className="text-[20px] font-semibold text-[#181D27] leading-tight">{project.name}</h1>
             </div>
             <p className="text-[12px] text-[#A4A7AE] ml-[28px]">
               Created on {new Date(project.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -510,11 +517,11 @@ export default function ProjectFullPage() {
           </div>
         </section>
 
-        {/* ── Sub Tasks ── */}
+        {/* ── Tasks ── */}
         <section className="px-8 py-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <h2 className="text-[14px] font-semibold text-[#181D27]">Sub Tasks</h2>
+              <h2 className="text-[14px] font-semibold text-[#181D27]">Tasks</h2>
               {projectTasks.length > 0 && (
                 <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#F4F3FF] text-[10px] font-bold text-[#6941C6]">
                   {projectTasks.length}
@@ -524,10 +531,69 @@ export default function ProjectFullPage() {
           </div>
 
           {projectTasks.length > 0 ? (
-            <div className="rounded-xl border border-[#E9EAEB] overflow-hidden">
-              {projectTasks.map((task) => (
-                <SubTaskRow key={task.id} task={task} onOpen={setSelectedTask} />
-              ))}
+            <div className="flex flex-col gap-2">
+              {projectTasks.map((task) => {
+                const subTasks = task.subtasks ?? [];
+                return (
+                  <div key={task.id} className="rounded-xl border border-[#E9EAEB] overflow-hidden">
+                    {/* Parent task row */}
+                    <SubTaskRow task={task} onOpen={setSelectedTask} />
+
+                    {/* Nested sub-task rows */}
+                    {subTasks.length > 0 && (
+                      <div className="border-t border-[#F2F4F7]">
+                        {subTasks.map((sub) => (
+                          <div
+                            key={sub.id}
+                            className="flex items-center gap-3 px-4 py-2 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group bg-[#FAFAFA]"
+                            onClick={() => setSelectedTask(sub)}
+                          >
+                            <div className="w-4 shrink-0" />
+                            <div className="w-px h-4 bg-[#E4E7EC] shrink-0" />
+                            <StatusDot status={sub.status} />
+                            <Dataflow03 width={12} height={12} className="text-[#C8CDD6] shrink-0" />
+                            <span className="flex-1 min-w-0 text-[12px] text-[#535862] truncate group-hover:text-[#6941C6] transition-colors">
+                              {sub.title}
+                            </span>
+                            {(sub.assignees ?? []).length > 0 && (
+                              <AvatarStack
+                                avatars={(sub.assignees ?? []).map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
+                                max={3}
+                                showAddButton={false}
+                              />
+                            )}
+                            {(() => {
+                              const { text: dt, overdue } = formatDeadline(sub.deadline ?? null);
+                              return (
+                                <span className={`text-[11px] shrink-0 w-[80px] text-center ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
+                                  {dt}
+                                </span>
+                              );
+                            })()}
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize shrink-0 ${PRIORITY_BADGE[sub.priority] ?? 'bg-gray-100 text-gray-500'}`}>
+                              {sub.priority}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add sub-task button per task */}
+                    <div className="px-4 py-2 border-t border-[#F2F4F7] bg-[#FAFAFA]">
+                      <button
+                        type="button"
+                        onClick={() => { setSubTaskParentId(task.id); setShowAddSubTask(true); }}
+                        className="flex items-center gap-1.5 text-[12px] text-[#A4A7AE] hover:text-[#6941C6] transition-colors"
+                      >
+                        <span className="w-4 h-4 rounded-full border border-dashed border-[#A4A7AE] hover:border-[#6941C6] flex items-center justify-center shrink-0 transition-colors">
+                          <Plus width={8} height={8} />
+                        </span>
+                        Add Sub-task
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="text-[13px] text-[#A4A7AE] mb-4">No tasks yet.</p>
@@ -556,6 +622,7 @@ export default function ProjectFullPage() {
         task={selectedTask}
         users={users}
         projects={projects}
+        firmId={firmId}
         onSave={handleSaveTask}
         viewLabel={selectedTask?.parent_task_id ? 'View Sub Task' : 'View Task'}
         onViewTask={selectedTask ? () => {

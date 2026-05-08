@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { HelpCircle, ChevronDown, ChevronRight, Plus, X, FolderClosed } from '@untitled-ui/icons-react';
+import { useNavigate } from 'react-router-dom';
+import { HelpCircle, ChevronDown, ChevronRight, Plus, X, FolderClosed, Dataflow03 } from '@untitled-ui/icons-react';
 import Avatar from '../ui/Avatar';
+import AvatarStack from '../ui/AvatarStack';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
 import { useClickOutside } from '../../hooks/useClickOutside';
@@ -23,6 +25,7 @@ interface TaskDetailPanelProps {
   task:          Task | null;
   users:         User[];
   projects?:     Project[];
+  firmId?:       string;
   onSave?:       (taskId: string, data: TaskDetailData) => Promise<void>;
   onViewTask?:   () => void;
   viewLabel?:    string;
@@ -63,10 +66,12 @@ export default function TaskDetailPanel({
   task,
   users,
   projects = [],
+  firmId,
   onSave,
   onViewTask,
   viewLabel = 'View Task',
 }: TaskDetailPanelProps) {
+  const navigate = useNavigate();
   const [title,        setTitle]        = useState('');
   const [description,  setDescription]  = useState('');
   const [priority,     setPriority]     = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
@@ -356,6 +361,59 @@ export default function TaskDetailPanel({
             )}
           </div>
         </div>
+
+        {/* Sub Tasks — only for top-level tasks */}
+        {!task.parent_task_id && (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-sm font-semibold text-[#181D27]">Sub Tasks</p>
+              {(task.subtasks ?? []).length > 0 && (
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#F4F3FF] text-[10px] font-bold text-[#7F56D9]">
+                  {task.subtasks!.length}
+                </span>
+              )}
+            </div>
+
+            {(task.subtasks ?? []).length > 0 ? (
+              <div className="rounded-lg border border-[#E9EAEB] overflow-hidden mb-2">
+                {task.subtasks!.map((sub) => (
+                  <div
+                    key={sub.id}
+                    className="flex items-center gap-2.5 px-3 py-2 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
+                    onClick={() => {
+                      if (firmId) {
+                        onClose();
+                        navigate(`/firms/${firmId}/tasks/${sub.id}`);
+                      }
+                    }}
+                  >
+                    <Dataflow03 width={12} height={12} className="text-[#A4A7AE] shrink-0" />
+                    <span className="flex-1 min-w-0 text-[13px] text-[#344054] truncate group-hover:text-[#6941C6] transition-colors">
+                      {sub.title}
+                    </span>
+                    {(sub.assignees ?? []).length > 0 && (
+                      <AvatarStack
+                        avatars={(sub.assignees ?? []).map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
+                        max={3}
+                        showAddButton={false}
+                      />
+                    )}
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize shrink-0 ${
+                      sub.priority === 'urgent' ? 'bg-red-100 text-red-600'
+                      : sub.priority === 'high' ? 'bg-orange-100 text-orange-600'
+                      : sub.priority === 'normal' ? 'bg-yellow-100 text-yellow-600'
+                      : 'bg-green-100 text-green-600'
+                    }`}>
+                      {sub.priority}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] text-[#A4A7AE] mb-2">No sub-tasks yet.</p>
+            )}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center gap-3 pt-4 border-t border-[#E9EAEB]">

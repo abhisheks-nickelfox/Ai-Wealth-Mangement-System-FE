@@ -23,6 +23,7 @@ export const queryKeys = {
   },
   tasks: {
     all:    ['tasks'] as const,
+    detail: (id: string) => ['tasks', 'detail', id] as const,
     byFirm: (firmId: string) => ['tasks', 'firm', firmId] as const,
   },
   transcripts: {

@@ -186,7 +186,15 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
 
   const handleAssigneeChange = async (taskId: string, userId: string | null) => {
     if (!userId) return;
-    const task = tasks.find((t) => t.id === taskId);
+
+    // Search top-level tasks AND nested sub-tasks
+    let task = tasks.find((t) => t.id === taskId);
+    if (!task) {
+      for (const parent of tasks) {
+        const sub = parent.subtasks?.find((s) => s.id === taskId);
+        if (sub) { task = sub; break; }
+      }
+    }
     if (!task) return;
 
     const current: string[] = task.assignees && task.assignees.length > 0
@@ -198,7 +206,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
       ? [...current, userId]
       : current.filter((id) => id !== userId);
 
-    // Optimistic update so the avatar appears immediately without waiting for refetch
+    // Optimistic update — handles both top-level tasks and sub-tasks
     if (firm?.id) {
       const userInfo = usersMap.get(userId);
       const newAssignees: TaskAssignee[] = isAdding
@@ -206,7 +214,18 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         : (task.assignees ?? []).filter((a) => a.id !== userId);
 
       qc.setQueryData(queryKeys.tasks.byFirm(firm.id), (old: Task[] | undefined) =>
-        old ? old.map((t) => t.id === taskId ? { ...t, assignees: newAssignees, assignee_id: next[0] ?? null } : t) : old
+        old ? old.map((t) => {
+          if (t.id === taskId) return { ...t, assignees: newAssignees, assignee_id: next[0] ?? null };
+          if (t.subtasks?.some((s) => s.id === taskId)) {
+            return {
+              ...t,
+              subtasks: t.subtasks!.map((s) =>
+                s.id === taskId ? { ...s, assignees: newAssignees, assignee_id: next[0] ?? null } : s
+              ),
+            };
+          }
+          return t;
+        }) : old
       );
     }
 

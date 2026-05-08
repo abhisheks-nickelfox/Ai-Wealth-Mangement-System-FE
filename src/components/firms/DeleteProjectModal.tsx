@@ -3,10 +3,11 @@ import { projectsApi } from '../../lib/api';
 import { Trash01 } from '@untitled-ui/icons-react';
 
 interface ProjectTask {
-  id:       string;
-  title:    string;
-  status:   string;
-  priority: string;
+  id:             string;
+  title:          string;
+  status:         string;
+  priority:       string;
+  parent_task_id: string | null;
 }
 
 interface DeleteProjectModalProps {
@@ -60,11 +61,28 @@ export default function DeleteProjectModal({
 
   if (!open) return null;
 
-  const allSelected = tasks.length > 0 && selected.size === tasks.length;
+  // Build tree — subtasks whose parent was filtered out become top-level
+  const taskIds = new Set(tasks.map((t) => t.id));
+  const parentTasks = tasks.filter((t) => !t.parent_task_id || !taskIds.has(t.parent_task_id));
+  const subTaskMap  = tasks.reduce<Record<string, ProjectTask[]>>((acc, t) => {
+    if (t.parent_task_id && taskIds.has(t.parent_task_id)) {
+      if (!acc[t.parent_task_id]) acc[t.parent_task_id] = [];
+      acc[t.parent_task_id].push(t);
+    }
+    return acc;
+  }, {});
+
+  // Count only items that are actually displayed
+  const displayedIds = new Set<string>([
+    ...parentTasks.map((t) => t.id),
+    ...Object.values(subTaskMap).flat().map((t) => t.id),
+  ]);
+  const displayedCount = displayedIds.size;
+  const allSelected = displayedCount > 0 && [...displayedIds].every((id) => selected.has(id));
 
   function toggleAll() {
     if (allSelected) setSelected(new Set());
-    else setSelected(new Set(tasks.map((t) => t.id)));
+    else setSelected(new Set(displayedIds));
   }
 
   function toggleTask(id: string) {
@@ -77,19 +95,19 @@ export default function DeleteProjectModal({
   }
 
   const selectedIds  = Array.from(selected);
-  const deletingAll  = selectedIds.length === tasks.length && tasks.length > 0;
+  const deletingAll  = allSelected && displayedCount > 0;
   const deletingSome = selectedIds.length > 0 && !deletingAll;
 
   let confirmLabel = 'Delete';
   let confirmDesc  = '';
   if (deletingAll) {
-    confirmLabel = `Delete ${tasks.length} task${tasks.length > 1 ? 's' : ''} & project`;
-    confirmDesc  = 'All tasks and the project will be permanently deleted.';
+    confirmLabel = `Delete ${displayedCount} task${displayedCount > 1 ? 's' : ''} & project`;
+    confirmDesc  = 'All active tasks and the project will be permanently deleted.';
   } else if (deletingSome) {
     confirmLabel = `Delete ${selectedIds.length} task${selectedIds.length > 1 ? 's' : ''}`;
     confirmDesc  = 'Selected tasks will be deleted. The project will remain.';
   } else {
-    confirmDesc = 'Select tasks to delete. If all tasks are deleted, the project is also removed.';
+    confirmDesc = 'Select tasks to delete. If all to-do tasks are deleted, the project is also removed.';
   }
 
   return (
@@ -115,11 +133,11 @@ export default function DeleteProjectModal({
           {loading ? (
             <p className="text-[13px] text-[#A4A7AE] py-4 text-center">Loading tasks…</p>
           ) : tasks.length === 0 ? (
-            <p className="text-[13px] text-[#717680] py-2">This project has no tasks. It will be deleted immediately.</p>
+            <p className="text-[13px] text-[#717680] py-2">No to-do tasks in this project. It will be deleted immediately.</p>
           ) : (
             <>
               <p className="text-[13px] text-[#344054] mb-3">
-                Select tasks to delete. Unselected tasks will remain.
+                Only <span className="font-semibold">To Do</span> tasks are shown. Select which ones to delete.
               </p>
 
               {/* Select all row */}
@@ -136,35 +154,67 @@ export default function DeleteProjectModal({
                     </svg>
                   )}
                 </div>
-                <span className="text-[13px] font-semibold text-[#344054]">Select all ({tasks.length})</span>
+                <span className="text-[13px] font-semibold text-[#344054]">Select all ({displayedCount})</span>
               </div>
 
-              {/* Task rows */}
+              {/* Task tree rows */}
               <div className="flex flex-col gap-1 mt-2">
-                {tasks.map((task) => {
+                {parentTasks.map((task) => {
+                  const subs     = subTaskMap[task.id] ?? [];
                   const isChecked = selected.has(task.id);
                   return (
-                    <div
-                      key={task.id}
-                      className={`flex items-center gap-3 py-2 px-3 rounded-lg cursor-pointer transition-colors ${
-                        isChecked ? 'bg-[#FEF3F2] border border-[#FECDCA]' : 'hover:bg-[#F9FAFB] border border-transparent'
-                      }`}
-                      onClick={() => toggleTask(task.id)}
-                    >
-                      <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                        isChecked ? 'bg-[#D92D20] border-[#D92D20]' : 'border-[#D0D5DD]'
-                      }`}>
-                        {isChecked && (
-                          <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                            <path d="M1 3.5L3 5.5L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
+                    <div key={task.id}>
+                      {/* Parent task row */}
+                      <div
+                        className={`flex items-center gap-3 py-2 px-3 rounded-lg cursor-pointer transition-colors ${
+                          isChecked ? 'bg-[#FEF3F2] border border-[#FECDCA]' : 'hover:bg-[#F9FAFB] border border-transparent'
+                        }`}
+                        onClick={() => toggleTask(task.id)}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                          isChecked ? 'bg-[#D92D20] border-[#D92D20]' : 'border-[#D0D5DD]'
+                        }`}>
+                          {isChecked && (
+                            <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                              <path d="M1 3.5L3 5.5L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[task.priority] ?? 'bg-gray-300'}`} />
+                        <span className="flex-1 text-[13px] font-medium text-[#181D27] truncate">{task.title}</span>
+                        <span className="text-[11px] text-[#717680] shrink-0">{STATUS_LABEL[task.status] ?? task.status}</span>
                       </div>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[task.priority] ?? 'bg-gray-300'}`} />
-                      <span className="flex-1 text-[13px] text-[#181D27] truncate">{task.title}</span>
-                      <span className="text-[11px] text-[#717680] shrink-0">
-                        {STATUS_LABEL[task.status] ?? task.status}
-                      </span>
+
+                      {/* Sub-task rows (indented with tree connector) */}
+                      {subs.length > 0 && (
+                        <div className="relative ml-5 pl-4 border-l border-[#E4E7EC]">
+                          {subs.map((sub) => {
+                            const subChecked = selected.has(sub.id);
+                            return (
+                              <div
+                                key={sub.id}
+                                className={`flex items-center gap-3 py-1.5 px-3 rounded-lg cursor-pointer transition-colors mt-0.5 ${
+                                  subChecked ? 'bg-[#FEF3F2] border border-[#FECDCA]' : 'hover:bg-[#F9FAFB] border border-transparent'
+                                }`}
+                                onClick={() => toggleTask(sub.id)}
+                              >
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                                  subChecked ? 'bg-[#D92D20] border-[#D92D20]' : 'border-[#D0D5DD]'
+                                }`}>
+                                  {subChecked && (
+                                    <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                                      <path d="M1 3.5L3 5.5L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  )}
+                                </div>
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${PRIORITY_DOT[sub.priority] ?? 'bg-gray-300'}`} />
+                                <span className="flex-1 text-[12px] text-[#344054] truncate">{sub.title}</span>
+                                <span className="text-[11px] text-[#A4A7AE] shrink-0">{STATUS_LABEL[sub.status] ?? sub.status}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
