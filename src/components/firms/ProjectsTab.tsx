@@ -9,7 +9,9 @@ import { useCreateProject, useUpdateProject, useDeleteProject, useProjects } fro
 import { useDeleteTask, useCreateTask, useUpdateTask } from '../../hooks/useTasks';
 import { useToast } from '../../hooks/useToast';
 import { StatusSection } from './ProjectGroupRow';
+import type { StatusGroup } from './ProjectGroupRow';
 import { FilterPanel } from './TaskFilterPanel';
+import type { DateRangeOption } from './TaskFilterPanel';
 import AddProjectModal from './AddProjectModal';
 import AddTaskModal, { type TaskFormData } from './AddTaskModal';
 import ProjectDetailPanel, { type ProjectDetail } from './ProjectDetailPanel';
@@ -21,13 +23,7 @@ import type { Firm, Task, TaskAssignee, User, Project } from '../../lib/api';
 
 // ── Status group definitions ──────────────────────────────────────────────────
 
-export interface StatusGroup {
-  id: string;
-  label: string;
-  statuses: string[];
-}
-
-export const STATUS_GROUPS: StatusGroup[] = [
+const STATUS_GROUPS: StatusGroup[] = [
   { id: 'todo',         label: 'To Do',           statuses: ['to_do'] },
   { id: 'assigned',     label: 'Assigned',         statuses: ['assigned'] },
   { id: 'inprogress',   label: 'In Progress',      statuses: ['in_progress'] },
@@ -39,7 +35,7 @@ export const STATUS_GROUPS: StatusGroup[] = [
 ];
 
 // ProjectDetail display status → DB workflow_status
-export const DISPLAY_TO_WORKFLOW: Record<string, string> = {
+const DISPLAY_TO_WORKFLOW: Record<string, string> = {
   'To Do':       'todo',
   'In progress': 'in_progress',
   'In Review':   'in_review',
@@ -48,7 +44,7 @@ export const DISPLAY_TO_WORKFLOW: Record<string, string> = {
 };
 
 // Map section group IDs → project workflow_status values
-export const GROUP_TO_WORKFLOW: Record<string, string> = {
+const GROUP_TO_WORKFLOW: Record<string, string> = {
   todo:        'todo',
   assigned:    'todo',
   inprogress:  'in_progress',
@@ -60,7 +56,7 @@ export const GROUP_TO_WORKFLOW: Record<string, string> = {
 };
 
 // Which group should an empty project appear in based on its workflow_status
-export const WORKFLOW_TO_GROUP: Record<string, string> = {
+const WORKFLOW_TO_GROUP: Record<string, string> = {
   todo:        'todo',
   in_progress: 'inprogress',
   in_review:   'inreview',
@@ -68,9 +64,7 @@ export const WORKFLOW_TO_GROUP: Record<string, string> = {
   completed:   'completed',
 };
 
-export type DateRangeOption = 'daily' | 'weekly' | 'monthly';
-
-export interface ProjectsTabProps {
+interface ProjectsTabProps {
   firm: Firm | null;
   tasks: Task[];
   users: User[];
@@ -215,9 +209,9 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
     }
 
     // Check if task deadline OR any sub-task deadline exceeds the target project end_date
-    const taskConflicts = task?.deadline && task.deadline > targetProject.end_date;
-    const subConflicts = (task?.subtasks ?? []).some(
-      (s) => s.deadline && s.deadline > targetProject.end_date,
+    const taskConflicts = task?.deadline && targetProject.end_date && task.deadline > targetProject.end_date;
+    const subConflicts = targetProject.end_date != null && (task?.subtasks ?? []).some(
+      (s) => s.deadline && s.deadline > targetProject.end_date!,
     );
 
     if (taskConflicts || subConflicts) {
@@ -226,10 +220,10 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         taskTitle: task!.title,
         taskDeadline: task?.deadline ?? targetProject.end_date,
         targetProject,
-        newTaskDate: task?.deadline && task.deadline > targetProject.end_date
+        newTaskDate: task?.deadline && task.deadline > targetProject.end_date!
           ? task.deadline
-          : targetProject.end_date,
-        newProjectDate: targetProject.end_date,
+          : targetProject.end_date!,
+        newProjectDate: targetProject.end_date!,
       });
       return;
     }
