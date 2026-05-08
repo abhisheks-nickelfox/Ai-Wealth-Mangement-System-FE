@@ -474,6 +474,50 @@ export const tasksApi = {
     request<{ data: Task[] }>('GET', `/tasks/${parentId}/subtasks`).then((r) => r.data),
 };
 
+// ── Attachments API ───────────────────────────────────────────────────────────
+
+export interface TaskAttachment {
+  id:          string;
+  task_id:     string;
+  uploaded_by: string;
+  file_name:   string;
+  file_size:   number;
+  mime_type:   string;
+  storage_url: string;
+  created_at:  string;
+}
+
+export const attachmentsApi = {
+  list: (taskId: string) =>
+    request<{ data: TaskAttachment[] }>('GET', `/tasks/${taskId}/attachments`).then((r) => r.data),
+
+  upload: (taskId: string, file: File): Promise<TaskAttachment> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result as string;
+        // Strip the data:<type>;base64, prefix — send raw base64
+        const base64 = dataUrl.split(',')[1];
+        try {
+          const result = await request<{ data: TaskAttachment }>('POST', `/tasks/${taskId}/attachments`, {
+            file_name: file.name,
+            file_size: file.size,
+            mime_type: file.type || 'application/octet-stream',
+            data:      base64,
+          });
+          resolve(result.data);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    }),
+
+  delete: (taskId: string, attId: string) =>
+    request<{ deleted: boolean }>('DELETE', `/tasks/${taskId}/attachments/${attId}`),
+};
+
 // ── Org Settings API ──────────────────────────────────────────────────────────
 
 export const orgSettingsApi = {

@@ -7,6 +7,7 @@ import Avatar from '../ui/Avatar';
 import AvatarStack from '../ui/AvatarStack';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
+import AttachmentsSection from '../tasks/AttachmentsSection';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import type { Task, User, Project } from '../../lib/api';
 import { TASK_STATUS_BADGE } from './TaskRow';
@@ -462,6 +463,13 @@ export default function TaskDetailPanel({
             ) : (
               <p className="text-[13px] text-[#A4A7AE] mb-2">No sub-tasks yet.</p>
             )}
+          </div>
+        )}
+
+        {/* Attachments */}
+        {task.id && (
+          <div className="pt-2 border-t border-[#F2F4F7]">
+            <AttachmentsSection taskId={task.id} />
           </div>
         )}
 

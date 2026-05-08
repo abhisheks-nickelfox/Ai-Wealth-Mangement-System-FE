@@ -35,4 +35,7 @@ export const queryKeys = {
   messages: {
     byScope: (scope: string, scopeId: string) => ['messages', scope, scopeId] as const,
   },
+  attachments: {
+    byTask: (taskId: string) => ['attachments', 'task', taskId] as const,
+  },
 };

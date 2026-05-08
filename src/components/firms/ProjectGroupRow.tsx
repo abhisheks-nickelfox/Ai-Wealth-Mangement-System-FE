@@ -77,13 +77,6 @@ export function ProjectGroupRow({
   const anchorRef  = useRef<HTMLDivElement>(null);
   const updateProject = useUpdateProject();
 
-  function openMemberPicker(e: React.MouseEvent) {
-    e.stopPropagation();
-    const rect = anchorRef.current?.getBoundingClientRect();
-    if (rect) setPickerPos(calcPickerPos(rect, 200, 260));
-    setPickerOpen((v) => !v);
-  }
-
   const label = project?.name ?? projectId ?? 'Project';
   const currentMemberIds = useMemo(() => project?.members.map((m) => m.id) ?? [], [project]);
 
@@ -140,7 +133,7 @@ export function ProjectGroupRow({
             avatars={memberAvatars}
             max={3}
             showAddButton={true}
-            onAdd={openMemberPicker}
+            onAdd={() => { const rect = anchorRef.current?.getBoundingClientRect(); if (rect) setPickerPos(calcPickerPos(rect, 200, 260)); setPickerOpen((v) => !v); }}
           />
           {pickerOpen && pickerPos && (
             <>

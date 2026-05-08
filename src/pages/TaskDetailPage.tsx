@@ -8,7 +8,6 @@ import {
   Edit01,
   Trash01,
   FileCheck01,
-  Paperclip,
   Send01,
   Plus,
 } from '@untitled-ui/icons-react';
@@ -19,6 +18,7 @@ import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { useQuery } from '@tanstack/react-query';
 import { tasksApi } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
+import AttachmentsSection from '../components/tasks/AttachmentsSection';
 import { useMessages, useSendMessage } from '../hooks/useMessages';
 import { useFirmDetail, useProjects } from '../hooks/useFirms';
 import { useUsers } from '../hooks/useUsers';
@@ -318,13 +318,6 @@ function SubTaskRow({
   const [pickerPos,  setPickerPos]  = useState<{ top: number; left: number } | null>(null);
   const anchorRef                   = useRef<HTMLDivElement>(null);
 
-  function openPicker(e: React.MouseEvent) {
-    e.stopPropagation();
-    const rect = anchorRef.current?.getBoundingClientRect();
-    if (rect) setPickerPos(calcPickerPos(rect, 230, 280));
-    setPickerOpen((v) => !v);
-  }
-
   const assignees     = task.assignees ?? [];
   const { text: dateText, overdue } = formatDeadline(task.deadline ?? null);
   const priorityStyle = PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500';
@@ -365,7 +358,7 @@ function SubTaskRow({
           avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
           max={3}
           showAddButton={true}
-          onAdd={openPicker}
+          onAdd={() => { const rect = anchorRef.current?.getBoundingClientRect(); if (rect) setPickerPos(calcPickerPos(rect, 230, 280)); setPickerOpen((v) => !v); }}
         />
         {pickerOpen && pickerPos && (
           <>
@@ -417,76 +410,6 @@ function SubTaskRow({
   );
 }
 
-// ── Attachment helpers ────────────────────────────────────────────────────────
-
-interface Attachment {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  url: string;
-  uploading: boolean;
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function FileTypeIcon({ type, name }: { type: string; name: string }) {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  if (type.startsWith('image/')) {
-    return (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <rect width="20" height="20" rx="4" fill="#ECFDF3"/>
-        <path d="M4 14l4-4 2.5 2.5L14 8l2 2v4H4z" fill="#17B26A" opacity=".3"/>
-        <circle cx="7" cy="7.5" r="1.5" fill="#17B26A"/>
-        <rect x="3" y="3" width="14" height="14" rx="2" stroke="#17B26A" strokeWidth="1.2" fill="none"/>
-      </svg>
-    );
-  }
-  if (type === 'application/pdf' || ext === 'pdf') {
-    return (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <rect width="20" height="20" rx="4" fill="#FEF3F2"/>
-        <path d="M5 3h7l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" fill="#FEE4E2" stroke="#F04438" strokeWidth="1.2"/>
-        <path d="M12 3v4h4" stroke="#F04438" strokeWidth="1.2"/>
-        <path d="M7 11h6M7 13.5h4" stroke="#F04438" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    );
-  }
-  if (['doc','docx','odt','rtf','txt'].includes(ext)) {
-    return (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <rect width="20" height="20" rx="4" fill="#EFF8FF"/>
-        <path d="M5 3h7l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" fill="#D1E9FF" stroke="#2E90FA" strokeWidth="1.2"/>
-        <path d="M12 3v4h4" stroke="#2E90FA" strokeWidth="1.2"/>
-        <path d="M7 11h6M7 13.5h4" stroke="#2E90FA" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    );
-  }
-  if (['xls','xlsx','csv'].includes(ext)) {
-    return (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <rect width="20" height="20" rx="4" fill="#F0FDF4"/>
-        <path d="M5 3h7l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" fill="#DCFCE7" stroke="#16A34A" strokeWidth="1.2"/>
-        <path d="M12 3v4h4" stroke="#16A34A" strokeWidth="1.2"/>
-        <path d="M7 10h6v5H7z" stroke="#16A34A" strokeWidth="1.2"/>
-        <path d="M10 10v5M7 12.5h6" stroke="#16A34A" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    );
-  }
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <rect width="20" height="20" rx="4" fill="#F4F3FF"/>
-      <path d="M5 3h7l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" fill="#EDE9FE" stroke="#7F56D9" strokeWidth="1.2"/>
-      <path d="M12 3v4h4" stroke="#7F56D9" strokeWidth="1.2"/>
-      <path d="M7 11h6M7 13.5h4" stroke="#7F56D9" strokeWidth="1.2" strokeLinecap="round"/>
-    </svg>
-  );
-}
-
 // ── Metadata grid cell ────────────────────────────────────────────────────────
 
 function MetaCell({ label, children }: { label: string; children: React.ReactNode }) {
@@ -510,36 +433,6 @@ export default function TaskDetailPage() {
   const [selectedSubTask,    setSelectedSubTask]    = useState<import('../lib/api').Task | null>(null);
   const [showAddSubTask,     setShowAddSubTask]     = useState(false);
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
-  const [attachments,        setAttachments]        = useState<Attachment[]>([]);
-  const [dragOver,           setDragOver]           = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  function handleFiles(files: FileList | null) {
-    if (!files) return;
-    const incoming = Array.from(files).map((f) => ({
-      id: `${Date.now()}-${Math.random()}`,
-      name: f.name,
-      size: f.size,
-      type: f.type,
-      url: URL.createObjectURL(f),
-      uploading: true,
-    }));
-    setAttachments((prev) => [...prev, ...incoming]);
-    // Simulate upload completion after 1.2 s
-    setTimeout(() => {
-      setAttachments((prev) =>
-        prev.map((a) => incoming.some((i) => i.id === a.id) ? { ...a, uploading: false } : a),
-      );
-    }, 1200);
-  }
-
-  function removeAttachment(id: string) {
-    setAttachments((prev) => {
-      const found = prev.find((a) => a.id === id);
-      if (found) URL.revokeObjectURL(found.url);
-      return prev.filter((a) => a.id !== id);
-    });
-  }
   const assigneePickerRef = useRef<HTMLDivElement>(null);
   useClickOutside(assigneePickerRef, () => setAssigneePickerOpen(false));
 
@@ -881,16 +774,11 @@ export default function TaskDetailPage() {
         </section>
 
         {/* ── Attachments ── */}
-        <section className="px-8 py-5 border-b border-[#E9EAEB]" aria-labelledby="attach-heading">
-          <h2 id="attach-heading" className="text-[12px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-3">
-            Attachments
-          </h2>
-          <div className="flex flex-col items-center justify-center py-6 rounded-lg border border-dashed border-[#E9EAEB] bg-[#FAFAFA] gap-2">
-            <Paperclip width={20} height={20} className="text-[#C8CDD6]" aria-hidden="true" />
-            <p className="text-[13px] text-[#A4A7AE]">No attachments yet</p>
-            <p className="text-[11px] text-[#C8CDD6]">Drag and drop files here or click to browse</p>
-          </div>
-        </section>
+        {taskId && (
+          <section className="px-8 py-5 border-b border-[#E9EAEB]">
+            <AttachmentsSection taskId={taskId} />
+          </section>
+        )}
 
         {/* ── Sub Tasks — only shown for top-level tasks, not sub-tasks ── */}
         {!isSubTask && (
