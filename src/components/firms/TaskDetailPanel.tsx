@@ -85,6 +85,7 @@ export default function TaskDetailPanel({
   const [projectId,    setProjectId]    = useState<string | null>(null);
   const [saving,        setSaving]       = useState(false);
   const [deadlineError, setDeadlineError] = useState('');
+  const [saveError,     setSaveError]     = useState('');
 
   const [showPriority, setShowPriority] = useState(false);
   const [showPicker,   setShowPicker]   = useState(false);
@@ -131,6 +132,13 @@ export default function TaskDetailPanel({
   const handleSave = async () => {
     if (!title.trim()) return;
 
+    setSaveError('');
+
+    if (task.status === 'completed' || task.status === 'blocked') {
+      setSaveError(`This task is ${task.status} and cannot be edited.`);
+      return;
+    }
+
     if (deadline) {
       if (parentTaskDeadline && deadline > parentTaskDeadline) {
         setDeadlineError(`Sub-task due date cannot exceed the parent task due date (${parentTaskDeadline})`);
@@ -150,6 +158,8 @@ export default function TaskDetailPanel({
     try {
       await onSave?.(task.id, { title, description, priority, assignee_ids: assigneeIds, deadline, project_id: projectId });
       onClose();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save task. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -452,6 +462,13 @@ export default function TaskDetailPanel({
             ) : (
               <p className="text-[13px] text-[#A4A7AE] mb-2">No sub-tasks yet.</p>
             )}
+          </div>
+        )}
+
+        {/* Save error */}
+        {saveError && (
+          <div className="mx-4 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+            {saveError}
           </div>
         )}
 
