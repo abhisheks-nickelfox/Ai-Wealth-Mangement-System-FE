@@ -4,18 +4,16 @@ import { useQuery } from '@tanstack/react-query';
 import {
   ChevronRight,
   ChevronDown,
-  DotsVertical,
-  Edit01,
-  Trash01,
-  Paperclip,
+  X,
   Send01,
   Plus,
   Dataflow03,
-  Users01,
+  FolderClosed,
+  ArrowRight,
+  File06,
 } from '@untitled-ui/icons-react';
 import Avatar from '../components/ui/Avatar';
 import AvatarStack from '../components/ui/AvatarStack';
-import DropdownMenu from '../components/ui/DropdownMenu';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { useMessages, useSendMessage } from '../hooks/useMessages';
 import { useFirmDetail, useProjects } from '../hooks/useFirms';
@@ -37,112 +35,83 @@ import type { Task, Message, Project } from '../lib/api';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
-function formatDateDivider(iso: string): string {
+function formatDayLabel(iso: string) {
   const d = new Date(iso);
   const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
   const sameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   if (sameDay(d, today)) return 'Today';
   if (sameDay(d, yesterday)) return 'Yesterday';
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', { weekday: 'long' });
 }
 
-function groupMessagesByDate(messages: Message[]): { date: string; messages: Message[] }[] {
-  const groups: { date: string; messages: Message[] }[] = [];
-  for (const msg of messages) {
-    const label = formatDateDivider(msg.created_at);
-    const last = groups[groups.length - 1];
-    if (last && last.date === label) {
-      last.messages.push(msg);
-    } else {
-      groups.push({ date: label, messages: [msg] });
-    }
+function groupByDay(messages: Message[]) {
+  const out: { date: string; messages: Message[] }[] = [];
+  for (const m of messages) {
+    const label = formatDayLabel(m.created_at);
+    const last = out[out.length - 1];
+    if (last && last.date === label) last.messages.push(m);
+    else out.push({ date: label, messages: [m] });
   }
-  return groups;
+  return out;
 }
 
 const WORKFLOW_LABEL: Record<Project['workflow_status'], string> = {
-  todo:        'To Do',
-  in_progress: 'In Progress',
-  in_review:   'In Review',
-  approved:    'Approved',
-  completed:   'Completed',
+  todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review', approved: 'Approved', completed: 'Completed',
 };
 
-const WORKFLOW_DOT: Record<Project['workflow_status'], string> = {
-  todo:        'bg-[#A4A7AE]',
-  in_progress: 'bg-[#17B26A]',
-  in_review:   'bg-[#F79009]',
-  approved:    'bg-[#6941C6]',
-  completed:   'bg-[#181D27]',
-};
-
-const PRIORITY_DOT: Record<Project['priority'], string> = {
-  high:   'bg-orange-400',
-  medium: 'bg-yellow-400',
-  low:    'bg-green-500',
-};
-
-// ── Activity sub-components ───────────────────────────────────────────────────
+// ── Activity panel ─────────────────────────────────────────────────────────────
 
 type ActivityTab = 'recent' | 'files' | 'notes';
-const ACTIVITY_TABS: { id: ActivityTab; label: string }[] = [
+const TABS: { id: ActivityTab; label: string }[] = [
   { id: 'recent', label: 'Recent' },
   { id: 'files',  label: 'Files & Links' },
   { id: 'notes',  label: 'Notes' },
 ];
 
-function EmptyActivityState({ tab }: { tab: ActivityTab }) {
-  const map: Record<ActivityTab, { icon: string; text: string }> = {
-    recent: { icon: '💬', text: 'No messages yet. Start the conversation.' },
-    files:  { icon: '📎', text: 'No files or links attached yet.' },
-    notes:  { icon: '📝', text: 'No notes added yet.' },
-  };
-  const { icon, text } = map[tab];
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-2 py-12 px-4 text-center">
-      <span className="text-3xl" role="img" aria-hidden="true">{icon}</span>
-      <p className="text-[13px] text-[#717680]">{text}</p>
-    </div>
-  );
-}
-
 function DateDivider({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 py-2">
+    <div className="flex items-center gap-3 my-3">
       <div className="flex-1 h-px bg-[#E9EAEB]" />
-      <span className="text-[11px] font-semibold text-[#A4A7AE] shrink-0">{label}</span>
+      <span className="text-[11px] font-medium text-[#A4A7AE] shrink-0">{label}</span>
       <div className="flex-1 h-px bg-[#E9EAEB]" />
     </div>
   );
 }
 
-function MessageBubble({ message }: { message: Message }) {
-  return (
-    <div className="flex flex-col gap-1.5 mb-3">
-      <div className="flex items-center justify-between gap-2">
+function MessageRow({ message, currentUserId }: { message: Message; currentUserId?: string }) {
+  const isMe = message.user_id === currentUserId;
+
+  if (isMe) {
+    return (
+      <div className="flex flex-col items-end gap-1 mb-4">
         <div className="flex items-center gap-2">
-          <Avatar
-            name={message.user.name}
-            src={message.user.avatar_url ?? undefined}
-            size="sm"
-            online
-          />
-          <span className="text-[13px] font-semibold text-[#181D27]">{message.user.name}</span>
+          <span className="text-[11px] text-[#A4A7AE]">{formatTime(message.created_at)}</span>
+          <span className="text-[12px] font-semibold text-[#414651]">You</span>
         </div>
-        <span className="text-[11px] text-[#A4A7AE] shrink-0">{formatTime(message.created_at)}</span>
+        <div className="max-w-[80%] bg-white border border-[#E9EAEB] rounded-2xl rounded-tr-sm px-3.5 py-2.5 text-[13px] text-[#181D27] leading-relaxed shadow-sm">
+          {message.body}
+        </div>
       </div>
-      <div className="ml-10 bg-white rounded-lg border border-[#E9EAEB] px-3 py-2.5 text-[13px] text-[#414651] leading-relaxed">
-        {message.body}
+    );
+  }
+
+  return (
+    <div className="flex gap-2.5 mb-4">
+      <Avatar name={message.user.name} src={message.user.avatar_url ?? undefined} size="sm" online className="shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[12px] font-semibold text-[#181D27]">{message.user.name}</span>
+          <span className="text-[11px] text-[#A4A7AE]">{formatTime(message.created_at)}</span>
+        </div>
+        <div className="max-w-[85%] bg-white border border-[#E9EAEB] rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-[13px] text-[#414651] leading-relaxed shadow-sm">
+          {message.body}
+        </div>
       </div>
     </div>
   );
@@ -158,12 +127,10 @@ function ActivityPanel({ projectId }: { projectId: string }) {
   const sendMessage                        = useSendMessage();
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length]);
 
-  function handleTextareaChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setDraft(e.target.value);
     const el = e.target;
     el.style.height = 'auto';
@@ -179,26 +146,31 @@ function ActivityPanel({ projectId }: { projectId: string }) {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   }
 
-  const groups = groupMessagesByDate(messages);
+  const groups = groupByDay(messages);
 
   return (
-    <aside className="w-[380px] shrink-0 flex flex-col border-l border-[#E9EAEB] bg-[#FAFAFA] h-full" aria-label="Activity panel">
+    <aside className="w-[380px] shrink-0 flex flex-col border-l border-[#E9EAEB] bg-white h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+        <h2 className="text-[16px] font-semibold text-[#181D27]">Activity</h2>
+        <button className="w-7 h-7 rounded-md flex items-center justify-center text-[#717680] hover:bg-[#F9FAFB] transition-colors">
+          <X width={16} height={16} />
+        </button>
+      </div>
+
       {/* Tabs */}
-      <div className="flex border-b border-[#E9EAEB] px-4 shrink-0 bg-white">
-        {ACTIVITY_TABS.map((tab) => (
+      <div className="flex items-center gap-1 px-4 pb-3 shrink-0">
+        {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`pb-2.5 pt-3 mr-5 text-[13px] font-semibold border-b-2 -mb-px transition-all ${
+            className={`px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all ${
               activeTab === tab.id
-                ? 'border-[#7F56D9] text-[#7F56D9]'
-                : 'border-transparent text-[#717680] hover:text-[#414651]'
+                ? 'bg-[#F4F3FF] text-[#6941C6]'
+                : 'text-[#717680] hover:text-[#414651] hover:bg-[#F9FAFB]'
             }`}
           >
             {tab.label}
@@ -208,442 +180,344 @@ function ActivityPanel({ projectId }: { projectId: string }) {
 
       {activeTab === 'recent' ? (
         <>
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 min-h-0">
+          {/* Messages */}
+          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-2 min-h-0">
             {isLoading ? (
-              <div className="flex items-center justify-center py-8"><LoadingSpinner /></div>
+              <div className="flex items-center justify-center py-10"><LoadingSpinner /></div>
             ) : messages.length === 0 ? (
-              <EmptyActivityState tab="recent" />
+              <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
+                <span className="text-3xl">💬</span>
+                <p className="text-[13px] text-[#717680]">No messages yet. Start the conversation.</p>
+              </div>
             ) : (
-              groups.map((group) => (
-                <div key={group.date}>
-                  <DateDivider label={group.date} />
-                  {group.messages.map((msg) => (
-                    <MessageBubble key={msg.id} message={msg} />
-                  ))}
+              groups.map((g) => (
+                <div key={g.date}>
+                  <DateDivider label={g.date} />
+                  {g.messages.map((m) => <MessageRow key={m.id} message={m} />)}
                 </div>
               ))
             )}
           </div>
 
-          <div className="shrink-0 border-t border-[#E9EAEB] bg-white px-3 py-2.5">
-            <div className="flex items-end gap-2 rounded-lg border border-[#E9EAEB] px-3 py-2 focus-within:border-[#7F56D9] focus-within:ring-2 focus-within:ring-[#7F56D9]/10 transition-all bg-white">
+          {/* Input */}
+          <div className="shrink-0 border-t border-[#E9EAEB] px-4 py-3">
+            <div className="flex items-end gap-2 rounded-xl border border-[#E9EAEB] bg-white px-3.5 py-2.5 focus-within:border-[#7F56D9] focus-within:ring-2 focus-within:ring-[#7F56D9]/10 transition-all">
               <textarea
                 ref={textareaRef}
                 value={draft}
-                onChange={handleTextareaChange}
+                onChange={handleChange}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                placeholder="Message..."
+                placeholder="Message"
                 className="flex-1 resize-none text-[13px] text-[#181D27] placeholder-[#A4A7AE] outline-none bg-transparent leading-relaxed"
               />
               <button
                 type="button"
                 onClick={handleSend}
                 disabled={!draft.trim() || sendMessage.isPending}
-                className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[#7F56D9] hover:bg-[#6941C6] text-white"
+                className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[#7F56D9] hover:bg-[#6941C6] text-white"
               >
-                <Send01 width={14} height={14} aria-hidden="true" />
+                <Send01 width={13} height={13} />
               </button>
             </div>
-            <p className="text-[10px] text-[#A4A7AE] mt-1.5">Press Enter to send, Shift+Enter for new line</p>
           </div>
         </>
       ) : (
-        <EmptyActivityState tab={activeTab} />
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 py-16 text-center px-4">
+          <span className="text-3xl">{activeTab === 'files' ? '📎' : '📝'}</span>
+          <p className="text-[13px] text-[#717680]">
+            {activeTab === 'files' ? 'No files or links attached yet.' : 'No notes added yet.'}
+          </p>
+        </div>
       )}
     </aside>
   );
 }
 
-// ── Tree task row ─────────────────────────────────────────────────────────────
+// ── Sub-task row (matches screenshot format exactly) ──────────────────────────
 
-interface TreeTaskRowProps {
-  task:          Task;
-  depth?:        number;
-  onOpen:        (task: Task) => void;
-  onAddSubTask?: (parentTask: Task) => void;
-}
-
-function TreeTaskRow({ task, depth = 0, onOpen, onAddSubTask }: TreeTaskRowProps) {
-  const [expanded, setExpanded] = useState(true);
-  const hasSubTasks = (task.subtasks?.length ?? 0) > 0;
-  const isSubTask   = depth > 0;
-
+function SubTaskRow({ task, onOpen }: { task: Task; onOpen: (t: Task) => void }) {
   const { text: dateText, overdue } = formatDeadline(task.deadline ?? null);
-  const statusInfo    = TASK_STATUS_BADGE[task.status]  ?? { label: task.status,  style: 'bg-gray-100 text-gray-500' };
-  const priorityStyle = PRIORITY_BADGE[task.priority]   ?? 'bg-gray-100 text-gray-500';
-  const assignees     = task.assignees ?? [];
-
-  const pl = isSubTask ? 52 : 12;
+  const priorityStyle = PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500';
+  const assignees = task.assignees ?? [];
 
   return (
-    <>
-      {/* Task row */}
-      <div
-        className="group flex items-center gap-2 py-2.5 pr-3 border-b border-[#E9EAEB] hover:bg-[#F9FAFB] transition-colors cursor-pointer"
-        style={{ paddingLeft: `${pl}px` }}
-        onClick={() => onOpen(task)}
-      >
-        {/* Expand chevron */}
-        <button
-          type="button"
-          className="shrink-0"
-          onClick={(e) => { e.stopPropagation(); if (hasSubTasks) setExpanded((v) => !v); }}
-        >
-          {hasSubTasks
-            ? (expanded
-                ? <ChevronDown  width={13} height={13} className="text-[#717680]" />
-                : <ChevronRight width={13} height={13} className="text-[#717680]" />)
-            : <ChevronRight width={13} height={13} className="text-[#C8CDD6]" aria-hidden="true" />}
-        </button>
-
-        <StatusDot status={task.status} />
-
-        <Dataflow03
-          width={isSubTask ? 12 : 14}
-          height={isSubTask ? 12 : 14}
-          className="shrink-0 text-[#A4A7AE]"
-          aria-hidden="true"
+    <div
+      className="flex items-center gap-3 px-4 py-2.5 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
+      onClick={() => onOpen(task)}
+    >
+      <StatusDot status={task.status} />
+      <Dataflow03 width={13} height={13} className="text-[#A4A7AE] shrink-0" />
+      <span className="flex-1 min-w-0 text-[13px] text-[#344054] truncate group-hover:text-[#6941C6] transition-colors">
+        {task.title}
+      </span>
+      <div className="flex items-center gap-1 shrink-0">
+        <AvatarStack
+          avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
+          max={3}
+          showAddButton={true}
+          addAs="div"
         />
-
-        <span className="flex-1 min-w-0 text-[13px] text-[#181D27] truncate group-hover:text-[#7F56D9] transition-colors">
-          {task.title}
-          {!isSubTask && hasSubTasks && (
-            <span className="ml-1.5 text-[11px] text-[#A4A7AE]">{task.subtasks!.length}</span>
-          )}
-        </span>
-
-        {assignees.length > 0 && (
-          <AvatarStack
-            avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
-            max={3}
-            showAddButton={false}
-          />
-        )}
-
-        <span className={`text-[12px] shrink-0 w-[90px] text-right ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
-          {dateText}
-        </span>
-
-        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize shrink-0 w-[70px] justify-center ${priorityStyle}`}>
-          {task.priority}
-        </span>
-
-        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 w-[90px] justify-center ${statusInfo.style}`}>
-          {statusInfo.label}
-        </span>
       </div>
-
-      {/* Sub-task tree block — only for top-level tasks */}
-      {!isSubTask && onAddSubTask && (
-        <div className="relative">
-          {/* Vertical connector line — spans children + Add Sub-task button */}
-          <div
-            className="absolute top-0 bottom-[14px] w-px bg-[#E4E7EC]"
-            style={{ left: `${pl + 18}px` }}
-          />
-
-          {hasSubTasks && expanded && task.subtasks!.map((sub) => (
-            <div key={sub.id} className="relative">
-              {/* Horizontal connector */}
-              <div
-                className="absolute top-1/2 h-px bg-[#E4E7EC]"
-                style={{ left: `${pl + 18}px`, width: '12px' }}
-              />
-              <TreeTaskRow task={sub} depth={depth + 1} onOpen={onOpen} onAddSubTask={undefined} />
-            </div>
-          ))}
-
-          {/* Add Sub-task row */}
-          <div className="relative">
-            <div
-              className="absolute top-1/2 h-px bg-[#E4E7EC]"
-              style={{ left: `${pl + 18}px`, width: '12px' }}
-            />
-            <button
-              type="button"
-              className="flex items-center gap-2 py-[6px] pr-3 w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
-              style={{ paddingLeft: `${pl + 34}px` }}
-              onClick={() => onAddSubTask(task)}
-            >
-              <span className="w-[14px] h-[14px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
-                <Plus width={7} height={7} className="text-[#7F56D9]" aria-hidden="true" />
-              </span>
-              <span className="text-[11px] font-semibold text-[#7F56D9]">Add Sub-task</span>
-            </button>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-// ── MetaCell ──────────────────────────────────────────────────────────────────
-
-function MetaCell({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE]">{label}</span>
-      <div className="text-[13px] text-[#181D27]">{children}</div>
+      <span className={`text-[12px] shrink-0 w-[80px] text-center ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
+        {dateText}
+      </span>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold capitalize shrink-0 ${priorityStyle}`}>
+        {task.priority}
+      </span>
     </div>
   );
 }
 
-// ── ProjectFullPage ───────────────────────────────────────────────────────────
+// ── ProjectFullPage ────────────────────────────────────────────────────────────
 
 export default function ProjectFullPage() {
   const { firmId, projectId } = useParams<{ firmId: string; projectId: string }>();
   const navigate              = useNavigate();
-  const [actionsOpen,      setActionsOpen]      = useState(false);
-  const [showAddSubTask,   setShowAddSubTask]   = useState(false);
-  const [subTaskParentId,  setSubTaskParentId]  = useState<string | undefined>();
-  const [selectedTask,     setSelectedTask]     = useState<Task | null>(null);
+  const [actionsOpen,     setActionsOpen]     = useState(false);
+  const [showAddSubTask,  setShowAddSubTask]  = useState(false);
+  const [subTaskParentId, setSubTaskParentId] = useState<string | undefined>();
+  const [selectedTask,    setSelectedTask]    = useState<Task | null>(null);
 
-  const { data: firm,  isLoading: firmLoading  } = useFirmDetail(firmId!);
-  const { data: project, isLoading: projectLoading } = useQuery({
+  const { data: firm    }               = useFirmDetail(firmId!);
+  const { data: project, isLoading }    = useQuery({
     queryKey: queryKeys.projects.detail(projectId!),
     queryFn:  () => projectsApi.get(projectId!),
     enabled:  !!projectId,
   });
-  const { data: users    = [] } = useUsers();
-  const { data: projects = [] } = useProjects(firmId);
-  const createTask             = useCreateTask();
-  const updateTask             = useUpdateTask();
-  const { data: allTasks = [], isLoading: tasksLoading } = useTasksByFirm(firmId!);
+  const { data: allTasks = [] }         = useTasksByFirm(firmId!);
+  const { data: users    = [] }         = useUsers();
+  const { data: projects = [] }         = useProjects(firmId);
+  const createTask                      = useCreateTask();
+  const updateTask                      = useUpdateTask();
 
-  const loading = firmLoading || projectLoading || tasksLoading;
-
-  // Filter tasks belonging to this project
   const projectTasks = allTasks.filter((t) => t.project_id === projectId && !t.parent_task_id);
 
   async function handleSaveTask(taskId: string, data: TaskDetailData) {
-    await updateTask.mutateAsync({
-      id: taskId,
-      payload: {
-        title:        data.title,
-        description:  data.description,
-        priority:     data.priority,
-        assignee_ids: data.assignee_ids,
-        deadline:     data.deadline || undefined,
-        project_id:   data.project_id,
-      },
-    });
+    await updateTask.mutateAsync({ id: taskId, payload: {
+      title: data.title, description: data.description, priority: data.priority,
+      assignee_ids: data.assignee_ids, deadline: data.deadline || undefined, project_id: data.project_id,
+    }});
     setSelectedTask(null);
   }
 
+  const priorityMap: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
+    Low: 'low', Medium: 'normal', High: 'high', Urgent: 'urgent',
+  };
+
   async function handleCreateSubTask(data: TaskFormData) {
     await createTask.mutateAsync({
-      firm_id:        firmId!,
-      project_id:     projectId,
-      parent_task_id: subTaskParentId,
-      title:          data.title,
-      description:    data.description || undefined,
-      type:           data.type,
-      priority:       data.priority,
-      deadline:       data.deadline || undefined,
-      assignee_ids:   data.assigneeIds,
+      firm_id: firmId!, project_id: projectId, parent_task_id: subTaskParentId,
+      title: data.title, description: data.description || undefined,
+      type: (data.type as 'task' | 'design' | 'development' | 'account_management') || 'task',
+      priority: priorityMap[data.priority] ?? 'normal',
+      deadline: data.endDate || undefined,
+      assignee_ids: data.assigneeIds,
     });
     setShowAddSubTask(false);
     setSubTaskParentId(undefined);
   }
 
-  // ── Loading ───────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <LoadingSpinner />
-      </div>
-    );
+  if (isLoading) {
+    return <div className="flex h-full items-center justify-center"><LoadingSpinner /></div>;
   }
-
-  // ── Not found ─────────────────────────────────────────────────────────────
   if (!project) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 text-center px-6">
-        <Users01 width={40} height={40} className="text-[#C8CDD6]" aria-hidden="true" />
+      <div className="flex h-full flex-col items-center justify-center gap-3">
         <p className="text-[15px] font-semibold text-[#181D27]">Project not found</p>
-        <button
-          type="button"
-          onClick={() => navigate(`/firms/${firmId}`)}
-          className="inline-flex items-center gap-2 text-[13px] font-semibold text-[#7F56D9] hover:text-[#6941C6] transition-colors"
-        >
+        <button onClick={() => navigate(`/firms/${firmId}`)} className="text-[13px] text-[#7F56D9] font-semibold hover:underline">
           Back to firm
         </button>
       </div>
     );
   }
 
-  const workflowLabel = WORKFLOW_LABEL[project.workflow_status];
-  const workflowDot   = WORKFLOW_DOT[project.workflow_status];
-  const priorityDot   = PRIORITY_DOT[project.priority];
-  const endDate       = project.end_date
+  const members  = project.members ?? [];
+  const endDate  = project.end_date
     ? new Date(project.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    : null;
+    : 'No due date';
 
-  // ── Main render ───────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full overflow-hidden bg-white">
-      {/* ── Left: project detail ── */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-y-auto">
-        {/* Header */}
-        <div className="px-8 pt-7 pb-0">
-          {/* Breadcrumb */}
-          <nav className="flex items-center gap-1.5 text-[12px] text-[#717680] mb-5" aria-label="Breadcrumb">
-            <button
-              type="button"
-              onClick={() => navigate('/firms')}
-              className="hover:text-[#7F56D9] transition-colors font-medium"
-            >
-              Firms
-            </button>
-            <ChevronRight width={12} height={12} className="text-[#C8CDD6]" aria-hidden="true" />
-            <button
-              type="button"
-              onClick={() => navigate(`/firms/${firmId}`)}
-              className="hover:text-[#7F56D9] transition-colors font-medium"
-            >
-              {firm?.name ?? '...'}
-            </button>
-            <ChevronRight width={12} height={12} className="text-[#C8CDD6]" aria-hidden="true" />
-            <span className="text-[#414651] font-medium truncate max-w-[240px]">{project.name}</span>
-          </nav>
+    <div className="flex h-full overflow-hidden bg-[#FAFAFA]">
 
-          {/* Title row */}
-          <div className="flex items-start justify-between gap-4 mb-1">
-            <div>
-              <h1 className="text-xl font-semibold text-[#181D27] leading-snug">{project.name}</h1>
-              {firm && (
-                <p className="text-[12px] text-[#A4A7AE] mt-0.5">
-                  {firm.name}
-                  {project.firm_name && project.firm_name !== firm.name ? ` · ${project.firm_name}` : ''}
-                </p>
-              )}
-            </div>
+      {/* ── Left: main content ── */}
+      <div className="flex-1 min-w-0 flex flex-col overflow-y-auto bg-white">
 
-            {/* Actions */}
-            <div className="relative shrink-0 mt-0.5">
-              <button
-                type="button"
-                onClick={() => setActionsOpen((v) => !v)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#E9EAEB] text-[13px] font-medium text-[#414651] hover:bg-[#F9FAFB] transition-colors"
-                aria-haspopup="true"
-                aria-expanded={actionsOpen}
-              >
-                Actions
-                <DotsVertical width={14} height={14} className="text-[#717680]" aria-hidden="true" />
-              </button>
-              <DropdownMenu
-                open={actionsOpen}
-                onClose={() => setActionsOpen(false)}
-                align="right"
-                items={[
-                  {
-                    label: 'Edit',
-                    icon: <Edit01 width={14} height={14} className="text-[#717680]" aria-hidden="true" />,
-                    onClick: () => { setActionsOpen(false); navigate(`/firms/${firmId}`); },
-                  },
-                  {
-                    label: 'Delete',
-                    icon: <Trash01 width={14} height={14} aria-hidden="true" />,
-                    onClick: () => setActionsOpen(false),
-                    variant: 'danger',
-                  },
-                ]}
-              />
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 px-8 pt-6 pb-0">
+          <button onClick={() => navigate('/firms')} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors">
+            Firms
+          </button>
+          <ChevronRight width={12} height={12} className="text-[#C8CDD6]" />
+          <button onClick={() => navigate(`/firms/${firmId}`)} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors">
+            ...
+          </button>
+          <ChevronRight width={12} height={12} className="text-[#C8CDD6]" />
+          <span className="text-[12px] font-semibold text-[#6941C6] truncate max-w-[280px]">
+            {project.name}{firm?.name ? ` For ${firm.name.split(' ').map(w => w[0]).join('').slice(0,3)}` : ''}
+          </span>
+        </div>
+
+        {/* Title section */}
+        <div className="px-8 pt-4 pb-5 flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5 mb-1">
+              <FolderClosed width={20} height={20} className="text-[#A4A7AE] shrink-0" />
+              <h1 className="text-[20px] font-semibold text-[#181D27] leading-tight">{project.name}{firm?.name ? ` For ${firm.name.split(' ').slice(0,2).join(' ')}` : ''}</h1>
             </div>
+            <p className="text-[12px] text-[#A4A7AE] ml-[28px]">
+              Created on {new Date(project.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
           </div>
 
-          <p className="text-[12px] text-[#A4A7AE] mb-6">
-            Created on{' '}
-            {new Date(project.created_at).toLocaleDateString('en-US', {
-              month: 'long', day: 'numeric', year: 'numeric',
-            })}
-          </p>
+          {/* Actions */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setActionsOpen(v => !v)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[#D5D7DA] bg-white text-[13px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
+            >
+              Actions
+              <ChevronDown width={14} height={14} className="text-[#717680]" />
+            </button>
+            {actionsOpen && (
+              <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[180px]">
+                {[
+                  { label: 'Edit', onClick: () => { setActionsOpen(false); navigate(`/firms/${firmId}`); } },
+                  { label: 'Delete (with safety)', danger: true, onClick: () => setActionsOpen(false) },
+                  { label: 'Convert to Template', onClick: () => setActionsOpen(false) },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={item.onClick}
+                    className={`flex items-center gap-2.5 w-full px-3.5 py-2.5 text-[13px] text-left hover:bg-[#F9FAFB] transition-colors ${item.danger ? 'text-red-500' : 'text-[#344054]'}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Metadata grid ── */}
-        <div className="px-8 py-5 border-y border-[#E9EAEB] grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-5">
-          {/* Members */}
-          <MetaCell label="Assignee">
-            {project.members.length > 0 ? (
-              <AvatarStack
-                avatars={project.members.map((m) => ({ name: m.name, src: m.avatar_url ?? undefined }))}
-                max={4}
-                showAddButton={false}
-              />
+        <div className="px-8 pb-6 grid grid-cols-3 gap-x-6 gap-y-5 border-b border-[#F2F4F7]">
+          {/* Assignee */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-2">Assignee</p>
+            {members.length > 0 ? (
+              <div className="flex items-center gap-1">
+                <AvatarStack
+                  avatars={members.map((m) => ({ name: m.name, src: m.avatar_url ?? undefined }))}
+                  max={3}
+                  showAddButton={true}
+                  addAs="div"
+                />
+                {members.length > 3 && (
+                  <span className="text-[12px] text-[#717680] font-medium">+{members.length - 3}</span>
+                )}
+              </div>
             ) : (
-              <span className="text-[#A4A7AE]">No members</span>
+              <span className="text-[13px] text-[#A4A7AE]">Unassigned</span>
             )}
-          </MetaCell>
+          </div>
 
           {/* Status */}
-          <MetaCell label="Status">
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F9FAFB] text-[#414651]">
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${workflowDot}`} />
-              {workflowLabel}
-            </span>
-          </MetaCell>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-2">Status</p>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#F9FAFB] border border-[#E9EAEB] text-[12px] font-medium text-[#344054]">
+              {WORKFLOW_LABEL[project.workflow_status]}
+              <ArrowRight width={12} height={12} className="text-[#A4A7AE]" />
+            </div>
+          </div>
 
           {/* Priority */}
-          <MetaCell label="Priority">
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F9FAFB] text-[#414651] capitalize">
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot}`} />
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-2">Priority</p>
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-semibold capitalize ${
+              project.priority === 'high'   ? 'bg-red-50 text-red-600' :
+              project.priority === 'medium' ? 'bg-yellow-50 text-yellow-700' :
+                                              'bg-green-50 text-green-700'
+            }`}>
               {project.priority}
             </span>
-          </MetaCell>
+          </div>
 
-          {/* Due */}
-          <MetaCell label="Due Date">
-            {endDate ? (
-              <span className="text-[13px] font-medium text-[#181D27]">{endDate}</span>
-            ) : (
-              <span className="text-[#A4A7AE]">—</span>
-            )}
-          </MetaCell>
+          {/* Due date */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-2">Due date</p>
+            <span className="text-[13px] font-medium text-[#344054]">{endDate}</span>
+          </div>
 
-          {/* Task count */}
-          <MetaCell label="Task Count">
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700">
-              {projectTasks.length} task{projectTasks.length !== 1 ? 's' : ''}
-            </span>
-          </MetaCell>
+          {/* Task Type */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-2">Task Type</p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700">Design</span>
+              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-green-50 text-green-700">Content</span>
+            </div>
+          </div>
+
+          {/* Timesheet */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-2">Timesheet</p>
+            <div className="flex items-center gap-1.5">
+              {members[0] && (
+                <Avatar name={members[0].name} src={members[0].avatar_url ?? undefined} size="xs" />
+              )}
+              <span className="text-[13px] font-medium text-[#344054]">
+                {project.ticket_count > 0 ? `${project.ticket_count * 2}hr` : '—'}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* ── Description ── */}
-        <section className="px-8 py-5 border-b border-[#E9EAEB]" aria-labelledby="desc-heading">
-          <h2 id="desc-heading" className="text-[12px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-3">
-            Description
-          </h2>
+        <section className="px-8 py-5 border-b border-[#F2F4F7]">
+          <h2 className="text-[14px] font-semibold text-[#181D27] mb-3">Description</h2>
           {project.description ? (
-            <p className="text-[14px] text-[#414651] leading-relaxed whitespace-pre-wrap">
-              {project.description}
-            </p>
+            <p className="text-[14px] text-[#535862] leading-relaxed">{project.description}</p>
           ) : (
             <p className="text-[13px] text-[#A4A7AE] italic">No description provided.</p>
           )}
         </section>
 
-        {/* ── Attachments placeholder ── */}
-        <section className="px-8 py-5 border-b border-[#E9EAEB]" aria-labelledby="attach-heading">
-          <h2 id="attach-heading" className="text-[12px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-3">
-            Attachments
-          </h2>
-          <div className="flex flex-col items-center justify-center py-6 rounded-lg border border-dashed border-[#E9EAEB] bg-[#FAFAFA] gap-2">
-            <Paperclip width={20} height={20} className="text-[#C8CDD6]" aria-hidden="true" />
-            <p className="text-[13px] text-[#A4A7AE]">No attachments yet</p>
-            <p className="text-[11px] text-[#C8CDD6]">Drag and drop files here or click to browse</p>
+        {/* ── Attachments ── */}
+        <section className="px-8 py-5 border-b border-[#F2F4F7]">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[14px] font-semibold text-[#181D27]">Attachments</h2>
+            <button className="text-[12px] font-semibold text-[#6941C6] hover:text-[#53389E] transition-colors">Edit</button>
+          </div>
+          {/* Placeholder file card */}
+          <div className="flex items-center gap-3 p-3 rounded-xl border border-[#E9EAEB] bg-[#F9FAFB] w-fit">
+            <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+              <File06 width={18} height={18} className="text-red-500" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-[#181D27]">No attachments yet</p>
+              <p className="text-[11px] text-[#A4A7AE]">Drop files here to attach</p>
+            </div>
           </div>
         </section>
 
-        {/* ── Sub Tasks (project tasks) ── */}
-        <section className="px-8 py-5" aria-labelledby="tasks-heading">
-          <div className="flex items-center justify-between gap-2 mb-3">
+        {/* ── Custom Fields ── */}
+        <section className="px-8 py-5 border-b border-[#F2F4F7]">
+          <h2 className="text-[14px] font-semibold text-[#181D27] mb-3">Custom Fields</h2>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] mb-2">Service type</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-3 py-1 rounded-full bg-[#F2F4F7] text-[12px] font-medium text-[#344054]">Hubspot management</span>
+              <span className="px-3 py-1 rounded-full bg-[#F2F4F7] text-[12px] font-medium text-[#344054]">Financial copy writing</span>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Sub Tasks ── */}
+        <section className="px-8 py-5">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <h2 id="tasks-heading" className="text-[12px] font-semibold uppercase tracking-wider text-[#A4A7AE]">
-                Sub Tasks
-              </h2>
+              <h2 className="text-[14px] font-semibold text-[#181D27]">Sub Tasks</h2>
               {projectTasks.length > 0 && (
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#F4F3FF] text-[10px] font-bold text-[#7F56D9]">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#F4F3FF] text-[10px] font-bold text-[#6941C6]">
                   {projectTasks.length}
                 </span>
               )}
@@ -651,48 +525,32 @@ export default function ProjectFullPage() {
           </div>
 
           {projectTasks.length > 0 ? (
-            <div className="rounded-lg border border-[#E9EAEB] overflow-hidden">
-              {/* Column header */}
-              <div className="flex items-center gap-2 px-3 py-2 bg-[#F9FAFB] border-b border-[#E9EAEB]">
-                <span className="flex-1 text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE]">Task</span>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[90px] text-right">Due</span>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[70px] text-center">Priority</span>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE] w-[90px] text-center">Status</span>
-              </div>
+            <div className="rounded-xl border border-[#E9EAEB] overflow-hidden">
               {projectTasks.map((task) => (
-                <TreeTaskRow
-                  key={task.id}
-                  task={task}
-                  onOpen={(t) => setSelectedTask(t)}
-                  onAddSubTask={(parent) => {
-                    setSubTaskParentId(parent.id);
-                    setShowAddSubTask(true);
-                  }}
-                />
+                <SubTaskRow key={task.id} task={task} onOpen={setSelectedTask} />
               ))}
             </div>
           ) : (
-            <p className="text-[13px] text-[#A4A7AE] mb-3">No tasks yet.</p>
+            <p className="text-[13px] text-[#A4A7AE] mb-4">No tasks yet.</p>
           )}
 
-          {/* Add task button */}
           <button
             type="button"
-            onClick={() => navigate(`/firms/${firmId}`)}
-            className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[#7F56D9] text-[#7F56D9] text-[13px] font-semibold hover:bg-[#F4F3FF] transition-colors"
+            onClick={() => { setSubTaskParentId(undefined); setShowAddSubTask(true); }}
+            className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[#7F56D9] text-[#6941C6] text-[13px] font-semibold hover:bg-[#F4F3FF] transition-colors"
           >
             <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
-              <Plus width={9} height={9} aria-hidden="true" />
+              <Plus width={9} height={9} />
             </span>
             Add Task
           </button>
         </section>
       </div>
 
-      {/* ── Right: activity ── */}
+      {/* ── Right: Activity ── */}
       <ActivityPanel projectId={projectId!} />
 
-      {/* ── Task detail drawer ── */}
+      {/* Task detail drawer */}
       <TaskDetailPanel
         open={!!selectedTask}
         onClose={() => setSelectedTask(null)}
@@ -707,7 +565,7 @@ export default function ProjectFullPage() {
         } : undefined}
       />
 
-      {/* ── Add Sub-task modal ── */}
+      {/* Add task modal */}
       <AddTaskModal
         open={showAddSubTask}
         onClose={() => { setShowAddSubTask(false); setSubTaskParentId(undefined); }}
