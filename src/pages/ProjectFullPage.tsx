@@ -23,6 +23,7 @@ import type { TaskFormData } from '../components/firms/AddTaskModal';
 import type { TaskDetailData } from '../components/firms/TaskDetailPanel';
 import {
   PRIORITY_BADGE,
+  TASK_STATUS_BADGE,
   StatusDot,
   formatDeadline,
 } from '../components/firms/TaskRow';
@@ -253,6 +254,14 @@ function SubTaskRow({ task, onOpen }: { task: Task; onOpen: (t: Task) => void })
       <span className="flex-1 min-w-0 text-[13px] text-[#344054] truncate group-hover:text-[#6941C6] transition-colors">
         {task.title}
       </span>
+      {(() => {
+        const s = TASK_STATUS_BADGE[task.status];
+        return s ? (
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${s.style}`}>
+            {s.label}
+          </span>
+        ) : null;
+      })()}
       <div className="flex items-center gap-1 shrink-0">
         <AvatarStack
           avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
@@ -555,6 +564,14 @@ export default function ProjectFullPage() {
                             <span className="flex-1 min-w-0 text-[12px] text-[#535862] truncate group-hover:text-[#6941C6] transition-colors">
                               {sub.title}
                             </span>
+                            {(() => {
+                              const s = TASK_STATUS_BADGE[sub.status];
+                              return s ? (
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${s.style}`}>
+                                  {s.label}
+                                </span>
+                              ) : null;
+                            })()}
                             {(sub.assignees ?? []).length > 0 && (
                               <AvatarStack
                                 avatars={(sub.assignees ?? []).map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
