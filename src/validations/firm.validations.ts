@@ -29,15 +29,9 @@ export const firmStep1Schema = Yup.object({
 export const firmStep2Schema = Yup.object({
   contactName: Yup.string()
     .trim()
-    .optional()
-    .test('min-length', 'Contact name must be at least 2 characters', (val) => {
-      if (!val || !val.trim()) return true;
-      return val.trim().length >= 2;
-    })
-    .test('has-letter', 'Contact name must contain at least one letter', (val) => {
-      if (!val || !val.trim()) return true;
-      return /[a-zA-Z]/.test(val);
-    }),
+    .required('Contact name is required')
+    .min(2, 'Contact name must be at least 2 characters')
+    .matches(/[a-zA-Z]/, 'Contact name must contain at least one letter'),
   contactRole: Yup.string()
     .trim()
     .optional()
@@ -46,15 +40,10 @@ export const firmStep2Schema = Yup.object({
       return /[a-zA-Z]/.test(val);
     }),
   contactEmail: Yup.string()
-    .optional()
+    .required('Email is required')
     .test('valid-email', 'Please enter a valid email address', (val) => {
-      if (!val || !val.trim()) return true;
+      if (!val || !val.trim()) return false;
       return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
     }),
-  contactPhone: Yup.string()
-    .optional()
-    .test('e164-format', 'Phone number must be in E.164 format (e.g. +12025551234)', (val) => {
-      if (!val || !val.trim()) return true;
-      return /^\+[1-9]\d{6,14}$/.test(val);
-    }),
+  contactPhone: Yup.string().optional(),
 });

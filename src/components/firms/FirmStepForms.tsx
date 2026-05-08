@@ -228,12 +228,14 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
       validationSchema={firmStep2Schema}
       onSubmit={(values) => {
         // Validate phone via PhoneInput helper before advancing
-        if (state.contactPhone) {
-          const err = getPhoneValidationError(state.contactPhone, state.contactCountry);
-          if (err) {
-            setPhoneError(err);
-            return;
-          }
+        if (!state.contactPhone) {
+          setPhoneError('Phone number is required');
+          return;
+        }
+        const err = getPhoneValidationError(state.contactPhone, state.contactCountry);
+        if (err) {
+          setPhoneError(err);
+          return;
         }
         onChange({
           contactName:  values.contactName,
@@ -258,8 +260,9 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
             value={values.contactName}
             onChange={(e) => { handleChange(e); onChange({ contactName: e.target.value }); }}
             onBlur={handleBlur}
-            placeholder="Enter contact name (optional)"
+            placeholder="Enter contact name"
             error={touched.contactName && errors.contactName ? errors.contactName : undefined}
+            required
           />
 
           <Input
@@ -279,8 +282,9 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
             value={values.contactEmail}
             onChange={(e) => { handleChange(e); onChange({ contactEmail: e.target.value }); }}
             onBlur={handleBlur}
-            placeholder="e.g. name@company.com (optional)"
+            placeholder="e.g. name@company.com"
             error={touched.contactEmail && errors.contactEmail ? errors.contactEmail : undefined}
+            required
           />
 
           <PhoneInput
@@ -290,6 +294,7 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
             countryCode={state.contactCountry}
             onCountryChange={(code) => onChange({ contactCountry: code })}
             error={phoneError || undefined}
+            required
           />
 
           <button
