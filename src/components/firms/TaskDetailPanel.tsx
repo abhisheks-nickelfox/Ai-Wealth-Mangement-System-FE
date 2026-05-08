@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HelpCircle, ChevronDown, ChevronRight, Plus, X, FolderClosed, Dataflow03 } from '@untitled-ui/icons-react';
+import { HelpCircle, ChevronDown, ChevronRight, Plus, X } from '@untitled-ui/icons-react';
+import ProjectIcon from '../icons/ProjectIcon';
+import TaskIcon from '../icons/TaskIcon';
 import Avatar from '../ui/Avatar';
 import AvatarStack from '../ui/AvatarStack';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import type { Task, User, Project } from '../../lib/api';
+import { TASK_STATUS_BADGE } from './TaskRow';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -238,7 +241,7 @@ export default function TaskDetailPanel({
               onClick={() => setShowProject((v) => !v)}
               className="w-full flex items-center gap-2 border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm bg-white hover:border-[#7F56D9] outline-none transition-colors"
             >
-              <FolderClosed width={14} height={14} className={projectId ? 'text-[#7F56D9]' : 'text-[#A4A7AE]'} />
+              <ProjectIcon width={14} height={14} className={projectId ? 'text-[#7F56D9]' : 'text-[#A4A7AE]'} />
               <span className={`flex-1 text-left truncate ${projectId ? 'text-[#181D27]' : 'text-[#A4A7AE]'}`}>
                 {projects.find((p) => p.id === projectId)?.name ?? 'No Project'}
               </span>
@@ -267,7 +270,7 @@ export default function TaskDetailPanel({
                       projectId === p.id ? 'text-[#6941C6] font-medium' : 'text-[#344054]'
                     }`}
                   >
-                    <FolderClosed width={13} height={13} className="text-[#7F56D9] shrink-0" />
+                    <ProjectIcon width={13} height={13} className="text-[#7F56D9] shrink-0" />
                     <span className="flex-1 text-left truncate">{p.name}</span>
                     {projectId === p.id && (
                       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -387,10 +390,18 @@ export default function TaskDetailPanel({
                       }
                     }}
                   >
-                    <Dataflow03 width={12} height={12} className="text-[#A4A7AE] shrink-0" />
+                    <TaskIcon width={12} height={12} className="text-[#A4A7AE] shrink-0" />
                     <span className="flex-1 min-w-0 text-[13px] text-[#344054] truncate group-hover:text-[#6941C6] transition-colors">
                       {sub.title}
                     </span>
+                    {(() => {
+                      const s = TASK_STATUS_BADGE[sub.status];
+                      return s ? (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${s.style}`}>
+                          {s.label}
+                        </span>
+                      ) : null;
+                    })()}
                     {(sub.assignees ?? []).length > 0 && (
                       <AvatarStack
                         avatars={(sub.assignees ?? []).map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}

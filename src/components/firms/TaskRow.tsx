@@ -2,8 +2,6 @@ import { useState, useRef } from 'react';
 import {
   ChevronRight,
   ChevronDown,
-  FolderClosed,
-  Dataflow03,
   DotsVertical,
   Edit01,
   Trash01,
@@ -13,6 +11,8 @@ import DropdownMenu from '../ui/DropdownMenu';
 import AvatarStack from '../ui/AvatarStack';
 import Avatar from '../ui/Avatar';
 import { useClickOutside } from '../../hooks/useClickOutside';
+import ProjectIcon from '../icons/ProjectIcon';
+import TaskIcon from '../icons/TaskIcon';
 import type { Task, User, Project } from '../../lib/api';
 
 // ── Shared column widths (imported by ProjectGroupRow) ────────────────────────
@@ -25,7 +25,7 @@ export const COL_MENU     = 'w-8 shrink-0';
 // ── Status dot ────────────────────────────────────────────────────────────────
 
 const STATUS_DOT_COLOR: Record<string, string> = {
-  to_do:           'stroke',
+  to_do:           '#A4A7AE',
   assigned:        '#7F56D9',
   in_progress:     '#7F56D9',
   revisions:       '#F79009',
@@ -36,17 +36,11 @@ const STATUS_DOT_COLOR: Record<string, string> = {
 };
 
 export function StatusDot({ status }: { status: string }) {
-  if (status === 'to_do') {
-    return (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <circle cx="8" cy="8" r="6" stroke="#A4A7AE" strokeWidth="1.5" fill="none" />
-      </svg>
-    );
-  }
-  const fill = STATUS_DOT_COLOR[status] ?? '#A4A7AE';
+  const color = STATUS_DOT_COLOR[status] ?? '#A4A7AE';
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <circle cx="8" cy="8" r="6" fill={fill} />
+      <circle cx="8" cy="8" r="6.5" stroke={color} strokeWidth="1.5" />
+      <circle cx="8" cy="8" r="3" fill={color} />
     </svg>
   );
 }
@@ -160,11 +154,11 @@ export function TaskRow({
         <span className="shrink-0"><StatusDot status={task.status} /></span>
 
         {/* Task icon — smaller for sub-tasks */}
-        <Dataflow03
+        <TaskIcon
           width={isSubTask ? 12 : 14}
           height={isSubTask ? 12 : 14}
           className="shrink-0 text-[#A4A7AE]"
-          aria-hidden="true"
+          color="currentColor"
         />
 
         {/* Title */}
@@ -269,7 +263,7 @@ export function TaskRow({
                 }] : []),
                 ...(onProjectChange ? [{
                   label: 'Move to project',
-                  icon: <FolderClosed width={14} height={14} className="text-[#717680]" aria-hidden="true" />,
+                  icon: <ProjectIcon width={14} height={14} className="text-[#717680]" />,
                   onClick: () => { setContextOpen(false); setProjectPickerOpen(true); },
                 }] : []),
                 {
@@ -300,7 +294,7 @@ export function TaskRow({
                       onClick={(e) => { e.stopPropagation(); onProjectChange(task.id, p.id); setProjectPickerOpen(false); }}
                       className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
                     >
-                      <FolderClosed width={13} height={13} className="text-[#7F56D9] shrink-0" aria-hidden="true" />
+                      <ProjectIcon width={13} height={13} className="text-[#7F56D9] shrink-0" />
                       <span className="flex-1 text-[13px] text-[#181D27] truncate">{p.name}</span>
                       {task.project_id === p.id && (
                         <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
@@ -355,14 +349,14 @@ export function TaskRow({
               style={{ left: `${indented ? 46 : 22}px`, width: '12px' }}
             />
             <button
-              className="flex items-center gap-2 pr-2 py-[6px] w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
+              className="group flex items-center gap-2 pr-2 py-[6px] w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
               style={{ paddingLeft: `${indented ? 62 : 38}px` }}
               onClick={() => onAddSubTask(task)}
             >
-              <span className="w-[14px] h-[14px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
-                <Plus width={7} height={7} className="text-[#7F56D9]" aria-hidden="true" />
+              <span className="w-4 h-4 rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9] transition-colors">
+                <Plus width={8} height={8} />
               </span>
-              <span className="text-[11px] font-semibold text-[#7F56D9]">Add Sub-task</span>
+              <span className="text-[11px] font-semibold text-[#A4A7AE] group-hover:text-[#6941C6] transition-colors">Add Sub-task</span>
             </button>
           </div>
         </div>

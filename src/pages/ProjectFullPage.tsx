@@ -6,11 +6,9 @@ import {
   ChevronDown,
   X,
   Send01,
-  Plus,
-  Dataflow03,
-  FolderClosed,
   ArrowRight,
   File06,
+  Plus,
 } from '@untitled-ui/icons-react';
 import Avatar from '../components/ui/Avatar';
 import AvatarStack from '../components/ui/AvatarStack';
@@ -30,6 +28,8 @@ import {
 } from '../components/firms/TaskRow';
 import { projectsApi } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
+import TaskIcon from '../components/icons/TaskIcon';
+import ProjectIcon from '../components/icons/ProjectIcon';
 import type { Task, Message, Project } from '../lib/api';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -249,7 +249,7 @@ function SubTaskRow({ task, onOpen }: { task: Task; onOpen: (t: Task) => void })
       onClick={() => onOpen(task)}
     >
       <StatusDot status={task.status} />
-      <Dataflow03 width={13} height={13} className="text-[#A4A7AE] shrink-0" />
+      <TaskIcon width={13} height={13} className="text-[#A4A7AE] shrink-0" />
       <span className="flex-1 min-w-0 text-[13px] text-[#344054] truncate group-hover:text-[#6941C6] transition-colors">
         {task.title}
       </span>
@@ -368,7 +368,7 @@ export default function ProjectFullPage() {
         <div className="px-8 pt-4 pb-5 flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
-              <FolderClosed width={20} height={20} className="text-[#A4A7AE] shrink-0" />
+              <ProjectIcon width={20} height={20} className="text-[#A4A7AE] shrink-0" />
               <h1 className="text-[20px] font-semibold text-[#181D27] leading-tight">{project.name}</h1>
             </div>
             <p className="text-[12px] text-[#A4A7AE] ml-[28px]">
@@ -551,7 +551,7 @@ export default function ProjectFullPage() {
                             <div className="w-4 shrink-0" />
                             <div className="w-px h-4 bg-[#E4E7EC] shrink-0" />
                             <StatusDot status={sub.status} />
-                            <Dataflow03 width={12} height={12} className="text-[#C8CDD6] shrink-0" />
+                            <TaskIcon width={12} height={12} className="text-[#C8CDD6] shrink-0" />
                             <span className="flex-1 min-w-0 text-[12px] text-[#535862] truncate group-hover:text-[#6941C6] transition-colors">
                               {sub.title}
                             </span>
@@ -583,9 +583,9 @@ export default function ProjectFullPage() {
                       <button
                         type="button"
                         onClick={() => { setSubTaskParentId(task.id); setShowAddSubTask(true); }}
-                        className="flex items-center gap-1.5 text-[12px] text-[#A4A7AE] hover:text-[#6941C6] transition-colors"
+                        className="group flex items-center gap-1.5 text-[12px] text-[#A4A7AE] hover:text-[#6941C6] transition-colors"
                       >
-                        <span className="w-4 h-4 rounded-full border border-dashed border-[#A4A7AE] hover:border-[#6941C6] flex items-center justify-center shrink-0 transition-colors">
+                        <span className="w-4 h-4 rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9] transition-colors">
                           <Plus width={8} height={8} />
                         </span>
                         Add Sub-task
@@ -602,9 +602,9 @@ export default function ProjectFullPage() {
           <button
             type="button"
             onClick={() => { setSubTaskParentId(undefined); setShowAddSubTask(true); }}
-            className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[#7F56D9] text-[#6941C6] text-[13px] font-semibold hover:bg-[#F4F3FF] transition-colors"
+            className="group mt-3 flex items-center gap-2 text-[#717680] text-[13px] font-semibold hover:text-[#6941C6] transition-colors"
           >
-            <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
+            <span className="w-5 h-5 rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9] transition-colors">
               <Plus width={9} height={9} />
             </span>
             Add Task

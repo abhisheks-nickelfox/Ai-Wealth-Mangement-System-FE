@@ -7,7 +7,6 @@ import {
   Edit01,
   Trash01,
   FileCheck01,
-  Dataflow03,
   Paperclip,
   Send01,
   Plus,
@@ -21,13 +20,20 @@ import { tasksApi } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
 import { useMessages, useSendMessage } from '../hooks/useMessages';
 import { useFirmDetail, useProjects } from '../hooks/useFirms';
+import { useUsers } from '../hooks/useUsers';
+import { useCreateTask } from '../hooks/useTasks';
+import TaskDetailPanel from '../components/firms/TaskDetailPanel';
+import AddTaskModal from '../components/firms/AddTaskModal';
+import type { TaskFormData } from '../components/firms/AddTaskModal';
 import {
   TASK_STATUS_BADGE,
   PRIORITY_BADGE,
   StatusDot,
   formatDeadline,
 } from '../components/firms/TaskRow';
+
 import type { Task, Message } from '../lib/api';
+import TaskIcon from '../components/icons/TaskIcon';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -287,8 +293,16 @@ function SubTaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
       onClick={onClick}
     >
       <StatusDot status={task.status} />
-      <Dataflow03 width={13} height={13} className="text-[#A4A7AE] shrink-0" aria-hidden="true" />
+      <TaskIcon width={13} height={13} className="text-[#A4A7AE] shrink-0" />
       <span className="flex-1 min-w-0 text-[13px] text-[#181D27] truncate group-hover:text-[#6941C6] transition-colors">{task.title}</span>
+      {(() => {
+        const s = TASK_STATUS_BADGE[task.status];
+        return s ? (
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${s.style}`}>
+            {s.label}
+          </span>
+        ) : null;
+      })()}
       {assignees.length > 0 && (
         <AvatarStack
           avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
@@ -324,7 +338,9 @@ function MetaCell({ label, children }: { label: string; children: React.ReactNod
 export default function TaskDetailPage() {
   const { firmId, taskId } = useParams<{ firmId: string; taskId: string }>();
   const navigate           = useNavigate();
-  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionsOpen,    setActionsOpen]    = useState(false);
+  const [selectedSubTask, setSelectedSubTask] = useState<import('../lib/api').Task | null>(null);
+  const [showAddSubTask,  setShowAddSubTask]  = useState(false);
 
   const { data: firm,  isLoading: firmLoading  } = useFirmDetail(firmId!);
   const { data: task,  isLoading: taskLoading  } = useQuery<Task>({
@@ -333,6 +349,8 @@ export default function TaskDetailPage() {
     enabled:  !!taskId,
   });
   const { data: projects = [] } = useProjects(firmId);
+  const { data: users    = [] } = useUsers();
+  const createTask              = useCreateTask();
 
   const isSubTask   = !!task?.parent_task_id;
   const taskProject = task?.project_id ? projects.find((p) => p.id === task.project_id) ?? null : null;
@@ -356,8 +374,27 @@ export default function TaskDetailPage() {
       : []
   );
 
-  const subTasks    = task?.subtasks ?? [];
-  const timeSpent   = task?.estimated_hours;
+  const subTasks  = task?.subtasks ?? [];
+  const timeSpent = task?.estimated_hours;
+
+  const priorityMap: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
+    Low: 'low', Medium: 'normal', High: 'high', Urgent: 'urgent',
+  };
+
+  async function handleCreateSubTask(data: TaskFormData) {
+    await createTask.mutateAsync({
+      firm_id: firmId!,
+      project_id: task?.project_id ?? undefined,
+      parent_task_id: taskId,
+      title: data.title,
+      description: data.description || undefined,
+      type: (data.type as 'task' | 'design' | 'development' | 'account_management') || 'task',
+      priority: priorityMap[data.priority] ?? 'normal',
+      deadline: data.endDate || undefined,
+      assignee_ids: data.assigneeIds,
+    });
+    setShowAddSubTask(false);
+  }
 
   // ── Render: loading ───────────────────────────────────────────────────────
 
@@ -374,7 +411,7 @@ export default function TaskDetailPage() {
   if (!task) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 text-center px-6">
-        <Dataflow03 width={40} height={40} className="text-[#C8CDD6]" aria-hidden="true" />
+        <TaskIcon width={40} height={40} className="text-[#C8CDD6]" />
         <p className="text-[15px] font-semibold text-[#181D27]">Task not found</p>
         <p className="text-[13px] text-[#717680]">
           This task may have been deleted or you may not have access.
@@ -394,6 +431,7 @@ export default function TaskDetailPage() {
   // ── Render: main ─────────────────────────────────────────────────────────
 
   return (
+    <>
     <div className="flex h-full overflow-hidden bg-white">
       {/* ── Left column: task detail ── */}
       <div className="flex-1 min-w-0 flex flex-col overflow-y-auto">
@@ -614,7 +652,7 @@ export default function TaskDetailPage() {
             {subTasks.length > 0 ? (
               <div className="rounded-lg border border-[#E9EAEB] overflow-hidden">
                 {subTasks.map((sub) => (
-                  <SubTaskRow key={sub.id} task={sub} onClick={() => navigate(`/firms/${firmId}/tasks/${sub.id}`)} />
+                  <SubTaskRow key={sub.id} task={sub} onClick={() => setSelectedSubTask(sub)} />
                 ))}
               </div>
             ) : (
@@ -623,10 +661,11 @@ export default function TaskDetailPage() {
 
             <button
               type="button"
-              className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[#7F56D9] text-[#7F56D9] text-[13px] font-semibold hover:bg-[#F4F3FF] transition-colors"
+              onClick={() => setShowAddSubTask(true)}
+              className="group mt-3 flex items-center gap-2 text-[#717680] text-[13px] font-semibold hover:text-[#6941C6] transition-colors"
             >
-              <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
-                <Plus width={9} height={9} aria-hidden="true" />
+              <span className="w-5 h-5 rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9] transition-colors">
+                <Plus width={9} height={9} />
               </span>
               Add Sub-task
             </button>
@@ -637,5 +676,32 @@ export default function TaskDetailPage() {
       {/* ── Right column: activity panel ── */}
       <ActivityPanel taskId={taskId!} />
     </div>
+
+    {/* Sub-task slide-over */}
+    <TaskDetailPanel
+      open={!!selectedSubTask}
+      onClose={() => setSelectedSubTask(null)}
+      task={selectedSubTask}
+      firmId={firmId}
+      users={users}
+      onViewTask={() => {
+        setSelectedSubTask(null);
+        navigate(`/firms/${firmId}/tasks/${selectedSubTask?.id}`);
+      }}
+      viewLabel="View Sub-task"
+    />
+
+    {/* Add Sub-task modal */}
+    <AddTaskModal
+      open={showAddSubTask}
+      onClose={() => setShowAddSubTask(false)}
+      firmName={firm?.name}
+      users={users}
+      projects={projects}
+      defaultProjectId={task?.project_id ?? undefined}
+      parentTaskId={taskId}
+      onCreate={handleCreateSubTask}
+    />
+    </>
   );
 }

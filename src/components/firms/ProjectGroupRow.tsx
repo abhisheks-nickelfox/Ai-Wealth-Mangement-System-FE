@@ -2,7 +2,6 @@ import { useState, useRef, useMemo } from 'react';
 import {
   ChevronRight,
   ChevronDown,
-  FolderClosed,
   Plus,
   DotsVertical,
   Edit01,
@@ -13,6 +12,7 @@ import AvatarStack from '../ui/AvatarStack';
 import Avatar from '../ui/Avatar';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useUpdateProject } from '../../hooks/useFirms';
+import ProjectIcon from '../icons/ProjectIcon';
 import { TaskRow, StatusDot, COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU, PRIORITY_BADGE } from './TaskRow';
 import type { Task, User, Project, Firm } from '../../lib/api';
 
@@ -101,7 +101,7 @@ export function ProjectGroupRow({
 
         {/* Folder + project name — flex-1 */}
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <FolderClosed width={15} height={15} className="text-[#7F56D9] shrink-0" aria-hidden="true" />
+          <ProjectIcon width={15} height={15} className="text-[#7F56D9] shrink-0" />
           <button
             type="button"
             className="text-[13px] font-semibold text-[#181D27] truncate hover:text-[#7F56D9] hover:underline"
@@ -221,13 +221,13 @@ export function ProjectGroupRow({
             />
           ))}
           <button
-            className="flex items-center gap-2 pl-10 pr-2 py-2.5 w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
+            className="group flex items-center gap-2 pl-10 pr-2 py-2.5 w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
             onClick={() => onAddTask?.(projectId, groupStatus)}
           >
-            <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
-              <Plus width={9} height={9} className="text-[#7F56D9]" aria-hidden="true" />
+            <span className="w-[18px] h-[18px] rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9] transition-colors">
+              <Plus width={9} height={9} aria-hidden="true" />
             </span>
-            <span className="text-[13px] font-semibold text-[#7F56D9]">Add Task</span>
+            <span className="text-[13px] font-semibold text-[#A4A7AE] group-hover:text-[#6941C6] transition-colors">Add Task</span>
           </button>
         </>
       )}
@@ -344,13 +344,13 @@ export function StatusSection({
                 </p>
               </div>
               <button
-                className="flex items-center gap-2 px-4 py-2.5 w-full text-left border-t border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
+                className="group flex items-center gap-2 px-4 py-2.5 w-full text-left border-t border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
                 onClick={() => onAddTask?.(null, group.statuses[0])}
               >
-                <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
-                  <Plus width={9} height={9} className="text-[#7F56D9]" aria-hidden="true" />
+                <span className="w-[18px] h-[18px] rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9] transition-colors">
+                  <Plus width={9} height={9} aria-hidden="true" />
                 </span>
-                <span className="text-[13px] font-semibold text-[#7F56D9]">Add Task</span>
+                <span className="text-[13px] font-semibold text-[#A4A7AE] group-hover:text-[#6941C6] transition-colors">Add Task</span>
               </button>
             </div>
           ) : viewMode === 'project' ? (
@@ -416,13 +416,13 @@ export function StatusSection({
                 />
               ))}
               <button
-                className="flex items-center gap-2 pl-4 pr-2 py-2.5 w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
+                className="group flex items-center gap-2 pl-4 pr-2 py-2.5 w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
                 onClick={() => onAddTask?.(null, group.statuses[0])}
               >
-                <span className="w-[18px] h-[18px] rounded-full border-2 border-dashed border-[#7F56D9] flex items-center justify-center shrink-0">
-                  <Plus width={9} height={9} className="text-[#7F56D9]" aria-hidden="true" />
+                <span className="w-[18px] h-[18px] rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9] transition-colors">
+                  <Plus width={9} height={9} aria-hidden="true" />
                 </span>
-                <span className="text-[13px] font-semibold text-[#7F56D9]">Add Task</span>
+                <span className="text-[13px] font-semibold text-[#A4A7AE] group-hover:text-[#6941C6] transition-colors">Add Task</span>
               </button>
             </>
           )}
