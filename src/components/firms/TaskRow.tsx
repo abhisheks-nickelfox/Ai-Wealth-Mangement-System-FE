@@ -280,33 +280,40 @@ export function TaskRow({
                 },
               ]}
             />
+
+            {/* Move-to-project picker — inside relative wrapper so absolute positioning works */}
+            {projectPickerOpen && onProjectChange && (
+              <div
+                ref={projectPickerRef}
+                className="absolute right-0 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[200px] max-h-52 overflow-y-auto"
+              >
+                <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#A4A7AE]">
+                  Move to project
+                </p>
+                {projects.length === 0 ? (
+                  <p className="px-3 py-2 text-[13px] text-[#717680]">No projects available</p>
+                ) : (
+                  projects.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onProjectChange(task.id, p.id); setProjectPickerOpen(false); }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                    >
+                      <FolderClosed width={13} height={13} className="text-[#7F56D9] shrink-0" aria-hidden="true" />
+                      <span className="flex-1 text-[13px] text-[#181D27] truncate">{p.name}</span>
+                      {task.project_id === p.id && (
+                        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                          <path d="M2 6.5L5 9.5L11 3" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Move-to-project picker */}
-        {projectPickerOpen && onProjectChange && (
-          <div
-            ref={projectPickerRef}
-            className="absolute right-8 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[190px] max-h-52 overflow-y-auto"
-          >
-            {projects.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => { onProjectChange(task.id, p.id); setProjectPickerOpen(false); }}
-                className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
-              >
-                <FolderClosed width={13} height={13} className="text-[#7F56D9] shrink-0" aria-hidden="true" />
-                <span className="flex-1 text-[13px] text-[#181D27] truncate">{p.name}</span>
-                {task.project_id === p.id && (
-                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-                    <path d="M2 6.5L5 9.5L11 3" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Sub-task tree block — only for top-level tasks */}

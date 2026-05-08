@@ -531,7 +531,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
                   priority:    matchedProject?.priority ?? undefined,
                 });
               }}
-              onEditTask={() => {}}
+              onEditTask={(task) => setSelectedTask(task)}
               onDeleteTask={(task) => setTaskToDelete(task)}
               onDeleteProject={(pid) => {
                 const proj = projectRows.find(([id]) => id === pid)?.[1].project ?? null;

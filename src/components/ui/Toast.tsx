@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { CheckCircle, AlertCircle, X } from '@untitled-ui/icons-react';
 
 interface ToastProps {
@@ -10,10 +10,15 @@ interface ToastProps {
 }
 
 export default function Toast({ message, subtitle, type = 'success', onClose, duration = 4000 }: ToastProps) {
+  // Keep a ref to the latest onClose so the timer never restarts when
+  // the parent re-renders and passes a new inline arrow function.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
-    const timer = setTimeout(onClose, duration);
+    const timer = setTimeout(() => onCloseRef.current(), duration);
     return () => clearTimeout(timer);
-  }, [onClose, duration]);
+  }, [duration]); // only restart if duration changes, never on onClose identity
 
   const isError = type === 'error';
 
