@@ -125,18 +125,21 @@ function DateDivider({ label }: { label: string }) {
 // ── MessageBubble ─────────────────────────────────────────────────────────────
 
 function MessageBubble({ message }: { message: Message }) {
+  const userName = message.user?.name ?? 'Unknown';
+  const userAvatar = message.user?.avatar_url ?? undefined;
+
   return (
     <div className="flex flex-col gap-1.5 mb-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Avatar
-            name={message.user.name}
-            src={message.user.avatar_url ?? undefined}
+            name={userName}
+            src={userAvatar}
             size="sm"
             online
           />
           <span className="text-[13px] font-semibold text-[#181D27]">
-            {message.user.name}
+            {userName}
           </span>
         </div>
         <span className="text-[11px] text-[#A4A7AE] shrink-0">
