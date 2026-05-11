@@ -34,6 +34,18 @@ const STATUS_GROUPS: StatusGroup[] = [
   { id: 'blocked',      label: 'Blocked',          statuses: ['blocked'] },
 ];
 
+// Maps group IDs → valid DB status values for initial_status
+const GROUP_ID_TO_STATUS: Record<string, string> = {
+  todo:         'to_do',
+  assigned:     'assigned',
+  inprogress:   'in_progress',
+  revisions:    'revisions',
+  inreview:     'internal_review',
+  clientreview: 'client_review',
+  completed:    'completed',
+  blocked:      'blocked',
+};
+
 // ProjectDetail display status → DB workflow_status
 const DISPLAY_TO_WORKFLOW: Record<string, string> = {
   'To Do':       'todo',
@@ -159,7 +171,9 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         project_id:      data.projectId          || undefined,
         assignee_ids:    data.assigneeIds.length > 0 ? data.assigneeIds : undefined,
         deadline:        data.endDate            || undefined,
-        initial_status:  data.initialStatus      || undefined,
+        initial_status:  data.initialStatus
+          ? (GROUP_ID_TO_STATUS[data.initialStatus] ?? data.initialStatus)
+          : undefined,
         parent_task_id:  data.parentTaskId       || undefined,
       });
       setShowAddTask(false);
