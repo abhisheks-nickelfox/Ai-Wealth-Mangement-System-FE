@@ -317,13 +317,14 @@ export interface CreateProjectPayload {
 }
 
 export interface UpdateProjectPayload {
-  name?:           string;
-  description?:    string;
+  name?:            string;
+  description?:     string;
+  status?:          'active' | 'archived';
   workflow_status?: Project['workflow_status'];
-  member_ids?:     string[];
-  start_date?:     string | null;
-  end_date?:       string | null;
-  priority?:       Project['priority'];
+  member_ids?:      string[];
+  start_date?:      string | null;
+  end_date?:        string | null;
+  priority?:        Project['priority'];
 }
 
 export const projectsApi = {

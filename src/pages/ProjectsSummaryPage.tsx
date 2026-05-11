@@ -19,7 +19,7 @@ import {
   COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU,
   PRIORITY_BADGE, formatDeadline,
 } from '../components/firms/TaskRow';
-import type { Project, User } from '../lib/api';
+import type { Project } from '../lib/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
