@@ -7,12 +7,12 @@ import {
   X,
   Send01,
   ArrowRight,
-  File06,
   Plus,
 } from '@untitled-ui/icons-react';
 import Avatar from '../components/ui/Avatar';
 import AvatarStack from '../components/ui/AvatarStack';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import AttachmentsSection from '../components/tasks/AttachmentsSection';
 import { useMessages, useSendMessage } from '../hooks/useMessages';
 import { useFirmDetail, useProjects, useUpdateProject } from '../hooks/useFirms';
 import { useClickOutside } from '../hooks/useClickOutside';
@@ -736,20 +736,7 @@ export default function ProjectFullPage() {
 
         {/* ── Attachments ── */}
         <section className="px-8 py-5 border-b border-[#F2F4F7]">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[14px] font-semibold text-[#181D27]">Attachments</h2>
-            <button className="text-[12px] font-semibold text-[#6941C6] hover:text-[#53389E] transition-colors">Edit</button>
-          </div>
-          {/* Placeholder file card */}
-          <div className="flex items-center gap-3 p-3 rounded-xl border border-[#E9EAEB] bg-[#F9FAFB] w-fit">
-            <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
-              <File06 width={18} height={18} className="text-red-500" />
-            </div>
-            <div>
-              <p className="text-[13px] font-semibold text-[#181D27]">No attachments yet</p>
-              <p className="text-[11px] text-[#A4A7AE]">Drop files here to attach</p>
-            </div>
-          </div>
+          <AttachmentsSection projectId={projectId} />
         </section>
 
         {/* ── Custom Fields ── */}

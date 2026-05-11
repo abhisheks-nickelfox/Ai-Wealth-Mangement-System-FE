@@ -448,11 +448,14 @@ export const tasksApi = {
     request<{ data: Task }>('GET', `/tasks/${id}`).then((r) => r.data),
   create: (payload: CreateTaskPayload) =>
     request<{ data: Task }>('POST', '/tasks', payload).then((r) => r.data),
-  list: (params?: { firm_id?: string; session_id?: string; status?: string }) => {
+  list: (params?: { firm_id?: string; session_id?: string; status?: string; assignee_id?: string; overdue?: string; project_id?: string }) => {
     const q = new URLSearchParams();
-    if (params?.firm_id) q.set('firm_id', params.firm_id);
+    if (params?.firm_id)    q.set('firm_id',    params.firm_id);
     if (params?.session_id) q.set('session_id', params.session_id);
-    if (params?.status) q.set('status', params.status);
+    if (params?.status)     q.set('status',     params.status);
+    if (params?.assignee_id) q.set('assignee_id', params.assignee_id);
+    if (params?.overdue)    q.set('overdue',    params.overdue);
+    if (params?.project_id) q.set('project_id', params.project_id);
     const qs = q.toString() ? `?${q.toString()}` : '';
     return request<{ data: Task[] }>('GET', `/tasks${qs}`).then((r) => r.data);
   },
@@ -516,6 +519,47 @@ export const attachmentsApi = {
 
   delete: (taskId: string, attId: string) =>
     request<{ deleted: boolean }>('DELETE', `/tasks/${taskId}/attachments/${attId}`),
+};
+
+// ── Project Attachments API ───────────────────────────────────────────────────
+
+export interface ProjectAttachment {
+  id:              string;
+  project_id:      string;
+  file_url:        string;
+  file_name:       string;
+  file_size:       number;
+  file_type:       string;
+  uploaded_by:     string;
+  uploader_name:   string | null;
+  uploader_avatar: string | null;
+  created_at:      string;
+}
+
+function uploadFileAsBase64(projectId: string, file: File): Promise<ProjectAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(',')[1];
+      try {
+        const result = await request<{ data: ProjectAttachment }>(
+          'POST', `/projects/${projectId}/attachments`,
+          { file_name: file.name, file_size: file.size, mime_type: file.type || 'application/octet-stream', data: base64 },
+        );
+        resolve(result.data);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+export const projectAttachmentsApi = {
+  list:   (projectId: string) =>
+    request<{ data: ProjectAttachment[] }>('GET', `/projects/${projectId}/attachments`).then((r) => r.data),
+  upload: (projectId: string, file: File) => uploadFileAsBase64(projectId, file),
+  delete: (projectId: string, attId: string) =>
+    request<{ deleted: boolean }>('DELETE', `/projects/${projectId}/attachments/${attId}`),
 };
 
 // ── Org Settings API ──────────────────────────────────────────────────────────

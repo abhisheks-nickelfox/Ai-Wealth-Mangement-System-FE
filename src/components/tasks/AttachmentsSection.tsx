@@ -1,6 +1,10 @@
 import { useRef, useState } from 'react';
-import { useAttachments, useUploadAttachment, useDeleteAttachment } from '../../hooks/useAttachments';
-import type { TaskAttachment } from '../../lib/api';
+import {
+  useProjectAttachments,
+  useUploadProjectAttachment,
+  useDeleteProjectAttachment,
+} from '../../hooks/useProjectAttachments';
+import type { ProjectAttachment } from '../../lib/api';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -63,27 +67,41 @@ function FileTypeIcon({ type, name }: { type: string; name: string }) {
   );
 }
 
-// ── AttachmentItem ─────────────────────────────────────────────────────────────
+// ── Single attachment row ──────────────────────────────────────────────────────
 
-function AttachmentItem({ att, onRemove }: { att: TaskAttachment; onRemove: () => void }) {
+function AttachmentItem({
+  att,
+  onRemove,
+}: {
+  att: ProjectAttachment;
+  onRemove: () => void;
+}) {
   return (
     <div className="group flex items-center gap-2.5 px-3 py-2 rounded-lg border border-[#E9EAEB] bg-white hover:bg-[#F9FAFB] transition-colors">
       <div className="shrink-0 w-8 h-8 rounded-md overflow-hidden border border-[#E9EAEB] flex items-center justify-center bg-[#F9FAFB]">
-        {att.mime_type.startsWith('image/') ? (
-          <img src={att.storage_url} alt={att.file_name} className="w-full h-full object-cover" />
+        {att.file_type?.startsWith('image/') ? (
+          <img src={att.file_url} alt={att.file_name} className="w-full h-full object-cover" />
         ) : (
-          <FileTypeIcon type={att.mime_type} name={att.file_name} />
+          <FileTypeIcon type={att.file_type ?? ''} name={att.file_name} />
         )}
       </div>
 
       <div className="flex-1 min-w-0">
         <p className="text-[12px] font-medium text-[#181D27] truncate">{att.file_name}</p>
-        <p className="text-[11px] text-[#A4A7AE]">{formatFileSize(att.file_size)}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-[11px] text-[#A4A7AE]">{formatFileSize(att.file_size)}</p>
+          {att.uploader_name && (
+            <>
+              <span className="text-[10px] text-[#D0D5DD]">·</span>
+              <p className="text-[11px] text-[#A4A7AE] truncate max-w-[100px]">{att.uploader_name}</p>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="shrink-0 flex items-center gap-1.5">
         <a
-          href={att.storage_url}
+          href={att.file_url}
           download={att.file_name}
           target="_blank"
           rel="noreferrer"
@@ -108,28 +126,43 @@ function AttachmentItem({ att, onRemove }: { att: TaskAttachment; onRemove: () =
 }
 
 // ── AttachmentsSection ─────────────────────────────────────────────────────────
+// projectId is the source of truth. Pass task.project_id from task views.
 
 interface Props {
-  taskId:    string;
+  projectId:  string | null | undefined;
   className?: string;
 }
 
-export default function AttachmentsSection({ taskId, className = '' }: Props) {
+export default function AttachmentsSection({ projectId, className = '' }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const { data: attachments = [] } = useAttachments(taskId);
-  const uploadAttachment           = useUploadAttachment(taskId);
-  const deleteAttachment           = useDeleteAttachment(taskId);
+  const { data: attachments = [] } = useProjectAttachments(projectId);
+  const upload  = useUploadProjectAttachment(projectId ?? '');
+  const destroy = useDeleteProjectAttachment(projectId ?? '');
 
   async function handleFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    await Promise.allSettled(Array.from(files).map((f) => uploadAttachment.mutateAsync(f)));
+    if (!files || !projectId) return;
+    await Promise.allSettled(Array.from(files).map((f) => upload.mutateAsync(f)));
+  }
+
+  // No project linked — show a quiet placeholder
+  if (!projectId) {
+    return (
+      <div className={className}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[13px] font-semibold text-[#181D27]">Attachments</span>
+        </div>
+        <p className="text-[12px] text-[#A4A7AE] italic">
+          Assign this task to a project to enable attachments.
+        </p>
+      </div>
+    );
   }
 
   return (
     <div className={className}>
-      {/* Header row */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-semibold text-[#181D27]">Attachments</span>
@@ -160,7 +193,7 @@ export default function AttachmentsSection({ taskId, className = '' }: Props) {
       />
 
       {/* Empty state — compact horizontal card */}
-      {attachments.length === 0 && !uploadAttachment.isPending && (
+      {attachments.length === 0 && !upload.isPending && (
         <div
           role="button"
           tabIndex={0}
@@ -175,7 +208,6 @@ export default function AttachmentsSection({ taskId, className = '' }: Props) {
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
         >
-          {/* File icon with pink/salmon bg */}
           <div className="shrink-0 w-9 h-9 rounded-lg bg-[#FEF3F2] flex items-center justify-center">
             <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
               <path d="M5 3h7l4 4v10a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" fill="#FEE4E2" stroke="#F04438" strokeWidth="1.2"/>
@@ -191,14 +223,14 @@ export default function AttachmentsSection({ taskId, className = '' }: Props) {
       )}
 
       {/* Upload spinner */}
-      {uploadAttachment.isPending && (
+      {upload.isPending && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#E9EAEB] bg-[#F9FAFB]">
           <div className="w-4 h-4 border-2 border-[#7F56D9] border-t-transparent rounded-full animate-spin shrink-0" />
           <span className="text-[12px] text-[#717680]">Uploading…</span>
         </div>
       )}
 
-      {/* File list with drop-to-add */}
+      {/* File list with drag-to-add */}
       {attachments.length > 0 && (
         <div
           className={`flex flex-col gap-1.5 rounded-lg transition-colors ${
@@ -212,7 +244,7 @@ export default function AttachmentsSection({ taskId, className = '' }: Props) {
             <AttachmentItem
               key={att.id}
               att={att}
-              onRemove={() => deleteAttachment.mutate(att.id)}
+              onRemove={() => destroy.mutate(att.id)}
             />
           ))}
         </div>

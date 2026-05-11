@@ -14,10 +14,18 @@ export function useCreateTask() {
   });
 }
 
-export function useTasks(params?: { session_id?: string; status?: string }) {
+export function useTasks(params?: { session_id?: string; status?: string; project_id?: string }) {
   return useQuery({
     queryKey: [...queryKeys.tasks.all, params],
     queryFn:  () => tasksApi.list(params),
+  });
+}
+
+export function useMyTasks(assigneeId: string | undefined) {
+  return useQuery({
+    queryKey: [...queryKeys.tasks.all, { assignee_id: assigneeId }],
+    queryFn:  () => tasksApi.list({ assignee_id: assigneeId }),
+    enabled:  !!assigneeId,
   });
 }
 

@@ -466,12 +466,10 @@ export default function TaskDetailPanel({
           </div>
         )}
 
-        {/* Attachments */}
-        {task.id && (
-          <div className="pt-2 border-t border-[#F2F4F7]">
-            <AttachmentsSection taskId={task.id} />
-          </div>
-        )}
+        {/* Attachments — universal per project */}
+        <div className="pt-2 border-t border-[#F2F4F7]">
+          <AttachmentsSection projectId={task.project_id ?? null} />
+        </div>
 
         {/* Save error */}
         {saveError && (

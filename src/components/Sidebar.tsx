@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SearchLg } from '@untitled-ui/icons-react';
 
@@ -6,6 +6,9 @@ import NavSection from './sidebar/NavSection';
 import NavItem from './sidebar/NavItem';
 import ExpandableNavItem from './sidebar/ExpandableNavItem';
 import { useFirms } from '../hooks/useFirms';
+import { useMyTasks } from '../hooks/useTasks';
+import { useAuth } from '../context/AuthContext';
+import type { Task } from '../lib/api';
 
 import vectorLogo    from '../assets/logo/Logomark.svg';
 import iconInbox      from '../assets/navbar-icon/icon-inbox.png';
@@ -24,21 +27,31 @@ const NavIcon = ({ src }: { src: string }) => (
   <img src={src} alt="" width={20} height={20} className="shrink-0" />
 );
 
-// ── My Tasks sub-items (from Figma / screenshot) ──────────────────────────────
-const MY_TASKS = [
-  { id: 'todo',          label: 'Todo',          badge: { count: 10, variant: 'blue'    as const } },
-  { id: 'assigned-me',   label: 'Assigned to me',badge: { count: 10, variant: 'brand'   as const } },
-  { id: 'today-due',     label: 'Today Due',     badge: { count: 10, variant: 'success' as const } },
-  { id: 'overdue',       label: 'Overdue',       badge: { count: 10, variant: 'error'   as const } },
-  { id: 'active',        label: 'Active' },
-  { id: 'assigned',      label: 'Assigned' },
-  { id: 'in-progress',   label: 'In Progress' },
-  { id: 'urgent',        label: 'Urgent' },
-  { id: 'blocked',       label: 'Blocked' },
-  { id: 'revisions',     label: 'Revisions' },
-  { id: 'closed',        label: 'Closed' },
-  { id: 'complete',      label: 'Complete' },
-];
+// ── Compute real My Tasks counts from fetched data ───────────────────────────
+
+function buildMyTaskItems(tasks: Task[]) {
+  const today = new Date().toISOString().slice(0, 10);
+  const counts = {
+    todo:        tasks.filter((t) => t.status === 'to_do').length,
+    assignedMe:  tasks.length,
+    todayDue:    tasks.filter((t) => t.deadline === today).length,
+    overdue:     tasks.filter((t) => !!t.deadline && t.deadline < today).length,
+  };
+  return [
+    { id: 'todo',        label: 'Todo',          ...(counts.todo       > 0 && { badge: { count: counts.todo,       variant: 'blue'    as const } }) },
+    { id: 'assigned-me', label: 'Assigned to me',...(counts.assignedMe > 0 && { badge: { count: counts.assignedMe, variant: 'brand'   as const } }) },
+    { id: 'today-due',   label: 'Today Due',     ...(counts.todayDue   > 0 && { badge: { count: counts.todayDue,   variant: 'success' as const } }) },
+    { id: 'overdue',     label: 'Overdue',       ...(counts.overdue    > 0 && { badge: { count: counts.overdue,    variant: 'error'   as const } }) },
+    { id: 'active',      label: 'Active' },
+    { id: 'assigned',    label: 'Assigned' },
+    { id: 'in-progress', label: 'In Progress' },
+    { id: 'urgent',      label: 'Urgent' },
+    { id: 'blocked',     label: 'Blocked' },
+    { id: 'revisions',   label: 'Revisions' },
+    { id: 'closed',      label: 'Closed' },
+    { id: 'complete',    label: 'Complete' },
+  ];
+}
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
@@ -50,11 +63,19 @@ function getActiveNav(pathname: string): string {
   if (pathname.startsWith('/timesheet'))             return 'timesheet';
   if (pathname.startsWith('/transcripts'))           return 'transcripts';
   if (pathname.startsWith('/settings'))              return 'settings';
+  if (pathname.startsWith('/my-tasks'))              return 'my-tasks';
   if (pathname.startsWith('/firms'))                 return 'firms';
   if (pathname.startsWith('/projects'))              return 'projects';
   if (pathname.startsWith('/team-pulse'))            return 'team-pulse';
   if (pathname.startsWith('/time-reports'))          return 'time-reports';
   return '';
+}
+
+/** Extracts the active MY_TASKS sub-filter id from the current location. */
+function getActiveTaskFilter(pathname: string, search: string): string {
+  if (!pathname.startsWith('/my-tasks')) return '';
+  const params = new URLSearchParams(search);
+  return params.get('filter') ?? 'assigned-me';
 }
 
 /** Extract the firm id from a /firms/:id pathname */
@@ -64,14 +85,17 @@ function getActiveFirmId(pathname: string): string {
 }
 
 export default function Sidebar() {
-  const navigate   = useNavigate();
-  const location   = useLocation();
-  const activeNav  = getActiveNav(location.pathname);
+  const navigate      = useNavigate();
+  const location      = useLocation();
+  const activeNav     = getActiveNav(location.pathname);
+  const activeMyTasksFilter = getActiveTaskFilter(location.pathname, location.search);
 
-  const [activeTask, setActiveTask] = useState('');
+  const { user }                                       = useAuth();
+  const { data: firms = [], isLoading: firmsLoading }  = useFirms();
+  const { data: myTasks = [] }                         = useMyTasks(user?.id);
 
-  const { data: firms = [], isLoading: firmsLoading } = useFirms();
-  const firmItems = firms.map((f) => ({ id: f.id, label: f.name }));
+  const firmItems  = firms.map((f) => ({ id: f.id, label: f.name }));
+  const myTaskItems = useMemo(() => buildMyTaskItems(myTasks), [myTasks]);
 
   // Derive active firm from URL
   const activeFirm = getActiveFirmId(location.pathname);
@@ -149,9 +173,9 @@ export default function Sidebar() {
           <ExpandableNavItem
             label="My Tasks"
             icon={<NavIcon src={iconTasks} />}
-            items={MY_TASKS}
-            activeItemId={activeTask}
-            onItemClick={setActiveTask}
+            items={myTaskItems}
+            activeItemId={activeMyTasksFilter}
+            onItemClick={(id) => navigate(`/my-tasks?filter=${id}`)}
           />
           <NavItem
             label="Timesheet"
