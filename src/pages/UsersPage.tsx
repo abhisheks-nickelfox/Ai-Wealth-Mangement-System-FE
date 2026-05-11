@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useDebounce } from '../hooks/useDebounce';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Trash01,
@@ -166,8 +167,10 @@ export default function UsersPage() {
   const [userPendingDelete, setUserPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [permissionsOpenFor, setPermissionsOpenFor] = useState<string | null>(null);
 
+  const debouncedSearch = useDebounce(search);
+
   // ── Search filter ─────────────────────────────────────────────────────────────
-  const needle = search.trim().toLowerCase();
+  const needle = debouncedSearch.trim().toLowerCase();
   const filteredUsers = needle
     ? users.filter((u) => {
         const fullName = [u.first_name, u.last_name].filter(Boolean).join(' ').toLowerCase();
@@ -327,7 +330,7 @@ export default function UsersPage() {
                 {pageMembers.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-sm text-[#717680]">
-                      {needle ? `No members match "${search}".` : 'No team members yet.'}
+                      {needle ? `No members match "${debouncedSearch}".` : 'No team members yet.'}
                     </td>
                   </tr>
                 ) : (

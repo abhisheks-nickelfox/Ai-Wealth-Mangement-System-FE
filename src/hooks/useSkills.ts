@@ -4,8 +4,9 @@ import { queryKeys } from '../lib/queryKeys';
 
 export function useSkills() {
   return useQuery({
-    queryKey: queryKeys.skills.all,
-    queryFn:  () => skillsApi.list(),
+    queryKey:  queryKeys.skills.all,
+    queryFn:   () => skillsApi.list(),
+    staleTime: 600_000,
   });
 }
 

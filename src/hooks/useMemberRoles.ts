@@ -4,8 +4,9 @@ import { queryKeys } from '../lib/queryKeys';
 
 export function useMemberRoles() {
   return useQuery({
-    queryKey: queryKeys.memberRoles.all,
-    queryFn:  () => memberRolesApi.list(),
+    queryKey:  queryKeys.memberRoles.all,
+    queryFn:   () => memberRolesApi.list(),
+    staleTime: 600_000,
   });
 }
 

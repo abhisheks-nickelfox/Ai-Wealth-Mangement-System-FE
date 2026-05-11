@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { ChevronDown, FilterLines } from '@untitled-ui/icons-react';
+import { useState, useMemo, useEffect } from 'react';
+import { ChevronDown, ChevronLeft, ChevronRight, FilterLines } from '@untitled-ui/icons-react';
 import AvatarStack from '../ui/AvatarStack';
 import { PriorityBadge, TaskStatusBadge } from '../tasks/TaskBadges';
 import { useTasks } from '../../hooks/useTasks';
@@ -96,11 +96,14 @@ function ProjectRow({ row, depth = 0 }: RowProps) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 20;
+
 export default function TasksTable() {
   const [firmFilter,  setFirmFilter]  = useState('All Firms');
   const [firmOpen,    setFirmOpen]    = useState(false);
   const [assigneeFilter, setAssigneeFilter] = useState('All Assignees');
   const [assigneeOpen,   setAssigneeOpen]   = useState(false);
+  const [page, setPage] = useState(1);
 
   const { data: tasks   = [] } = useTasks();
   const { data: firms   = [] } = useFirms();
@@ -131,6 +134,11 @@ export default function TasksTable() {
     if (assigneeFilter !== 'All Assignees' && !r.assignees.some((a) => a.name === assigneeFilter)) return false;
     return true;
   });
+
+  useEffect(() => { setPage(1); }, [firmFilter, assigneeFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageRows   = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function FilterDropdown({
     label, value, options, open, onToggle, onSelect,
@@ -201,7 +209,7 @@ export default function TasksTable() {
             </tr>
           </thead>
           <tbody className="bg-white">
-            {filtered.map((row) => (
+            {pageRows.map((row) => (
               <ProjectRow key={row.id} row={row} />
             ))}
             {filtered.length === 0 && (
@@ -214,6 +222,35 @@ export default function TasksTable() {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-3 px-1">
+          <p className="text-[12px] text-gray-500">
+            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="p-1 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              aria-label="Previous page"
+            >
+              <ChevronLeft width={16} height={16} />
+            </button>
+            <span className="text-[12px] text-gray-600 px-2">
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="p-1 rounded text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              aria-label="Next page"
+            >
+              <ChevronRight width={16} height={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

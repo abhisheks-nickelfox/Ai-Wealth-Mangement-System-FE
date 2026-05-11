@@ -282,12 +282,15 @@ export interface StatusSectionProps {
   onAddSubTask?: (parentTask: Task) => void;
 }
 
+const LOAD_MORE_PAGE_SIZE = 30;
+
 export function StatusSection({
   group, tasks, emptyProjects = [], projectsMap, firm, usersMap, viewMode,
   onProjectClick, onEditTask, onDeleteTask, onAddProject, onAddTask,
   onOpenTaskDetail, onAssigneeChange, onProjectChange, onDeleteProject, onAddSubTask,
 }: StatusSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(LOAD_MORE_PAGE_SIZE);
 
   const byProject = useMemo<Map<string | null, Task[]>>(() => {
     const map = new Map<string | null, Task[]>();
@@ -419,7 +422,7 @@ export function StatusSection({
             </>
           ) : (
             <>
-              {tasks.map((task) => (
+              {tasks.slice(0, visibleCount).map((task) => (
                 <TaskRow
                   key={task.id}
                   task={task}
@@ -434,6 +437,15 @@ export function StatusSection({
                   onAddSubTask={onAddSubTask}
                 />
               ))}
+              {visibleCount < tasks.length && (
+                <button
+                  type="button"
+                  className="text-xs text-gray-400 hover:text-gray-600 py-2 w-full text-center border-b border-[#E9EAEB] transition-colors"
+                  onClick={() => setVisibleCount((prev) => prev + LOAD_MORE_PAGE_SIZE)}
+                >
+                  Show {tasks.length - visibleCount} more
+                </button>
+              )}
               <button
                 className="group flex items-center gap-2 pl-4 pr-2 py-2.5 w-full text-left border-b border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
                 onClick={() => onAddTask?.(null, group.statuses[0])}

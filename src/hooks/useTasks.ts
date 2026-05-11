@@ -14,26 +14,29 @@ export function useCreateTask() {
   });
 }
 
-export function useTasks(params?: { session_id?: string; status?: string; project_id?: string }) {
+export function useTasks(params?: { firm_id?: string; session_id?: string; status?: string; project_id?: string }) {
   return useQuery({
-    queryKey: [...queryKeys.tasks.all, params],
-    queryFn:  () => tasksApi.list(params),
+    queryKey:  [...queryKeys.tasks.all, params],
+    queryFn:   () => tasksApi.list(params),
+    staleTime: 15_000,
   });
 }
 
 export function useMyTasks(assigneeId: string | undefined) {
   return useQuery({
-    queryKey: [...queryKeys.tasks.all, { assignee_id: assigneeId }],
-    queryFn:  () => tasksApi.list({ assignee_id: assigneeId }),
-    enabled:  !!assigneeId,
+    queryKey:  [...queryKeys.tasks.all, { assignee_id: assigneeId }],
+    queryFn:   () => tasksApi.list({ assignee_id: assigneeId }),
+    enabled:   !!assigneeId,
+    staleTime: 15_000,
   });
 }
 
 export function useTasksByFirm(firmId: string) {
   return useQuery({
-    queryKey: queryKeys.tasks.byFirm(firmId),
-    queryFn:  () => tasksApi.list({ firm_id: firmId }),
-    enabled:  !!firmId,
+    queryKey:  queryKeys.tasks.byFirm(firmId),
+    queryFn:   () => tasksApi.list({ firm_id: firmId }),
+    enabled:   !!firmId,
+    staleTime: 15_000,
   });
 }
 
@@ -46,10 +49,19 @@ export function useUpdateTask() {
         assignee_id?:  string | null;
         assignee_ids?: string[];
         project_id?:   string | null;
+        firm_id?:      string;
         status?:       string;
       };
     }) => tasksApi.update(id, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
+    onSuccess: (data, { payload }) => {
+      // Prefer firm_id from response data, fall back to what was in the payload
+      const firmId = data.firm_id ?? payload.firm_id;
+      if (firmId) {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.byFirm(firmId) });
+      } else {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      }
+    },
   });
 }
 
@@ -57,7 +69,13 @@ export function useDiscardTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => tasksApi.discard(id),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
+    onSuccess: (data) => {
+      if (data.firm_id) {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.byFirm(data.firm_id) });
+      } else {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      }
+    },
   });
 }
 
@@ -65,7 +83,13 @@ export function useResolveTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => tasksApi.resolve(id),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
+    onSuccess: (data) => {
+      if (data.firm_id) {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.byFirm(data.firm_id) });
+      } else {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      }
+    },
   });
 }
 
@@ -74,7 +98,13 @@ export function useArchiveTask() {
   return useMutation({
     mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
       tasksApi.archive(id, archived),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
+    onSuccess: (data) => {
+      if (data.firm_id) {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.byFirm(data.firm_id) });
+      } else {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      }
+    },
   });
 }
 
@@ -82,7 +112,8 @@ export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => tasksApi.delete(id),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
+    // delete returns { message } with no firm_id — full invalidation is the only option
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
   });
 }
 
@@ -91,7 +122,13 @@ export function useAssignApproveTask() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof tasksApi.assignApprove>[1] }) =>
       tasksApi.assignApprove(id, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
+    onSuccess: (data) => {
+      if (data.firm_id) {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.byFirm(data.firm_id) });
+      } else {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      }
+    },
   });
 }
 
@@ -100,8 +137,12 @@ export function useTransitionTask() {
   return useMutation({
     mutationFn: ({ id, status, change_note }: { id: string; status: string; change_note?: string }) =>
       tasksApi.transition(id, status as Parameters<typeof tasksApi.transition>[1], change_note),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    onSuccess: (data) => {
+      if (data.firm_id) {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.byFirm(data.firm_id) });
+      } else {
+        qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      }
       qc.invalidateQueries({ queryKey: queryKeys.projects.all });
     },
   });

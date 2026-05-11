@@ -57,7 +57,8 @@ function GuestRoute() {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60_000,       // 1 min before data is considered stale
+      staleTime: 30_000,       // 30s default for most data
+      gcTime:    600_000,      // 10 min — keep cache longer before GC
       retry:     1,
       refetchOnWindowFocus: false,
     },

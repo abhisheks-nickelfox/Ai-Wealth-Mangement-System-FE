@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { TrendUp01, Users01, CalendarDate, BellRinging01, CheckDone01, ChevronDown } from '@untitled-ui/icons-react';
 import { DonutChart } from './DonutChart';
 import { FocusItem } from './FocusItem';
-import { useTasks, useTasksByFirm } from '../../hooks/useTasks';
+import { useTasks } from '../../hooks/useTasks';
 import { useFirms } from '../../hooks/useFirms';
 
 // ── Status → colour mapping ────────────────────────────────────────────────────
@@ -45,12 +45,9 @@ export default function MetricCard() {
   const [selectedFirmId, setSelectedFirmId] = useState<string | null>(null);
   const [firmOpen, setFirmOpen]             = useState(false);
 
-  const { data: firms = [] }    = useFirms();
-  const { data: allTasks = [] } = useTasks();
-  const { data: firmTasks = [] } = useTasksByFirm(selectedFirmId ?? '');
-
-  const tasks   = selectedFirmId ? firmTasks : allTasks;
-  const total   = tasks.length;
+  const { data: firms = [] } = useFirms();
+  const { data: tasks = [] } = useTasks(selectedFirmId ? { firm_id: selectedFirmId } : undefined);
+  const total = tasks.length;
 
   const segments = STATUS_CONFIG.map(({ key, label, color }) => ({
     label,

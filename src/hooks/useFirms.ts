@@ -5,16 +5,18 @@ import { queryKeys } from '../lib/queryKeys';
 
 export function useFirms() {
   return useQuery({
-    queryKey: queryKeys.firms.all,
-    queryFn:  () => firmsApi.list(),
+    queryKey:  queryKeys.firms.all,
+    queryFn:   () => firmsApi.list(),
+    staleTime: 120_000,
   });
 }
 
 export function useFirmDetail(id: string) {
   return useQuery({
-    queryKey: queryKeys.firms.detail(id),
-    queryFn:  () => firmsApi.get(id),
-    enabled:  !!id,
+    queryKey:  queryKeys.firms.detail(id),
+    queryFn:   () => firmsApi.get(id),
+    enabled:   !!id,
+    staleTime: 120_000,
   });
 }
 
@@ -48,8 +50,9 @@ export function useDeleteFirm() {
 
 export function useProjects(firmId?: string) {
   return useQuery({
-    queryKey: firmId ? queryKeys.projects.byFirm(firmId) : queryKeys.projects.all,
-    queryFn:  () => projectsApi.list(firmId),
+    queryKey:  firmId ? queryKeys.projects.byFirm(firmId) : queryKeys.projects.all,
+    queryFn:   () => projectsApi.list(firmId),
+    staleTime: 120_000,
   });
 }
 

@@ -5,16 +5,18 @@ import { queryKeys } from '../lib/queryKeys';
 
 export function useUsers() {
   return useQuery({
-    queryKey: queryKeys.users.all,
-    queryFn:  () => usersApi.list(),
+    queryKey:  queryKeys.users.all,
+    queryFn:   () => usersApi.list(),
+    staleTime: 300_000,
   });
 }
 
 export function useUser(id: string) {
   return useQuery({
-    queryKey: queryKeys.users.detail(id),
-    queryFn:  () => usersApi.get(id),
-    enabled:  !!id,
+    queryKey:  queryKeys.users.detail(id),
+    queryFn:   () => usersApi.get(id),
+    enabled:   !!id,
+    staleTime: 300_000,
   });
 }
 
