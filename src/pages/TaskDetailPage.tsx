@@ -30,6 +30,7 @@ import type { TaskFormData } from '../components/firms/AddTaskModal';
 import {
   TASK_STATUS_BADGE,
   PRIORITY_BADGE,
+  PRIORITY_LABEL,
   StatusDot,
   formatDeadline,
 } from '../components/firms/TaskRow';
@@ -402,8 +403,8 @@ function SubTaskRow({
 
       {/* Priority — fixed 64 px */}
       <div className="w-[64px] flex justify-center shrink-0">
-        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize ${priorityStyle}`}>
-          {task.priority}
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${priorityStyle}`}>
+          {PRIORITY_LABEL[task.priority] ?? task.priority}
         </span>
       </div>
     </div>
@@ -729,8 +730,8 @@ export default function TaskDetailPage() {
           {/* Priority */}
           <MetaCell label="Priority">
             {priorityStyle && (
-              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold capitalize ${priorityStyle}`}>
-                {task.priority}
+              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${priorityStyle}`}>
+                {PRIORITY_LABEL[task.priority] ?? task.priority}
               </span>
             )}
           </MetaCell>

@@ -26,6 +26,7 @@ import type { TaskFormData } from '../components/firms/AddTaskModal';
 import type { TaskDetailData } from '../components/firms/TaskDetailPanel';
 import {
   PRIORITY_BADGE,
+  PRIORITY_LABEL,
   TASK_STATUS_BADGE,
   StatusDot,
   formatDeadline,
@@ -120,7 +121,7 @@ function MessageRow({ message, currentUserId }: { message: Message; currentUserI
   );
 }
 
-function ActivityPanel({ projectId }: { projectId: string }) {
+function ActivityPanel({ projectId, onClose }: { projectId: string; onClose?: () => void }) {
   const [activeTab, setActiveTab] = useState<ActivityTab>('recent');
   const [draft, setDraft]         = useState('');
   const textareaRef               = useRef<HTMLTextAreaElement>(null);
@@ -159,7 +160,7 @@ function ActivityPanel({ projectId }: { projectId: string }) {
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
         <h2 className="text-[16px] font-semibold text-[#181D27]">Activity</h2>
-        <button className="w-7 h-7 rounded-md flex items-center justify-center text-[#717680] hover:bg-[#F9FAFB] transition-colors">
+        <button onClick={onClose} className="w-7 h-7 rounded-md flex items-center justify-center text-[#717680] hover:bg-[#F9FAFB] transition-colors">
           <X width={16} height={16} />
         </button>
       </div>
@@ -331,8 +332,8 @@ function NestedSubTaskRow({
       </span>
       {/* Priority */}
       <div className="w-[64px] flex justify-center shrink-0">
-        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize ${PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500'}`}>
-          {task.priority}
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${PRIORITY_BADGE[task.priority] ?? 'bg-gray-100 text-gray-500'}`}>
+          {PRIORITY_LABEL[task.priority] ?? task.priority}
         </span>
       </div>
     </div>
@@ -443,18 +444,26 @@ function SubTaskRow({
 
       {/* Priority — fixed 64 px */}
       <div className="w-[64px] flex justify-center shrink-0">
-        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize ${priorityStyle}`}>
-          {task.priority}
+        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${priorityStyle}`}>
+          {PRIORITY_LABEL[task.priority] ?? task.priority}
         </span>
       </div>
     </div>
   );
 }
 
-// ── ProjectFullPage ────────────────────────────────────────────────────────────
+// ── ProjectFullContent (shared between page and panel) ────────────────────────
 
-export default function ProjectFullPage() {
-  const { firmId, projectId } = useParams<{ firmId: string; projectId: string }>();
+export interface ProjectFullContentProps {
+  firmId?:    string;
+  projectId?: string;
+  onClose?:   () => void;
+}
+
+export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdProp, onClose }: ProjectFullContentProps) {
+  const params                = useParams<{ firmId: string; projectId: string }>();
+  const firmId                = firmIdProp   ?? params.firmId;
+  const projectId             = projectIdProp ?? params.projectId;
   const navigate              = useNavigate();
   const [searchParams]        = useSearchParams();
   const statusOverride        = searchParams.get('status') ?? '';
@@ -467,6 +476,7 @@ export default function ProjectFullPage() {
   const [subTaskParentId,      setSubTaskParentId]      = useState<string | undefined>();
   const [subTaskParentDeadline, setSubTaskParentDeadline] = useState<string | undefined>();
   const [selectedTask,    setSelectedTask]    = useState<Task | null>(null);
+  const [showActivity,    setShowActivity]    = useState(true);
 
   const { data: firm    }               = useFirmDetail(firmId!);
   const { data: project, isLoading }    = useQuery({
@@ -554,8 +564,11 @@ export default function ProjectFullPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
         <p className="text-[15px] font-semibold text-[#181D27]">Project not found</p>
-        <button onClick={() => navigate(`/firms/${firmId}`)} className="text-[13px] text-[#7F56D9] font-semibold hover:underline">
-          Back to firm
+        <button
+          onClick={() => onClose ? onClose() : navigate(`/firms/${firmId}`)}
+          className="text-[13px] text-[#7F56D9] font-semibold hover:underline"
+        >
+          {onClose ? 'Close' : 'Back to firm'}
         </button>
       </div>
     );
@@ -572,24 +585,41 @@ export default function ProjectFullPage() {
       {/* ── Left: main content ── */}
       <div className="flex-1 min-w-0 flex flex-col overflow-y-auto bg-white">
 
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-1.5 px-8 pt-6 pb-0 flex-wrap">
-          <button onClick={() => navigate('/firms')} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors">
-            Firms
-          </button>
-          <ChevronRight width={12} height={12} className="text-[#C8CDD6]" />
-          <button onClick={() => navigate(`/firms/${firmId}`)} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors truncate max-w-[160px]">
-            {firm?.name ?? '...'}
-          </button>
-          <ChevronRight width={12} height={12} className="text-[#C8CDD6]" />
-          <button onClick={() => navigate(`/firms/${firmId}`)} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors">
-            Projects
-          </button>
-          <ChevronRight width={12} height={12} className="text-[#C8CDD6]" />
-          <span className="text-[12px] font-semibold text-[#6941C6] truncate max-w-[200px]">
-            {project.name}
-          </span>
-        </div>
+        {/* Breadcrumb / panel header */}
+        {onClose ? (
+          <div className="flex items-center justify-between px-8 pt-5 pb-0 shrink-0">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[12px] text-[#717680] font-medium truncate max-w-[160px]">{firm?.name ?? '...'}</span>
+              <ChevronRight width={12} height={12} className="text-[#C8CDD6] shrink-0" />
+              <span className="text-[12px] font-semibold text-[#6941C6] truncate max-w-[200px]">{project.name}</span>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-[#717680] hover:bg-[#F2F4F7] transition-colors shrink-0 ml-4"
+              aria-label="Close panel"
+            >
+              <X width={16} height={16} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 px-8 pt-6 pb-0 flex-wrap">
+            <button onClick={() => navigate('/firms')} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors">
+              Firms
+            </button>
+            <ChevronRight width={12} height={12} className="text-[#C8CDD6]" />
+            <button onClick={() => navigate(`/firms/${firmId}`)} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors truncate max-w-[160px]">
+              {firm?.name ?? '...'}
+            </button>
+            <ChevronRight width={12} height={12} className="text-[#C8CDD6]" />
+            <button onClick={() => navigate(`/firms/${firmId}`)} className="text-[12px] text-[#717680] hover:text-[#6941C6] font-medium transition-colors">
+              Projects
+            </button>
+            <ChevronRight width={12} height={12} className="text-[#C8CDD6]" />
+            <span className="text-[12px] font-semibold text-[#6941C6] truncate max-w-[200px]">
+              {project.name}
+            </span>
+          </div>
+        )}
 
         {/* Title section */}
         <div className="px-8 pt-4 pb-5 flex items-start justify-between gap-4">
@@ -836,7 +866,7 @@ export default function ProjectFullPage() {
       </div>
 
       {/* ── Right: Activity ── */}
-      <ActivityPanel projectId={projectId!} />
+      {showActivity && <ActivityPanel projectId={projectId!} onClose={() => setShowActivity(false)} />}
 
       {/* Task detail drawer */}
       <TaskDetailPanel
@@ -903,4 +933,57 @@ export default function ProjectFullPage() {
       )}
     </div>
   );
+}
+
+// ── ProjectFullPanel — slide-over wrapper ──────────────────────────────────────
+
+interface ProjectFullPanelProps {
+  open:      boolean;
+  firmId:    string;
+  projectId: string;
+  onClose:   () => void;
+}
+
+export function ProjectFullPanel({ open, firmId, projectId, onClose }: ProjectFullPanelProps) {
+  // Lock body scroll while open
+  useEffect(() => {
+    document.body.style.overflow = open ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open, onClose]);
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        className={`fixed inset-0 z-40 bg-black/30 transition-opacity duration-300 ${
+          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+      />
+      {/* Panel */}
+      <div
+        className={`fixed inset-y-0 right-0 z-50 flex flex-col bg-[#FAFAFA] shadow-2xl transition-transform duration-300 ease-in-out w-full max-w-[1300px] ${
+          open ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {open && (
+          <ProjectFullContent firmId={firmId} projectId={projectId} onClose={onClose} />
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Default export — full page (reads params from URL) ─────────────────────────
+
+export default function ProjectFullPage() {
+  return <ProjectFullContent />;
 }

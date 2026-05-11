@@ -65,6 +65,13 @@ export const PRIORITY_BADGE: Record<string, string> = {
   low:    'bg-green-50 text-green-600',
 };
 
+export const PRIORITY_LABEL: Record<string, string> = {
+  urgent: 'Urgent',
+  high:   'High',
+  normal: 'Medium',
+  low:    'Low',
+};
+
 export const TASK_STATUS_BADGE: Record<string, { label: string; style: string }> = {
   draft:             { label: 'Draft',       style: 'bg-gray-100 text-gray-500' },
   to_do:             { label: 'To Do',       style: 'bg-gray-100 text-gray-500' },
@@ -247,8 +254,8 @@ export function TaskRow({
 
         {/* Priority column */}
         <div className={COL_PRIORITY}>
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold capitalize ${priorityStyle}`}>
-            {task.priority}
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${priorityStyle}`}>
+            {PRIORITY_LABEL[task.priority] ?? task.priority}
           </span>
         </div>
 

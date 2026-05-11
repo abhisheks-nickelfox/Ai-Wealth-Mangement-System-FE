@@ -23,7 +23,7 @@ function calcPickerPos(rect: DOMRect, dropdownW = 200, dropdownH = 260) {
   return { top, left };
 }
 import ProjectIcon from '../icons/ProjectIcon';
-import { TaskRow, StatusDot, COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU, PRIORITY_BADGE, formatDeadline } from './TaskRow';
+import { TaskRow, StatusDot, COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU, PRIORITY_BADGE, PRIORITY_LABEL, formatDeadline } from './TaskRow';
 import type { Task, User, Project, Firm } from '../../lib/api';
 
 // ── Status group definition (shared with ProjectsTab) ────────────────────────
@@ -176,8 +176,8 @@ export function ProjectGroupRow({
         {/* Priority column */}
         <div className={COL_PRIORITY}>
           {priorityStyle && project && (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold capitalize ${priorityStyle}`}>
-              {project.priority}
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${priorityStyle}`}>
+              {PRIORITY_LABEL[project.priority] ?? project.priority}
             </span>
           )}
         </div>
@@ -346,13 +346,13 @@ export function StatusSection({
       {/* Column header row */}
       {!collapsed && hasContent && (
         <div className="flex items-center gap-2 pl-4 pr-2 py-1.5 border-b border-[#E9EAEB] bg-white">
-          <span className="flex-1 min-w-0 text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider">
+          <span className="flex-1 min-w-0 text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">
             {viewMode === 'project' ? 'Projects' : 'Tasks'}
           </span>
-          <div className={`${COL_ASSIGNEE} text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider text-center shrink-0`}>Assignee</div>
-          <div className={`${COL_DATE}     text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider shrink-0`}>Due date</div>
-          <div className={`${COL_PRIORITY} text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider shrink-0`}>Priority</div>
-          <div className={`${COL_STATUS}   text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider shrink-0`}>Status</div>
+          <div className={`${COL_ASSIGNEE} text-[11px] font-bold text-[#6B7280] uppercase tracking-wider text-center shrink-0`}>Assignee</div>
+          <div className={`${COL_DATE}     text-[11px] font-bold text-[#6B7280] uppercase tracking-wider shrink-0`}>Due date</div>
+          <div className={`${COL_PRIORITY} text-[11px] font-bold text-[#6B7280] uppercase tracking-wider shrink-0`}>Priority</div>
+          <div className={`${COL_STATUS}   text-[11px] font-bold text-[#6B7280] uppercase tracking-wider shrink-0`}>Status</div>
           <div className={`${COL_MENU} shrink-0`} />
         </div>
       )}
@@ -361,15 +361,9 @@ export function StatusSection({
       {!collapsed && (
         <div>
           {!hasContent ? (
-            <div className="flex flex-col border-b border-[#E9EAEB]">
-              <div className="flex flex-col items-center justify-center py-4 gap-0.5">
-                <p className="text-[13px] font-medium text-[#A4A7AE]">No tasks right now</p>
-                <p className="text-[12px] text-[#C8CAD0]">
-                  {viewMode === 'project' ? 'Add a project to get started' : 'No tasks in this section yet'}
-                </p>
-              </div>
+            <div className="border-b border-[#E9EAEB]">
               <button
-                className="group flex items-center gap-2 px-4 py-2.5 w-full text-left border-t border-[#E9EAEB] hover:bg-[#F4F3FF] transition-colors"
+                className="group flex items-center gap-2 px-4 py-2.5 w-full text-left hover:bg-[#F4F3FF] transition-colors"
                 onClick={() => onAddTask?.(null, group.statuses[0])}
               >
                 <span className="w-[18px] h-[18px] rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9] transition-colors">

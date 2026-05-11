@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HelpCircle, ChevronDown, ChevronRight, Plus, X } from '@untitled-ui/icons-react';
+import { useTransitionTask, useUpdateTask } from '../../hooks/useTasks';
 import ProjectIcon from '../icons/ProjectIcon';
 import TaskIcon from '../icons/TaskIcon';
 import Avatar from '../ui/Avatar';
@@ -56,6 +57,28 @@ const STATUS_LABELS: Record<string, string> = {
   blocked:         'Blocked',
 };
 
+const STATUS_DOT: Record<string, string> = {
+  to_do:           'bg-[#A4A7AE]',
+  assigned:        'bg-[#7F56D9]',
+  in_progress:     'bg-[#2E90FA]',
+  revisions:       'bg-[#F79009]',
+  internal_review: 'bg-[#7F56D9]',
+  client_review:   'bg-[#444CE7]',
+  completed:       'bg-[#17B26A]',
+  blocked:         'bg-[#F04438]',
+};
+
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  to_do:           ['assigned', 'in_progress', 'blocked'],
+  assigned:        ['in_progress', 'blocked'],
+  in_progress:     ['revisions', 'internal_review', 'blocked'],
+  revisions:       ['in_progress'],
+  internal_review: ['client_review', 'revisions'],
+  client_review:   ['completed', 'revisions'],
+  completed:       [],
+  blocked:         ['to_do', 'in_progress'],
+};
+
 const TYPE_LABELS: Record<string, string> = {
   task:               'Task',
   design:             'Design',
@@ -84,21 +107,30 @@ export default function TaskDetailPanel({
   const [assigneeIds,  setAssigneeIds]  = useState<string[]>([]);
   const [deadline,     setDeadline]     = useState('');
   const [projectId,    setProjectId]    = useState<string | null>(null);
+  const [taskStatus,   setTaskStatus]   = useState('');
   const [saving,        setSaving]       = useState(false);
   const [deadlineError, setDeadlineError] = useState('');
   const [saveError,     setSaveError]     = useState('');
+  const [statusError,   setStatusError]   = useState('');
 
-  const [showPriority, setShowPriority] = useState(false);
-  const [showPicker,   setShowPicker]   = useState(false);
-  const [showProject,  setShowProject]  = useState(false);
+  const [showPriority,  setShowPriority]  = useState(false);
+  const [showPicker,    setShowPicker]    = useState(false);
+  const [showProject,   setShowProject]   = useState(false);
+  const [showStatus,    setShowStatus]    = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
 
   const priorityRef    = useRef<HTMLDivElement>(null);
   const pickerRef      = useRef<HTMLDivElement>(null);
   const projectRef     = useRef<HTMLDivElement>(null);
+  const statusRef      = useRef<HTMLDivElement>(null);
   const attachmentsRef = useRef<AttachmentsSectionHandle>(null);
   useClickOutside(priorityRef, () => setShowPriority(false));
   useClickOutside(pickerRef,   () => setShowPicker(false));
   useClickOutside(projectRef,  () => setShowProject(false));
+  useClickOutside(statusRef,   () => setShowStatus(false));
+
+  const transitionTask = useTransitionTask();
+  const updateTask     = useUpdateTask();
 
   // Sync fields when task changes or panel opens
   useEffect(() => {
@@ -108,6 +140,8 @@ export default function TaskDetailPanel({
       setPriority(task.priority ?? 'normal');
       setDeadline(task.deadline ?? '');
       setProjectId(task.project_id ?? null);
+      setTaskStatus(task.status ?? 'to_do');
+      setStatusError('');
       // Prefer assignees[] (multi), fall back to single assignee_id
       if (task.assignees && task.assignees.length > 0) {
         setAssigneeIds(task.assignees.map((a) => a.id));
@@ -136,8 +170,8 @@ export default function TaskDetailPanel({
 
     setSaveError('');
 
-    if (task.status === 'completed' || task.status === 'blocked') {
-      setSaveError(`This task is ${task.status} and cannot be edited.`);
+    if (taskStatus === 'completed') {
+      setSaveError('This task is completed and cannot be edited.');
       return;
     }
 
@@ -168,10 +202,30 @@ export default function TaskDetailPanel({
     }
   };
 
+  const handleStatusChange = async (nextStatus: string) => {
+    if (nextStatus === taskStatus) { setShowStatus(false); return; }
+    setShowStatus(false);
+    setStatusError('');
+    setTransitioning(true);
+    try {
+      const validNext = VALID_TRANSITIONS[taskStatus] ?? [];
+      if (validNext.includes(nextStatus)) {
+        await transitionTask.mutateAsync({ id: task.id, status: nextStatus });
+      } else {
+        await updateTask.mutateAsync({ id: task.id, payload: { status: nextStatus } });
+      }
+      setTaskStatus(nextStatus);
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : 'Failed to update task status.');
+    } finally {
+      setTransitioning(false);
+    }
+  };
+
   // Breadcrumb: Firm › Type › Status
-  const firmName   = task.firms?.name ?? '';
-  const typeLabel  = TYPE_LABELS[task.type]   ?? task.type;
-  const statusLabel = STATUS_LABELS[task.status] ?? task.status;
+  const firmName    = task.firms?.name ?? '';
+  const typeLabel   = TYPE_LABELS[task.type]   ?? task.type;
+  const statusLabel = STATUS_LABELS[taskStatus] ?? taskStatus;
 
   return (
     <SlideOver
@@ -190,17 +244,14 @@ export default function TaskDetailPanel({
             <ChevronRight width={11} height={11} className="shrink-0" />
             <span>{typeLabel}</span>
             <ChevronRight width={11} height={11} className="shrink-0" />
-            <span className="font-medium text-[#7F56D9]">{statusLabel}</span>
+            <span className={`font-medium ${taskStatus === 'completed' ? 'text-[#12B76A]' : 'text-[#7F56D9]'}`}>{statusLabel}</span>
           </nav>
         )}
 
-        {/* Read-only meta pills */}
+        {/* Meta pills */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="px-2.5 py-1 rounded-full bg-[#F2F4F7] text-[12px] font-medium text-[#414651]">
             {typeLabel}
-          </span>
-          <span className="px-2.5 py-1 rounded-full bg-[#F2F4F7] text-[12px] font-medium text-[#414651]">
-            {statusLabel}
           </span>
           {task.firms?.name && (
             <span className="px-2.5 py-1 rounded-full bg-[#F4F3FF] text-[12px] font-medium text-[#6941C6]">
@@ -260,6 +311,51 @@ export default function TaskDetailPanel({
                   {opt.label}
                 </button>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Status */}
+        <div ref={statusRef} className="relative">
+          <label className="block text-sm font-medium text-[#344054] mb-1.5">Status</label>
+          <button
+            type="button"
+            disabled={transitioning}
+            onClick={() => { setShowStatus((v) => !v); setStatusError(''); }}
+            className={`w-full flex items-center gap-2 border rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white hover:border-[#7F56D9] outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${statusError ? 'border-red-400' : 'border-[#D5D7DA]'}`}
+          >
+            <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[taskStatus] ?? 'bg-gray-400'}`} />
+            <span className="flex-1 text-left">{statusLabel}</span>
+            <ChevronDown width={15} height={15} className="text-[#717680] shrink-0" />
+          </button>
+          {showStatus && (
+            <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 max-h-52 overflow-y-auto">
+              {Object.entries(STATUS_LABELS).map(([s, label]) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => handleStatusChange(s)}
+                  className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors ${
+                    s === taskStatus ? 'text-[#6941C6] font-medium' : 'text-[#344054]'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[s] ?? 'bg-gray-400'}`} />
+                  <span className="flex-1 text-left">{label}</span>
+                  {s === taskStatus && (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
+                      <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+          {statusError && (
+            <div className="mt-2 flex items-start gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0 mt-0.5 text-red-500">
+                <path d="M7 1.75C4.1 1.75 1.75 4.1 1.75 7S4.1 12.25 7 12.25 12.25 9.9 12.25 7 9.9 1.75 7 1.75zm0 4.375v2.625M7 9.625h.007" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <p className="text-xs text-red-600 leading-relaxed">{statusError}</p>
             </div>
           )}
         </div>
@@ -451,13 +547,13 @@ export default function TaskDetailPanel({
                         showAddButton={false}
                       />
                     )}
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize shrink-0 ${
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${
                       sub.priority === 'urgent' ? 'bg-red-100 text-red-600'
                       : sub.priority === 'high' ? 'bg-orange-100 text-orange-600'
                       : sub.priority === 'normal' ? 'bg-yellow-100 text-yellow-600'
                       : 'bg-green-100 text-green-600'
                     }`}>
-                      {sub.priority}
+                      {sub.priority === 'normal' ? 'Medium' : sub.priority ? sub.priority.charAt(0).toUpperCase() + sub.priority.slice(1) : ''}
                     </span>
                   </div>
                 ))}

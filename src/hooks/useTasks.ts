@@ -46,6 +46,7 @@ export function useUpdateTask() {
         assignee_id?:  string | null;
         assignee_ids?: string[];
         project_id?:   string | null;
+        status?:       string;
       };
     }) => tasksApi.update(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
@@ -91,5 +92,17 @@ export function useAssignApproveTask() {
     mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof tasksApi.assignApprove>[1] }) =>
       tasksApi.assignApprove(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
+  });
+}
+
+export function useTransitionTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status, change_note }: { id: string; status: string; change_note?: string }) =>
+      tasksApi.transition(id, status as Parameters<typeof tasksApi.transition>[1], change_note),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      qc.invalidateQueries({ queryKey: queryKeys.projects.all });
+    },
   });
 }

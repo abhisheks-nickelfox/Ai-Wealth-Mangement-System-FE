@@ -1,15 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ProjectFullPanel } from './ProjectFullPage';
 import {
   Plus, FilterLines, ChevronDown, ChevronRight,
-  DotsVertical, Edit01, Trash01, X, SearchLg,
+  DotsVertical, Edit01, Trash01, X, SearchLg, Folder,
 } from '@untitled-ui/icons-react';
 import { useProjects, useFirms, useDeleteProject, useCreateProject } from '../hooks/useFirms';
 import { useUsers } from '../hooks/useUsers';
 import { useTasks } from '../hooks/useTasks';
 import AvatarStack from '../components/ui/AvatarStack';
-import ProjectSummaryPanel from '../components/firms/ProjectSummaryPanel';
-import ProjectDetailPanel, { type ProjectDetail } from '../components/firms/ProjectDetailPanel';
+import Avatar from '../components/ui/Avatar';
 import { useUpdateProject } from '../hooks/useFirms';
 import AddProjectModal, { type ProjectFormData } from '../components/firms/AddProjectModal';
 import DeleteProjectModal from '../components/firms/DeleteProjectModal';
@@ -18,9 +18,11 @@ import DropdownMenu from '../components/ui/DropdownMenu';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import {
   COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU,
-  PRIORITY_BADGE, formatDeadline,
+  PRIORITY_BADGE, PRIORITY_LABEL, formatDeadline,
 } from '../components/firms/TaskRow';
 import type { Project } from '../lib/api';
+
+const COL_CLIENT = 'w-[160px] shrink-0';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -36,7 +38,7 @@ const STATUS_GROUPS = [
   { id: 'blocked',      label: 'Blocked'        },
 ];
 
-// Maps TASK status → section group id (same logic as FirmDetailPage STATUS_GROUPS)
+// Maps TASK status → section group id
 const TASK_STATUS_TO_GROUP: Record<string, string> = {
   to_do:             'todo',
   assigned:          'assigned',
@@ -52,7 +54,7 @@ const TASK_STATUS_TO_GROUP: Record<string, string> = {
   draft:             'todo',
 };
 
-// For empty projects (no tasks) — maps project workflow_status → section group id
+// Maps project workflow_status → section group id (fallback for projects with no tasks)
 const WORKFLOW_TO_GROUP: Record<string, string> = {
   todo:        'todo',
   in_progress: 'inprogress',
@@ -81,32 +83,39 @@ const WORKFLOW_BADGE: Record<string, { label: string; style: string }> = {
   completed:   { label: 'Completed',   style: 'bg-gray-100 text-gray-600' },
 };
 
+// Badge for each section group (shown in the STATUS column)
+const GROUP_BADGE: Record<string, { label: string; style: string }> = {
+  todo:         { label: 'To Do',           style: 'bg-gray-100 text-gray-500'       },
+  assigned:     { label: 'Assigned',        style: 'bg-blue-50 text-blue-600'        },
+  inprogress:   { label: 'In Progress',     style: 'bg-purple-50 text-purple-600'    },
+  revisions:    { label: 'Revisions',       style: 'bg-orange-50 text-orange-600'    },
+  inreview:     { label: 'Internal Review', style: 'bg-violet-50 text-violet-600'    },
+  clientreview: { label: 'Client Review',   style: 'bg-indigo-50 text-indigo-600'    },
+  completed:    { label: 'Completed',       style: 'bg-green-50 text-green-700'      },
+  blocked:      { label: 'Blocked',         style: 'bg-red-50 text-red-600'          },
+};
+
+// Dot color keyed by SECTION group id (matches Firm→Project view colors)
+const GROUP_DOT_COLOR: Record<string, string> = {
+  todo:         '#A4A7AE',
+  assigned:     '#7F56D9',
+  inprogress:   '#7F56D9',
+  revisions:    '#F79009',
+  inreview:     '#F79009',
+  clientreview: '#444CE7',
+  completed:    '#17B26A',
+  blocked:      '#F04438',
+};
+
+// Fallback for projects with no section (workflow_status-based)
 const WORKFLOW_DOT_COLOR: Record<string, string> = {
   todo:        '#A4A7AE',
   in_progress: '#7F56D9',
   in_review:   '#F79009',
   approved:    '#17B26A',
-  completed:   '#181D27',
+  completed:   '#17B26A',
 };
 
-type ProjectStatus = 'In progress' | 'To Do' | 'In Review' | 'Approved' | 'Completed' | 'Blocked';
-
-const WORKFLOW_TO_DISPLAY: Record<string, ProjectStatus> = {
-  todo:        'To Do',
-  in_progress: 'In progress',
-  in_review:   'In Review',
-  approved:    'Approved',
-  completed:   'Completed',
-};
-
-const DISPLAY_TO_WORKFLOW: Record<string, string> = {
-  'To Do':       'todo',
-  'In progress': 'in_progress',
-  'In Review':   'in_review',
-  'Approved':    'approved',
-  'Completed':   'completed',
-  'Blocked':     'in_progress',
-};
 
 const PROJ_PRIORITY_MAP: Record<string, 'high' | 'medium' | 'low'> = {
   High: 'high', Medium: 'medium', Low: 'low',
@@ -118,18 +127,28 @@ interface ProjectRowProps {
   project: Project;
   taskCount?: number;
   showFirmBadge?: boolean;
+  sectionGroupId?: string;
+  allUsers: { id: string; name: string; avatar_url?: string | null }[];
   onProjectClick: (p: Project) => void;
   onDeleteProject: (p: Project) => void;
   onNavigate: (p: Project) => void;
+  onMembersChange: (projectId: string, memberIds: string[]) => void;
 }
 
-function ProjectRow({ project, taskCount, showFirmBadge = true, onProjectClick, onDeleteProject, onNavigate }: ProjectRowProps) {
+function ProjectRow({ project, taskCount, sectionGroupId, allUsers, onProjectClick, onDeleteProject, onNavigate, onMembersChange }: ProjectRowProps) {
   const [contextOpen, setContextOpen] = useState(false);
+  const [pickerOpen, setPickerOpen]   = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
   const isArchived = project.status === 'archived';
+  const currentMemberIds = (project.members ?? []).map((m) => m.id);
   const { text: dateText, overdue } = formatDeadline(project.end_date ?? null);
-  const workflowBadge = WORKFLOW_BADGE[project.workflow_status] ?? { label: project.workflow_status, style: 'bg-gray-100 text-gray-500' };
+  const statusBadge = sectionGroupId
+    ? (GROUP_BADGE[sectionGroupId] ?? GROUP_BADGE['todo'])
+    : (WORKFLOW_BADGE[project.workflow_status] ?? { label: project.workflow_status, style: 'bg-gray-100 text-gray-500' });
   const priorityStyle = PRIORITY_BADGE[project.priority] ?? 'bg-gray-100 text-gray-500';
-  const dotColor = WORKFLOW_DOT_COLOR[project.workflow_status] ?? '#A4A7AE';
+  const dotColor = sectionGroupId
+    ? (GROUP_DOT_COLOR[sectionGroupId] ?? '#A4A7AE')
+    : (WORKFLOW_DOT_COLOR[project.workflow_status] ?? '#A4A7AE');
   const memberAvatars = (project.members ?? []).map((m) => ({ name: m.name ?? '', src: m.avatar_url ?? undefined }));
 
   return (
@@ -155,11 +174,6 @@ function ProjectRow({ project, taskCount, showFirmBadge = true, onProjectClick, 
             Archived
           </span>
         )}
-        {showFirmBadge && project.firm_name && (
-          <span className="text-[11px] font-medium text-[#717680] bg-[#F2F4F7] px-1.5 py-0.5 rounded shrink-0">
-            {project.firm_name}
-          </span>
-        )}
         {taskCount !== undefined && taskCount > 0 && (
           <span className="text-[11px] text-[#A4A7AE] shrink-0">
             {taskCount} task{taskCount !== 1 ? 's' : ''}
@@ -167,9 +181,56 @@ function ProjectRow({ project, taskCount, showFirmBadge = true, onProjectClick, 
         )}
       </div>
 
+      {/* Client */}
+      <div className={`${COL_CLIENT} flex items-center`}>
+        {project.firm_name && (
+          <span className="text-[12px] text-[#535862] truncate">{project.firm_name}</span>
+        )}
+      </div>
+
       {/* Assignees */}
-      <div className={`${COL_ASSIGNEE} flex justify-center`}>
-        <AvatarStack avatars={memberAvatars} max={3} />
+      <div
+        ref={anchorRef}
+        className={`${COL_ASSIGNEE} relative flex justify-center`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <AvatarStack
+          avatars={memberAvatars}
+          max={3}
+          showAddButton
+          onAdd={() => setPickerOpen((v) => !v)}
+        />
+        {pickerOpen && (
+          <>
+            <div className="fixed inset-0 z-[998]" onClick={() => setPickerOpen(false)} />
+            <div className="absolute right-0 top-full mt-1 z-[999] bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[200px] max-h-60 overflow-y-auto">
+              {allUsers.map((u) => {
+                const selected = currentMemberIds.includes(u.id);
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => {
+                      const next = selected
+                        ? currentMemberIds.filter((id) => id !== u.id)
+                        : [...currentMemberIds, u.id];
+                      onMembersChange(project.id, next);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                  >
+                    <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+                    <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
+                    {selected && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                        <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Due date */}
@@ -179,15 +240,15 @@ function ProjectRow({ project, taskCount, showFirmBadge = true, onProjectClick, 
 
       {/* Priority */}
       <div className={COL_PRIORITY}>
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold capitalize ${priorityStyle}`}>
-          {project.priority}
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${priorityStyle}`}>
+          {PRIORITY_LABEL[project.priority] ?? project.priority}
         </span>
       </div>
 
       {/* Status */}
       <div className={COL_STATUS}>
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${workflowBadge.style}`}>
-          {workflowBadge.label}
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${statusBadge.style}`}>
+          {statusBadge.label}
         </span>
       </div>
 
@@ -236,15 +297,17 @@ interface ProjectStatusSectionProps {
   groupId: string;
   projects: { project: Project; taskCount: number }[];
   showFirmBadge?: boolean;
+  allUsers: { id: string; name: string; avatar_url?: string | null }[];
   onProjectClick: (p: Project) => void;
   onDeleteProject: (p: Project) => void;
   onNavigate: (p: Project) => void;
   onAddProject?: (groupId: string) => void;
+  onMembersChange: (projectId: string, memberIds: string[]) => void;
 }
 
 function ProjectStatusSection({
-  label, groupId, projects, showFirmBadge,
-  onProjectClick, onDeleteProject, onNavigate, onAddProject,
+  label, groupId, projects, showFirmBadge, allUsers,
+  onProjectClick, onDeleteProject, onNavigate, onAddProject, onMembersChange,
 }: ProjectStatusSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -276,31 +339,45 @@ function ProjectStatusSection({
       </div>
 
       {!collapsed && projects.length > 0 && (
-        <div className="flex items-center gap-2 pl-6 pr-2 py-1.5 border-b border-[#E9EAEB] bg-white">
-          <span className="flex-1 text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider">Project</span>
-          <div className={`${COL_ASSIGNEE} text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider text-center`}>Assignee</div>
-          <div className={`${COL_DATE}     text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider`}>Due date</div>
-          <div className={`${COL_PRIORITY} text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider`}>Priority</div>
-          <div className={`${COL_STATUS}   text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider`}>Status</div>
+        <div className="flex items-center gap-2 pl-6 pr-2 py-1.5 border-b border-[#E9EAEB] bg-[#F9FAFB]">
+          <span className="flex-1 text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">Project</span>
+          <div className={`${COL_CLIENT} text-[11px] font-bold text-[#6B7280] uppercase tracking-wider`}>Client</div>
+          <div className={`${COL_ASSIGNEE} text-[11px] font-bold text-[#6B7280] uppercase tracking-wider text-center`}>Assignee</div>
+          <div className={`${COL_DATE}     text-[11px] font-bold text-[#6B7280] uppercase tracking-wider`}>Due date</div>
+          <div className={`${COL_PRIORITY} text-[11px] font-bold text-[#6B7280] uppercase tracking-wider`}>Priority</div>
+          <div className={`${COL_STATUS}   text-[11px] font-bold text-[#6B7280] uppercase tracking-wider`}>Status</div>
           <div className={`${COL_MENU}`} />
         </div>
       )}
 
       {!collapsed && (
         projects.length === 0 ? (
-          <div className="flex items-center justify-center py-4 border-b border-[#E9EAEB]">
-            <p className="text-[13px] text-[#A4A7AE]">No projects in this section</p>
+          <div className="border-b border-[#E9EAEB]">
+            {onAddProject ? (
+              <button
+                className="group flex items-center gap-2 px-6 py-2.5 w-full text-left hover:bg-[#F4F3FF] transition-colors"
+                onClick={() => onAddProject(groupId)}
+              >
+                <span className="w-[18px] h-[18px] rounded-full border border-dashed border-gray-300 flex items-center justify-center shrink-0 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9] transition-colors">
+                  <Plus width={9} height={9} aria-hidden="true" />
+                </span>
+                <span className="text-[13px] font-semibold text-[#A4A7AE] group-hover:text-[#6941C6] transition-colors">Add Project</span>
+              </button>
+            ) : null}
           </div>
         ) : (
           projects.map(({ project, taskCount }) => (
             <ProjectRow
-              key={project.id}
+              key={`${project.id}-${groupId}`}
               project={project}
               taskCount={taskCount}
               showFirmBadge={showFirmBadge}
+              sectionGroupId={groupId}
+              allUsers={allUsers}
               onProjectClick={onProjectClick}
               onDeleteProject={onDeleteProject}
               onNavigate={onNavigate}
+              onMembersChange={onMembersChange}
             />
           ))
         )
@@ -556,7 +633,7 @@ export default function ProjectsSummaryPage() {
 
   const [viewMode, setViewMode] = useState<'by-status' | 'by-firm'>('by-status');
   const [selectedFirmId, setSelectedFirmId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [search] = useState('');
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
@@ -569,9 +646,11 @@ export default function ProjectsSummaryPage() {
   const [showFirmPicker, setShowFirmPicker] = useState(false);
   const [showAddProject, setShowAddProject] = useState(false);
 
-  const [selectedProject, setSelectedProject] = useState<ProjectDetail | null>(null);
-  const [editProject,     setEditProject]     = useState<ProjectDetail | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+
+  // Full project panel (slides in from right)
+  const [panelProjectId,  setPanelProjectId]  = useState<string | null>(null);
+  const [panelFirmId,     setPanelFirmId]      = useState<string | null>(null);
 
   const { data: allProjects = [], isLoading: projectsLoading } = useProjects();
   const { data: allTasks = [],    isLoading: tasksLoading    } = useTasks();
@@ -582,34 +661,6 @@ export default function ProjectsSummaryPage() {
   const createProject = useCreateProject();
 
   const firmsMap = useMemo(() => new Map(firms.map((f) => [f.id, f])), [firms]);
-
-  // Build a map: projectId → Set<groupId> based on task statuses
-  // A project can appear in MULTIPLE sections (same as FirmDetailPage)
-  const projectGroupsFromTasks = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const task of allTasks) {
-      if (!task.project_id) continue;
-      const groupId = TASK_STATUS_TO_GROUP[task.status];
-      if (!groupId) continue;
-      if (!map.has(task.project_id)) map.set(task.project_id, new Set());
-      map.get(task.project_id)!.add(groupId);
-    }
-    return map;
-  }, [allTasks]);
-
-  // Build a map: projectId → task count per groupId
-  const projectTaskCounts = useMemo(() => {
-    const map = new Map<string, Map<string, number>>();
-    for (const task of allTasks) {
-      if (!task.project_id) continue;
-      const groupId = TASK_STATUS_TO_GROUP[task.status];
-      if (!groupId) continue;
-      if (!map.has(task.project_id)) map.set(task.project_id, new Map());
-      const inner = map.get(task.project_id)!;
-      inner.set(groupId, (inner.get(groupId) ?? 0) + 1);
-    }
-    return map;
-  }, [allTasks]);
 
   // Filtered projects based on search / firm filters
   const filteredProjects = useMemo(() => {
@@ -632,32 +683,49 @@ export default function ProjectsSummaryPage() {
     return result;
   }, [allProjects, search, filterFirmIds, viewMode, selectedFirmId]);
 
-  const filteredProjectIds = useMemo(
-    () => new Set(filteredProjects.map((p) => p.id)),
-    [filteredProjects],
-  );
+  // Build maps needed for task-based grouping
+  const projectGroupsFromTasks = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const task of allTasks) {
+      if (!task.project_id) continue;
+      const groupId = TASK_STATUS_TO_GROUP[task.status];
+      if (!groupId) continue;
+      if (!map.has(task.project_id)) map.set(task.project_id, new Set());
+      map.get(task.project_id)!.add(groupId);
+    }
+    return map;
+  }, [allTasks]);
 
-  const filteredProjectsMap = useMemo(
-    () => new Map(filteredProjects.map((p) => [p.id, p])),
-    [filteredProjects],
-  );
+  const projectTaskCounts = useMemo(() => {
+    const map = new Map<string, Map<string, number>>();
+    for (const task of allTasks) {
+      if (!task.project_id) continue;
+      const groupId = TASK_STATUS_TO_GROUP[task.status];
+      if (!groupId) continue;
+      if (!map.has(task.project_id)) map.set(task.project_id, new Map());
+      const inner = map.get(task.project_id)!;
+      inner.set(groupId, (inner.get(groupId) ?? 0) + 1);
+    }
+    return map;
+  }, [allTasks]);
 
-  // Build per-section project list (with task counts) matching FirmDetailPage logic:
-  // - Projects WITH tasks → appear in every section that has tasks for that project
-  // - Projects WITHOUT tasks → appear in one section based on their workflow_status
+  const filteredProjectIds   = useMemo(() => new Set(filteredProjects.map((p) => p.id)), [filteredProjects]);
+  const filteredProjectsMap  = useMemo(() => new Map(filteredProjects.map((p) => [p.id, p])), [filteredProjects]);
+
+  // Group projects by task statuses.
+  // Projects WITH tasks → appear in every section whose tasks they contain.
+  // Projects WITHOUT tasks → appear once based on their own workflow_status.
   const projectsByGroup = useMemo(() => {
     const map = new Map<string, { project: Project; taskCount: number }[]>();
     for (const g of STATUS_GROUPS) map.set(g.id, []);
 
     const projectsWithTasks = new Set<string>();
 
-    // Projects that have tasks — place in each section their tasks belong to
     for (const [projectId, groupSet] of projectGroupsFromTasks) {
       if (!filteredProjectIds.has(projectId)) continue;
       const project = filteredProjectsMap.get(projectId);
       if (!project) continue;
 
-      // Filter by status filter
       const applicableGroups = filterStatuses.length > 0
         ? [...groupSet].filter((g) => filterStatuses.includes(g))
         : [...groupSet];
@@ -671,8 +739,7 @@ export default function ProjectsSummaryPage() {
       }
     }
 
-    // Projects WITHOUT any tasks — place by workflow_status
-    // Skip if a status filter is active (empty projects don't have a meaningful status to filter on)
+    // Projects with no tasks — fall back to workflow_status grouping
     if (filterStatuses.length === 0) {
       for (const project of filteredProjects) {
         if (projectsWithTasks.has(project.id)) continue;
@@ -686,11 +753,6 @@ export default function ProjectsSummaryPage() {
 
   const activeFilterCount = (filterStatuses.length > 0 ? 1 : 0) + (filterFirmIds.length > 0 ? 1 : 0);
 
-  const projectCountByFirm = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const p of allProjects) counts.set(p.firm_id, (counts.get(p.firm_id) ?? 0) + 1);
-    return counts;
-  }, [allProjects]);
 
   function openAddProject(groupId: string) {
     const workflowStatus = GROUP_TO_WORKFLOW[groupId] ?? 'todo';
@@ -724,38 +786,8 @@ export default function ProjectsSummaryPage() {
   }
 
   function openDetailPanel(project: Project) {
-    const firm = firmsMap.get(project.firm_id);
-    const firmName = firm?.name ?? project.firm_name ?? '';
-    const firmAbbr = firmName.split(' ').map((w) => w[0]).join('').toUpperCase();
-    setSelectedProject({
-      id:          project.id,
-      name:        project.name,
-      description: project.description ?? '',
-      status:      WORKFLOW_TO_DISPLAY[project.workflow_status] ?? 'To Do',
-      memberIds:   project.members.map((m) => m.id),
-      firmName,
-      firmAbbr,
-      startDate:   project.start_date ?? undefined,
-      endDate:     project.end_date ?? undefined,
-      priority:    project.priority ?? 'medium',
-      createdAt:   project.created_at,
-    });
-  }
-
-  async function handleSaveProject(updated: ProjectDetail) {
-    if (!updated.id) return;
-    await updateProject.mutateAsync({
-      id: updated.id,
-      payload: {
-        name:            updated.name,
-        description:     updated.description || undefined,
-        workflow_status: (DISPLAY_TO_WORKFLOW[updated.status] ?? 'todo') as Project['workflow_status'],
-        member_ids:      updated.memberIds,
-        start_date:      updated.startDate || undefined,
-        end_date:        updated.endDate   || undefined,
-        priority:        updated.priority,
-      },
-    });
+    setPanelProjectId(project.id);
+    setPanelFirmId(project.firm_id);
   }
 
   function applyFilters() {
@@ -778,17 +810,7 @@ export default function ProjectsSummaryPage() {
 
       {/* ── Header ─────────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-6 py-4 border-b border-[#E9EAEB] bg-white shrink-0 flex-wrap">
-        <h1 className="text-[18px] font-bold text-[#181D27] mr-2">Projects</h1>
-
-        <div className="flex items-center gap-2 border border-[#E9EAEB] rounded-lg px-3 py-1.5 bg-white min-w-0 w-52">
-          <SearchLg width={14} height={14} className="text-[#A4A7AE] shrink-0" aria-hidden="true" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search projects…"
-            className="flex-1 text-[13px] text-[#181D27] placeholder-[#A4A7AE] outline-none bg-transparent"
-          />
-        </div>
+        <h1 className="text-[18px] font-bold text-[#181D27] mr-2">Project Summary</h1>
 
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => setViewMode('by-status')}
@@ -835,34 +857,36 @@ export default function ProjectsSummaryPage() {
       {/* ── Body ───────────────────────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
-        {/* By Firm sidebar */}
+        {/* By Firm sidebar — firm list */}
         {viewMode === 'by-firm' && (
-          <aside className="w-56 shrink-0 border-r border-[#E9EAEB] overflow-y-auto">
-            <div className="px-3 py-3">
-              <p className="text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider px-2 mb-2">Firms</p>
-              <button type="button" onClick={() => setSelectedFirmId(null)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  selectedFirmId === null
-                    ? 'bg-[#F4F3FF] text-[#6941C6]'
-                    : 'text-[#344054] hover:bg-[#F9FAFB]'
-                }`}>
-                <span>All Firms</span>
-                <span className="text-[12px] text-[#717680]">{allProjects.length}</span>
-              </button>
-              {firms.map((firm) => (
-                <button key={firm.id} type="button" onClick={() => setSelectedFirmId(firm.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                    selectedFirmId === firm.id
-                      ? 'bg-[#F4F3FF] text-[#6941C6]'
-                      : 'text-[#344054] hover:bg-[#F9FAFB]'
-                  }`}>
-                  <span className="truncate">{firm.name}</span>
-                  <span className="text-[12px] text-[#717680] shrink-0 ml-1">
-                    {projectCountByFirm.get(firm.id) ?? 0}
+          <aside className="w-[280px] shrink-0 border-r border-[#E9EAEB] overflow-y-auto bg-white">
+            {firms.map((firm) => {
+              const isSelected = selectedFirmId === firm.id;
+              return (
+                <button
+                  key={firm.id}
+                  type="button"
+                  onClick={() => setSelectedFirmId(isSelected ? null : firm.id)}
+                  className={`w-full flex items-center gap-3 px-5 py-4 border-b border-[#E9EAEB] text-left transition-colors ${
+                    isSelected ? 'bg-[#F4F3FF]' : 'hover:bg-[#F9FAFB]'
+                  }`}
+                >
+                  <ChevronRight
+                    width={14} height={14}
+                    className={`shrink-0 transition-transform duration-200 ${isSelected ? 'rotate-90 text-[#7F56D9]' : 'text-[#A4A7AE]'}`}
+                    aria-hidden="true"
+                  />
+                  <Folder
+                    width={18} height={18}
+                    className={`shrink-0 ${isSelected ? 'text-[#7F56D9]' : 'text-[#717680]'}`}
+                    aria-hidden="true"
+                  />
+                  <span className={`text-[13px] font-semibold truncate ${isSelected ? 'text-[#6941C6]' : 'text-[#181D27]'}`}>
+                    {firm.name}
                   </span>
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </aside>
         )}
 
@@ -889,20 +913,24 @@ export default function ProjectsSummaryPage() {
               </button>
             </div>
           ) : (
-            <div className="min-w-[700px] pb-10">
-            {STATUS_GROUPS.map((g) => (
-              <ProjectStatusSection
-                key={g.id}
-                label={g.label}
-                groupId={g.id}
-                projects={projectsByGroup.get(g.id) ?? []}
-                showFirmBadge={!(viewMode === 'by-firm' && selectedFirmId)}
-                onProjectClick={openDetailPanel}
-                onDeleteProject={(p) => setProjectToDelete(p)}
-                onNavigate={(p) => navigate(`/firms/${p.firm_id}/projects/${p.id}`)}
-                onAddProject={openAddProject}
-              />
-            ))}
+            <div className="w-full pb-10">
+              {STATUS_GROUPS.map((g) => (
+                <ProjectStatusSection
+                  key={g.id}
+                  label={g.label}
+                  groupId={g.id}
+                  projects={projectsByGroup.get(g.id) ?? []}
+                  showFirmBadge={!(viewMode === 'by-firm' && selectedFirmId)}
+                  allUsers={users}
+                  onProjectClick={openDetailPanel}
+                  onDeleteProject={(p) => setProjectToDelete(p)}
+                  onNavigate={(p) => navigate(`/firms/${p.firm_id}/projects/${p.id}`)}
+                  onAddProject={openAddProject}
+                  onMembersChange={(projectId, memberIds) =>
+                    updateProject.mutate({ id: projectId, payload: { member_ids: memberIds } })
+                  }
+                />
+              ))}
             </div>
           )}
         </div>
@@ -949,37 +977,15 @@ export default function ProjectsSummaryPage() {
         }}
       />
 
-      {/* View panel — Figma-style summary */}
-      <ProjectSummaryPanel
-        open={!!selectedProject && !editProject}
-        onClose={() => setSelectedProject(null)}
-        project={selectedProject}
-        users={users}
-        onEdit={(p) => { setEditProject(p); setSelectedProject(null); }}
-        onArchive={(id) => {
-          const proj = allProjects.find((p) => p.id === id);
-          if (proj) updateProject.mutate({ id, payload: { status: proj.status === 'archived' ? 'active' : 'archived' } });
-          setSelectedProject(null);
-        }}
-        onDelete={(p) => { setProjectToDelete(allProjects.find((ap) => ap.id === p.id) ?? null); setSelectedProject(null); }}
-      />
-
-      {/* Edit panel — same TaskDetailPanel style as FirmDetailPage */}
-      <ProjectDetailPanel
-        open={!!editProject}
-        onClose={() => setEditProject(null)}
-        project={editProject}
-        users={users}
-        onSave={async (updated) => {
-          await handleSaveProject(updated);
-          setEditProject(null);
-        }}
-        onViewTask={(projectId) => {
-          const proj = allProjects.find((p) => p.id === projectId);
-          if (proj) navigate(`/firms/${proj.firm_id}/projects/${projectId}`);
-          setEditProject(null);
-        }}
-      />
+      {/* Full project panel — slides in from right when a project row is clicked */}
+      {panelProjectId && panelFirmId && (
+        <ProjectFullPanel
+          open={!!(panelProjectId && panelFirmId)}
+          firmId={panelFirmId}
+          projectId={panelProjectId}
+          onClose={() => { setPanelProjectId(null); setPanelFirmId(null); }}
+        />
+      )}
 
       <DeleteProjectModal
         open={!!projectToDelete}

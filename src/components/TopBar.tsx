@@ -75,6 +75,11 @@ function useBreadcrumbs(): Crumb[] {
     return [{ label: 'Users' }];
   }
 
+  // /projects
+  if (pathname === '/projects') {
+    return [{ label: 'Projects' }];
+  }
+
   return [];
 }
 

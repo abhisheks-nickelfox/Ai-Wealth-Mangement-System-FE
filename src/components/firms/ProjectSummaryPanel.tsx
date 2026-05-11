@@ -96,20 +96,21 @@ function fmtHours(h: number): string {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface ProjectSummaryPanelProps {
-  open:       boolean;
-  onClose:    () => void;
-  project:    ProjectDetail | null;
-  users:      User[];
-  onEdit?:    (project: ProjectDetail) => void;
-  onArchive?: (projectId: string) => void;
-  onDelete?:  (project: ProjectDetail) => void;
+  open:             boolean;
+  onClose:          () => void;
+  project:          ProjectDetail | null;
+  users:            User[];
+  onEdit?:          (project: ProjectDetail) => void;
+  onArchive?:       (projectId: string) => void;
+  onDelete?:        (project: ProjectDetail) => void;
+  onStatusChange?:  (projectId: string, status: ProjectStatus) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ProjectSummaryPanel({
   open, onClose, project, users,
-  onEdit, onArchive, onDelete,
+  onEdit, onArchive, onDelete, onStatusChange,
 }: ProjectSummaryPanelProps) {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [statusOpen,  setStatusOpen]  = useState(false);
@@ -325,7 +326,7 @@ export default function ProjectSummaryPanel({
                         <button
                           key={opt}
                           className={`flex items-center gap-2.5 w-full px-4 py-2 text-[13px] hover:bg-[#F9FAFB] ${project.status === opt ? 'font-semibold text-[#6941C6]' : 'text-[#344054]'}`}
-                          onClick={() => setStatusOpen(false)}
+                          onClick={() => { setStatusOpen(false); if (opt !== project.status) onStatusChange?.(project.id!, opt); }}
                         >
                           <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden="true">
                             <circle cx="4" cy="4" r="4" fill={os.dot} />

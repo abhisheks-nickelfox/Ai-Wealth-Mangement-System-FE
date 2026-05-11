@@ -5,23 +5,16 @@ import type { User } from '../lib/api';
 
 const TOKEN_KEY = 'mw_token';
 
-export function saveToken(token: string, remember: boolean) {
-  if (remember) {
-    localStorage.setItem(TOKEN_KEY, token);
-    sessionStorage.removeItem(TOKEN_KEY);
-  } else {
-    sessionStorage.setItem(TOKEN_KEY, token);
-    localStorage.removeItem(TOKEN_KEY);
-  }
+export function saveToken(token: string, _remember?: boolean) {
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
 function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 interface AuthState {
