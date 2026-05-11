@@ -28,6 +28,7 @@ import { useUsers } from '../hooks/useUsers';
 import { useTaskTypes, useCreateTaskType, useUpdateTaskType, useDeleteTaskType } from '../hooks/useTaskTypes';
 import type { User, Skill, TaskType } from '../lib/api';
 import AddSkillsModal from '../components/users/AddSkillsModal';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 import type { LocalSkill } from '../components/users/AddSkillsModal';
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
@@ -712,7 +713,7 @@ function TaskTypeManagement() {
         </div>
 
         {isLoading ? (
-          <div className="px-4 py-8 text-sm text-[#717680] text-center">Loading…</div>
+          <LoadingSpinner />
         ) : taskTypes.length === 0 ? (
           <div className="px-4 py-8 text-sm text-[#717680] text-center">
             No task types yet. Click "Create A Task Type" to get started.
@@ -837,7 +838,7 @@ function SkillManagement() {
 
         {/* Rows */}
         {isLoading ? (
-          <div className="px-4 py-8 text-sm text-[#717680] text-center">Loading…</div>
+          <LoadingSpinner />
         ) : skills.length === 0 ? (
           <div className="px-4 py-8 text-sm text-[#717680] text-center">
             No skills yet. Click "Add a skill" to get started.
@@ -1108,7 +1109,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <main className="flex-1 min-w-0 overflow-y-auto bg-gray-50 flex items-center justify-center">
-        <p className="text-sm text-[#717680]">Loading…</p>
+        <LoadingSpinner />
       </main>
     );
   }

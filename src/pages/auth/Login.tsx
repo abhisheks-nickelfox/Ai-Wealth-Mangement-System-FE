@@ -4,6 +4,7 @@ import { Formik, Form } from 'formik';
 import { Eye, EyeOff } from '@untitled-ui/icons-react';
 import AuthLayout from '../../components/layout/AuthLayout';
 import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
 import Checkbox from '../../components/ui/Checkbox';
 import { useAuth } from '../../context/AuthContext';
 import { loginSchema } from '../../validations/auth.validations';
@@ -85,13 +86,9 @@ export default function Login() {
             </div>
 
             {/* Submit */}
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-60 text-white font-semibold text-sm rounded-lg py-2.5 transition-colors"
-            >
-              {isSubmitting ? 'Signing in…' : 'Sign in'}
-            </button>
+            <Button type="submit" variant="primary" className="w-full justify-center" loading={isSubmitting}>
+              Sign in
+            </Button>
           </Form>
         )}
       </Formik>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ChevronDown } from '@untitled-ui/icons-react';
 
 // ── Country list ──────────────────────────────────────────────────────────────
@@ -101,6 +101,18 @@ export default function PhoneInput({
   required,
 }: PhoneInputProps) {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [open]);
 
   const selected = COUNTRIES.find((c) => c.code === countryCode) ?? COUNTRIES[0];
 
@@ -122,7 +134,7 @@ export default function PhoneInput({
         </label>
       )}
 
-      <div className="relative">
+      <div className="relative" ref={containerRef}>
         <div
           className={`
             flex w-full bg-white border rounded-lg shadow-sm overflow-hidden
@@ -150,10 +162,10 @@ export default function PhoneInput({
           <input
             type="tel"
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))}
             onBlur={onBlur}
             placeholder={placeholder ?? defaultPlaceholder}
-            maxLength={max + 5}
+            maxLength={max}
             className="flex-1 min-w-0 px-2 py-2.5 text-base text-[#181D27] placeholder-[#717680] bg-white focus:outline-none"
           />
 
@@ -173,7 +185,6 @@ export default function PhoneInput({
         {/* Dropdown */}
         {open && (
           <>
-            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
             <ul className="absolute left-0 top-full mt-1 z-20 w-56 bg-white border border-[#E9EAEB] rounded-lg shadow-lg overflow-hidden py-1 max-h-52 overflow-y-auto">
               {COUNTRIES.map((c) => (
                 <li key={c.code}>
@@ -193,6 +204,7 @@ export default function PhoneInput({
             </ul>
           </>
         )}
+
       </div>
 
       {error && (

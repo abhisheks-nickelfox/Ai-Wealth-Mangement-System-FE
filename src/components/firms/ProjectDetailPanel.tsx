@@ -4,7 +4,7 @@ import Avatar from '../ui/Avatar';
 import AvatarStack from '../ui/AvatarStack';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
-import AttachmentsSection from '../tasks/AttachmentsSection';
+import AttachmentsSection, { type AttachmentsSectionHandle } from '../tasks/AttachmentsSection';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useTasks } from '../../hooks/useTasks';
 import type { User } from '../../lib/api';
@@ -81,9 +81,10 @@ export default function ProjectDetailPanel({
   const [showPriority, setShowPriority] = useState(false);
   const [showPicker,   setShowPicker]   = useState(false);
 
-  const statusRef   = useRef<HTMLDivElement>(null);
-  const priorityRef = useRef<HTMLDivElement>(null);
-  const pickerRef   = useRef<HTMLDivElement>(null);
+  const statusRef      = useRef<HTMLDivElement>(null);
+  const priorityRef    = useRef<HTMLDivElement>(null);
+  const pickerRef      = useRef<HTMLDivElement>(null);
+  const attachmentsRef = useRef<AttachmentsSectionHandle>(null);
   useClickOutside(statusRef,   () => setShowStatus(false));
   useClickOutside(priorityRef, () => setShowPriority(false));
   useClickOutside(pickerRef,   () => setShowPicker(false));
@@ -128,6 +129,7 @@ export default function ProjectDetailPanel({
     setSaving(true);
     try {
       await onSave?.({ ...project, name, description, status, priority, memberIds, startDate, endDate });
+      await attachmentsRef.current?.commit();
       onClose();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save project.');
@@ -375,7 +377,7 @@ export default function ProjectDetailPanel({
 
         {/* Attachments */}
         <div className="pt-2 border-t border-[#F2F4F7]">
-          <AttachmentsSection projectId={project.id} />
+          <AttachmentsSection ref={attachmentsRef} projectId={project.id} />
         </div>
 
         {/* Save error */}

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Formik, Form } from 'formik';
 import { Check, SearchSm } from '@untitled-ui/icons-react';
 import Input from '../ui/Input';
+import Button from '../ui/Button';
 import Avatar from '../ui/Avatar';
 import FileUpload from '../ui/FileUpload';
 import PhoneInput, { getPhoneValidationError } from '../ui/PhoneInput';
@@ -164,7 +165,7 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error, apiName
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-[#414651]">
-                Write a short description <span className="text-error-500 ml-0.5">*</span>
+                Write a short description
               </label>
               <textarea
                 name="description"
@@ -190,13 +191,14 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error, apiName
               </div>
             </div>
 
-            <button
+            <Button
               type="submit"
-              disabled={isPending || isSubmitting}
-              className="w-full py-3 bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white font-semibold rounded-lg transition-colors mt-2"
+              variant="primary"
+              className="w-full justify-center mt-2"
+              loading={isPending || isSubmitting}
             >
-              {isPending ? 'Saving…' : 'Update & Continue'}
-            </button>
+              Update &amp; Continue
+            </Button>
           </Form>
         );
       }}
@@ -226,15 +228,16 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
         contactEmail: state.contactEmail,
       }}
       validationSchema={firmStep2Schema}
-      onSubmit={(values) => {
-        // Validate phone via PhoneInput helper before advancing
+      onSubmit={(values, { setSubmitting }) => {
         if (!state.contactPhone) {
           setPhoneError('Phone number is required');
+          setSubmitting(false);
           return;
         }
         const err = getPhoneValidationError(state.contactPhone, state.contactCountry);
         if (err) {
           setPhoneError(err);
+          setSubmitting(false);
           return;
         }
         onChange({
@@ -297,13 +300,14 @@ export function Step2Form({ state, onChange, onSubmit, isPending, error }: Step2
             required
           />
 
-          <button
+          <Button
             type="submit"
-            disabled={isPending || isSubmitting}
-            className="w-full py-3 bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white font-semibold rounded-lg transition-colors mt-2"
+            variant="primary"
+            className="w-full justify-center mt-2"
+            loading={isPending || isSubmitting}
           >
-            {isPending ? 'Saving…' : 'Update & Continue'}
-          </button>
+            Update &amp; Continue
+          </Button>
         </Form>
       )}
     </Formik>
@@ -402,14 +406,15 @@ export function Step3Form({ users, selectedId, onSelect, onSubmit, isPending, er
 
       </div>
 
-      <button
+      <Button
         type="button"
+        variant="primary"
+        className="w-full justify-center mt-2"
+        loading={isPending}
         onClick={onSubmit}
-        disabled={isPending}
-        className="w-full py-3 bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white font-semibold rounded-lg transition-colors mt-2"
       >
-        {isPending ? 'Saving…' : (submitLabel ?? 'Add Client')}
-      </button>
+        {submitLabel ?? 'Add Firm'}
+      </Button>
     </div>
   );
 }

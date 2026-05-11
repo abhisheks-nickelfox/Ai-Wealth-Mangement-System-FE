@@ -1,77 +1,32 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, FilterLines } from '@untitled-ui/icons-react';
+import { useState, useMemo } from 'react';
+import { ChevronDown, FilterLines } from '@untitled-ui/icons-react';
 import AvatarStack from '../ui/AvatarStack';
 import { PriorityBadge, TaskStatusBadge } from '../tasks/TaskBadges';
+import { useTasks } from '../../hooks/useTasks';
+import { useFirms } from '../../hooks/useFirms';
+import type { Task } from '../../lib/api';
+
+// ── Dot colors cycling per firm ───────────────────────────────────────────────
+
+const DOT_COLORS = ['#F79009', '#2E90FA', '#7F56D9', '#17B26A', '#F04438', '#FAC515', '#EE46BC'];
+
+function dotColorForFirm(firmId: string | null, _firmNames: string[]): string {
+  if (!firmId) return '#A4A7AE';
+  return DOT_COLORS[Math.abs(firmId.charCodeAt(0) + firmId.charCodeAt(firmId.length - 1)) % DOT_COLORS.length];
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface Project {
+interface RowData {
   id:        string;
   name:      string;
-  tag?:      string;
-  tagColor?: string;
-  dot:       string;        // dot color
+  dot:       string;
   client:    string;
   assignees: { name: string; bg: string }[];
   dueDate:   string;
-  priority:  'low' | 'normal' | 'high' | 'urgent';
-  status:    'in_progress' | 'draft' | 'resolved' | 'discarded' | 'internal_review';
-  children?: Omit<Project, 'children'>[];
+  priority:  Task['priority'];
+  status:    Task['status'];
 }
-
-// ── Dummy data ────────────────────────────────────────────────────────────────
-
-const AVATARS = [
-  { name: 'Alice', bg: '#D6BBFB' },
-  { name: 'Bob',   bg: '#93C5FD' },
-  { name: 'Carol', bg: '#6EE7B7' },
-  { name: 'Dave',  bg: '#FCA5A5' },
-];
-
-const PROJECTS: Project[] = [
-  {
-    id: '1', name: 'Website changes For AWP', tag: 'Website design', tagColor: '#EFF8FF',
-    dot: '#F79009', client: 'Ashwati Capital', assignees: AVATARS, dueDate: 'Tomorrow',
-    priority: 'high', status: 'in_progress',
-    children: [
-      { id: '1-1', name: 'Home page redesign',   dot: '#F79009', client: 'Ashwati Capital', assignees: AVATARS.slice(0,2), dueDate: 'Tomorrow', priority: 'high', status: 'in_progress' },
-      { id: '1-2', name: 'Copy & Content update', dot: '#F79009', client: 'Ashwati Capital', assignees: AVATARS.slice(0,2), dueDate: 'Tomorrow', priority: 'normal', status: 'draft' },
-    ],
-  },
-  {
-    id: '2', name: 'Marketing Landing page',
-    dot: '#2E90FA', client: 'Ashwati Capital', assignees: AVATARS.slice(0,3), dueDate: 'Tomorrow',
-    priority: 'high', status: 'in_progress',
-    children: [
-      { id: '2-1', name: 'SEO Optimization', dot: '#2E90FA', client: 'Ashwati Capital', assignees: AVATARS.slice(0,2), dueDate: 'Tomorrow', priority: 'high', status: 'in_progress' },
-    ],
-  },
-  {
-    id: '3', name: 'Website changes For AWP', tag: 'Website design', tagColor: '#F4F3FF',
-    dot: '#7F56D9', client: 'IGA Health', assignees: AVATARS, dueDate: 'Tomorrow',
-    priority: 'high', status: 'in_progress',
-  },
-  {
-    id: '4', name: 'Marketing Landing page',
-    dot: '#17B26A', client: 'IGA Health', assignees: AVATARS.slice(1,4), dueDate: 'Tomorrow',
-    priority: 'high', status: 'in_progress',
-  },
-  {
-    id: '5', name: 'Website changes For AWP', tag: 'Website design', tagColor: '#EFF8FF',
-    dot: '#F04438', client: 'Ashwati Capital', assignees: AVATARS, dueDate: 'Tomorrow',
-    priority: 'high', status: 'in_progress',
-  },
-  {
-    id: '6', name: 'Website changes For AWP', tag: 'Website design', tagColor: '#FFF6ED',
-    dot: '#FAC515', client: 'Ashwati Capital', assignees: AVATARS.slice(0,3), dueDate: 'Tomorrow',
-    priority: 'high', status: 'in_progress',
-  },
-  {
-    id: '7', name: 'Marketing Landing page',
-    dot: '#EE46BC', client: 'IGA Health', assignees: AVATARS.slice(0,2), dueDate: 'Tomorrow',
-    priority: 'high', status: 'in_progress',
-  },
-];
 
 
 // ── Project dot (concentric rings) ───────────────────────────────────────────
@@ -89,75 +44,51 @@ function ProjectDot({ color }: { color: string }) {
 // ── Row component ─────────────────────────────────────────────────────────────
 
 interface RowProps {
-  project:    Project | Omit<Project, 'children'>;
-  depth?:     number;
-  expanded?:  boolean;
-  onToggle?:  () => void;
+  row:       RowData;
+  depth?:    number;
 }
 
-function ProjectRow({ project, depth = 0, expanded, onToggle }: RowProps) {
-  const hasChildren = 'children' in project && !!project.children?.length;
-
+function ProjectRow({ row, depth = 0 }: RowProps) {
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
 
-      {/* Project name */}
+      {/* Task name */}
       <td className="py-2.5 pr-3">
         <div
           className="flex items-center gap-2"
           style={{ paddingLeft: depth > 0 ? `${depth * 20}px` : 0 }}
         >
-          {hasChildren ? (
-            <button onClick={onToggle} className="shrink-0 text-gray-400 hover:text-gray-600 p-0.5" aria-label={expanded ? 'Collapse' : 'Expand'}>
-              {expanded
-                ? <ChevronDown width={14} height={14} />
-                : <ChevronRight width={14} height={14} />
-              }
-            </button>
-          ) : (
-            <span className="w-5 shrink-0" />
-          )}
-
-          <ProjectDot color={project.dot} />
-
-          <span className={`text-[13px] font-semibold leading-tight ${depth > 0 ? 'text-gray-600' : 'text-gray-900'}`}>
-            {project.name}
+          <span className="w-5 shrink-0" />
+          <ProjectDot color={row.dot} />
+          <span className="text-[13px] font-semibold leading-tight text-gray-900">
+            {row.name}
           </span>
-
-          {project.tag && (
-            <span
-              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border border-blue-200 text-blue-700 shrink-0"
-              style={{ backgroundColor: project.tagColor ?? '#EFF8FF' }}
-            >
-              {project.tag}
-            </span>
-          )}
         </div>
       </td>
 
       {/* Client */}
       <td className="py-2.5 pr-3">
-        <span className="text-[12px] text-gray-700">{project.client}</span>
+        <span className="text-[12px] text-gray-700">{row.client}</span>
       </td>
 
       {/* Assignee */}
       <td className="py-2.5 pr-3">
-        <AvatarStack avatars={project.assignees} max={3} showAddButton={false} />
+        <AvatarStack avatars={row.assignees} max={3} showAddButton={false} />
       </td>
 
       {/* Due date */}
       <td className="py-2.5 pr-3">
-        <span className="text-[12px] text-gray-700">{project.dueDate}</span>
+        <span className="text-[12px] text-gray-700">{row.dueDate}</span>
       </td>
 
       {/* Priority */}
       <td className="py-2.5 pr-3">
-        <PriorityBadge priority={project.priority} />
+        <PriorityBadge priority={row.priority} />
       </td>
 
       {/* Status */}
       <td className="py-2.5">
-        <TaskStatusBadge status={project.status} />
+        <TaskStatusBadge status={row.status} />
       </td>
     </tr>
   );
@@ -165,27 +96,39 @@ function ProjectRow({ project, depth = 0, expanded, onToggle }: RowProps) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-const FIRMS     = ['All Firms', 'Ashwati Capital', 'IGA Health'];
-const ASSIGNEES = ['All Assignees', 'Alice', 'Bob', 'Carol'];
-
 export default function TasksTable() {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(['1']));
   const [firmFilter,  setFirmFilter]  = useState('All Firms');
   const [firmOpen,    setFirmOpen]    = useState(false);
   const [assigneeFilter, setAssigneeFilter] = useState('All Assignees');
   const [assigneeOpen,   setAssigneeOpen]   = useState(false);
 
-  const toggle = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
+  const { data: tasks   = [] } = useTasks();
+  const { data: firms   = [] } = useFirms();
 
-  const filtered = PROJECTS.filter((p) => {
-    if (firmFilter !== 'All Firms' && p.client !== firmFilter) return false;
-    if (assigneeFilter !== 'All Assignees' && !p.assignees.some((a) => a.name === assigneeFilter)) return false;
+  // Build unique assignee names from loaded tasks for the filter dropdown
+  const assigneeNames = useMemo(() => {
+    const names = new Set<string>();
+    tasks.forEach((t) => { if (t.assignee?.name) names.add(t.assignee.name); });
+    return ['All Assignees', ...Array.from(names)];
+  }, [tasks]);
+
+  const firmOptions = useMemo(() => ['All Firms', ...firms.map((f) => f.name)], [firms]);
+
+  // Map Task → RowData for the table
+  const rows: RowData[] = useMemo(() => tasks.map((task) => ({
+    id:        task.id,
+    name:      task.title,
+    dot:       dotColorForFirm(task.firm_id, firms.map((f) => f.id)),
+    client:    task.firms?.name ?? '—',
+    assignees: task.assignee ? [{ name: task.assignee.name, bg: '#D6BBFB' }] : [],
+    dueDate:   task.deadline ?? '—',
+    priority:  task.priority,
+    status:    task.status,
+  })), [tasks, firms]);
+
+  const filtered = rows.filter((r) => {
+    if (firmFilter !== 'All Firms' && r.client !== firmFilter) return false;
+    if (assigneeFilter !== 'All Assignees' && !r.assignees.some((a) => a.name === assigneeFilter)) return false;
     return true;
   });
 
@@ -232,12 +175,12 @@ export default function TasksTable() {
 
         <div className="flex items-center gap-2">
           <FilterDropdown
-            label="Filter by firm" value={firmFilter} options={FIRMS}
+            label="Filter by firm" value={firmFilter} options={firmOptions}
             open={firmOpen} onToggle={() => { setFirmOpen((v) => !v); setAssigneeOpen(false); }}
             onSelect={setFirmFilter}
           />
           <FilterDropdown
-            label="Filter by Assignee" value={assigneeFilter} options={ASSIGNEES}
+            label="Filter by Assignee" value={assigneeFilter} options={assigneeNames}
             open={assigneeOpen} onToggle={() => { setAssigneeOpen((v) => !v); setFirmOpen(false); }}
             onSelect={setAssigneeFilter}
           />
@@ -258,27 +201,13 @@ export default function TasksTable() {
             </tr>
           </thead>
           <tbody className="bg-white">
-            {filtered.flatMap((project) => {
-              const isExpanded = expandedIds.has(project.id);
-              const rows = [
-                <ProjectRow
-                  key={project.id}
-                  project={project}
-                  expanded={isExpanded}
-                  onToggle={() => toggle(project.id)}
-                />,
-              ];
-              if (isExpanded && project.children) {
-                project.children.forEach((child) =>
-                  rows.push(<ProjectRow key={child.id} project={child} depth={1} />)
-                );
-              }
-              return rows;
-            })}
+            {filtered.map((row) => (
+              <ProjectRow key={row.id} row={row} />
+            ))}
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-8 text-center text-sm text-gray-400">
-                  No projects match the selected filters.
+                  No tasks match the selected filters.
                 </td>
               </tr>
             )}

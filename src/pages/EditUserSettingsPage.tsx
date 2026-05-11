@@ -13,6 +13,7 @@ import Select from '../components/ui/Select';
 import FileUpload from '../components/ui/FileUpload';
 import ImageCropModal from '../components/ui/ImageCropModal';
 import Button from '../components/ui/Button';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Input from '../components/ui/Input';
 import Checkbox from '../components/ui/Checkbox';
 import Badge from '../components/ui/Badge';
@@ -123,7 +124,12 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
     }
     let finalAvatarUrl = avatarUrl;
     if (croppedUrl?.startsWith('data:')) {
-      try { finalAvatarUrl = (await profileApi.uploadAvatar(userId, croppedUrl)).avatar_url; } catch { /* local dev fallback */ }
+      try {
+        finalAvatarUrl = (await profileApi.uploadAvatar(userId, croppedUrl)).avatar_url;
+      } catch (uploadErr) {
+        setToast({ message: (uploadErr as Error).message || 'Failed to upload avatar. Please try a smaller image.', isError: true });
+        return;
+      }
     }
     const skills_with_experience = localSkills
       .filter((s) => !s.id.startsWith('temp-'))
@@ -453,7 +459,7 @@ export default function EditUserSettingsPage() {
   if (isLoading) {
     return (
       <main className="flex-1 min-w-0 overflow-y-auto bg-white flex items-center justify-center">
-        <p className="text-sm text-gray-400">Loading…</p>
+        <LoadingSpinner />
       </main>
     );
   }

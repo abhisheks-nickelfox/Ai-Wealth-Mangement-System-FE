@@ -12,6 +12,7 @@ import {
 import type { Step1State, Step2State } from '../components/firms/FirmStepForms';
 import { useFirmDetail, useUpdateFirm } from '../hooks/useFirms';
 import { useUsers } from '../hooks/useUsers';
+import { firmsApi } from '../lib/api';
 
 type StepId = 1 | 2 | 3;
 
@@ -85,6 +86,13 @@ export default function EditFirmPage() {
         ? buildE164Phone(step2.contactPhone, step2.contactCountry)
         : null;
 
+      // If logo was changed to a new local file (base64), upload to S3 first
+      let logoUrl: string | null = step1.logoPreview ?? null;
+      if (logoUrl?.startsWith('data:')) {
+        const result = await firmsApi.uploadLogo(id!, logoUrl);
+        logoUrl = result.logo_url;
+      }
+
       await updateFirm.mutateAsync({
         id: id!,
         payload: {
@@ -92,7 +100,7 @@ export default function EditFirmPage() {
           location:           step1.location.trim()    || null,
           website:            step1.website.trim()     || null,
           description:        step1.description.trim() || null,
-          logo_url:           step1.logoPreview        ?? null,
+          logo_url:           logoUrl,
           contact_name:       step2.contactName.trim()  || null,
           contact_role:       step2.contactRole.trim()  || null,
           contact_email:      step2.contactEmail.trim() || null,

@@ -736,7 +736,7 @@ export default function ProjectFullPage() {
 
         {/* ── Attachments ── */}
         <section className="px-8 py-5 border-b border-[#F2F4F7]">
-          <AttachmentsSection projectId={projectId} />
+          <AttachmentsSection projectId={projectId} immediate />
         </section>
 
         {/* ── Custom Fields ── */}

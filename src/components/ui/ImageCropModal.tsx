@@ -68,6 +68,9 @@ function getCroppedDataUrl(
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
+// Max base64 size we allow to go to the server (~7.5 MB original → ~10 MB base64)
+const MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
+
 interface ImageCropModalProps {
   src: string;
   onSave: (dataUrl: string) => void;
@@ -82,7 +85,8 @@ export default function ImageCropModal({ src, onSave, onCancel, transparent = fa
   const [crop, setCrop]           = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<Crop>();
   const [selectedGradient, setSelectedGradient] = useState(0);
-  const [logoScale, setLogoScale] = useState(0.8); // default 80% — gives natural padding for logos
+  const [logoScale, setLogoScale] = useState(0.8);
+  const [sizeError, setSizeError] = useState('');
 
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const { width, height } = e.currentTarget;
@@ -91,7 +95,14 @@ export default function ImageCropModal({ src, onSave, onCancel, transparent = fa
 
   function handleSave() {
     if (!imgRef.current || !completedCrop) return;
+    setSizeError('');
     const dataUrl = getCroppedDataUrl(imgRef.current, completedCrop, transparent, transparent ? logoScale : 1);
+    // base64 string length ≈ byte size of the encoded data
+    if (dataUrl.length > MAX_OUTPUT_BYTES) {
+      const sizeMB = (dataUrl.length / 1024 / 1024).toFixed(1);
+      setSizeError(`Image is too large (${sizeMB} MB). Please use a smaller or lower-resolution image (max 7.5 MB).`);
+      return;
+    }
     onSave(dataUrl);
   }
 
@@ -184,6 +195,13 @@ export default function ImageCropModal({ src, onSave, onCancel, transparent = fa
             +
           </button>
         </div>
+
+        {/* Size error */}
+        {sizeError && (
+          <div className="mx-5 mb-2 px-3 py-2 rounded-lg bg-error-50 border border-error-200">
+            <p className="text-xs text-error-600 font-medium">{sizeError}</p>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex gap-3 px-5 pb-5">

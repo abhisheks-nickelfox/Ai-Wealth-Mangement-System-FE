@@ -18,6 +18,7 @@ import Avatar from '../components/ui/Avatar';
 import Pagination from '../components/ui/Pagination';
 import Checkbox from '../components/ui/Checkbox';
 import { useUsers, useDeleteUser, useResendInvite, useUpdateUser } from '../hooks/useUsers';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { useToast } from '../hooks/useToast';
 import type { UserStatus } from '../types';
@@ -293,7 +294,7 @@ export default function UsersPage() {
 
         {/* Loading / error / table */}
         {loading ? (
-          <div className="px-6 py-12 text-center text-sm text-[#717680]">Loading…</div>
+          <LoadingSpinner />
         ) : fetchError ? (
           <AccessDenied message={fetchError} />
         ) : (

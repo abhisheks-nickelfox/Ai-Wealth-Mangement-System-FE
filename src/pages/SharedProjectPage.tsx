@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { projectsApi, type SharedProjectView } from '../lib/api';
 import Avatar from '../components/ui/Avatar';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 
 const WORKFLOW_LABELS: Record<string, string> = {
   todo:        'To Do',
@@ -47,7 +48,7 @@ export default function SharedProjectPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F9FAFB]">
-        <p className="text-sm text-[#717680]">Loading project…</p>
+        <LoadingSpinner message="Loading project…" />
       </div>
     );
   }

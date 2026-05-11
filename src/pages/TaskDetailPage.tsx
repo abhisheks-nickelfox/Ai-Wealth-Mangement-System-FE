@@ -775,7 +775,7 @@ export default function TaskDetailPage() {
 
         {/* ── Attachments ── */}
         <section className="px-8 py-5 border-b border-[#E9EAEB]">
-          <AttachmentsSection projectId={task?.project_id ?? null} />
+          <AttachmentsSection projectId={task?.project_id ?? null} immediate />
         </section>
 
         {/* ── Sub Tasks — only shown for top-level tasks, not sub-tasks ── */}

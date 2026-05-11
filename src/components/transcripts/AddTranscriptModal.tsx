@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { X, ChevronDown } from '@untitled-ui/icons-react';
+import { X } from '@untitled-ui/icons-react';
 import Input from '../ui/Input';
+import Select from '../ui/Select';
 import type { Transcript, Firm } from '../../lib/api';
 import { useCreateTranscript } from '../../hooks/useTranscripts';
 
@@ -86,19 +87,12 @@ export default function AddTranscriptModal({ open, onClose, firms, onCreated }: 
           </div>
           <div>
             <label className="block text-sm font-medium text-[#414651] mb-1.5">Firm</label>
-            <div className="relative">
-              <select
-                value={firmId}
-                onChange={(e) => setFirmId(e.target.value)}
-                className="w-full appearance-none border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent bg-white"
-              >
-                <option value="">Select firm (optional)</option>
-                {firms.map((f) => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))}
-              </select>
-              <ChevronDown width={16} height={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A4A7AE] pointer-events-none" />
-            </div>
+            <Select value={firmId} onChange={(e) => setFirmId(e.target.value)}>
+              <option value="">Select firm (optional)</option>
+              {firms.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </Select>
           </div>
           <div>
             <label className="block text-sm font-medium text-[#414651] mb-1.5">

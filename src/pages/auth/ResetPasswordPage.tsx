@@ -4,6 +4,7 @@ import { Formik, Form } from 'formik';
 import { Eye, EyeOff, AlertCircle } from '@untitled-ui/icons-react';
 import AuthLayout from '../../components/layout/AuthLayout';
 import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
 import { authApi } from '../../lib/api';
 import { resetPasswordSchema } from '../../validations/auth.validations';
 
@@ -81,13 +82,9 @@ export default function ResetPasswordPage() {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-60 text-white font-semibold text-sm rounded-lg py-2.5 transition-colors"
-              >
-                {isSubmitting ? 'Resetting…' : 'Reset Password'}
-              </button>
+              <Button type="submit" variant="primary" className="w-full justify-center" loading={isSubmitting}>
+                Reset Password
+              </Button>
             </Form>
           )}
         </Formik>

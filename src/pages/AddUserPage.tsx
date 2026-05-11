@@ -3,6 +3,8 @@ import { Formik, Form } from 'formik';
 import { UserPlus01 } from '@untitled-ui/icons-react';
 import MultiSelect from '../components/ui/MultiSelect';
 import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
+import Button from '../components/ui/Button';
 import { ROLE_OPTIONS } from '../lib/constants';
 import { useCreateUser } from '../hooks/useUsers';
 import { createUserSchema } from '../validations/user.validations';
@@ -96,40 +98,36 @@ export default function AddUserPage() {
                 />
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-[#414651]">Frequency</label>
-                  <div className="relative">
-                    <select
-                      name="rateFrequency"
-                      value={values.rateFrequency}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
-                      className="border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full appearance-none pr-8"
-                    >
-                      {RATE_FREQUENCIES.map((f) => (
-                        <option key={f} value={f}>{f}</option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
-                  </div>
+                  <Select
+                    name="rateFrequency"
+                    value={values.rateFrequency}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                  >
+                    {RATE_FREQUENCIES.map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </Select>
                 </div>
               </div>
 
               {/* Actions */}
               <div className="flex items-center gap-3 mt-2">
-                <button
+                <Button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="inline-flex items-center gap-2 bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-50 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm"
+                  variant="primary"
+                  loading={isSubmitting}
+                  leftIcon={<UserPlus01 width={18} height={18} />}
                 >
-                  <UserPlus01 width={18} height={18} />
-                  {isSubmitting ? 'Sending invite…' : 'Send Invite'}
-                </button>
-                <button
+                  Send Invite
+                </Button>
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => navigate('/users')}
-                  className="inline-flex items-center gap-2 bg-white hover:bg-gray-50 border border-[#D5D7DA] text-[#414651] text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors shadow-sm"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
 
             </Form>

@@ -15,6 +15,7 @@ import AddProjectModal, { type ProjectFormData } from '../components/firms/AddPr
 import DeleteProjectModal from '../components/firms/DeleteProjectModal';
 import ProjectIcon from '../components/icons/ProjectIcon';
 import DropdownMenu from '../components/ui/DropdownMenu';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 import {
   COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU,
   PRIORITY_BADGE, formatDeadline,
@@ -868,9 +869,7 @@ export default function ProjectsSummaryPage() {
         {/* Main content */}
         <div className="flex-1 overflow-y-auto overflow-x-auto min-w-0">
           {isLoading ? (
-            <div className="flex items-center justify-center py-24">
-              <p className="text-[13px] text-[#A4A7AE]">Loading projects…</p>
-            </div>
+            <LoadingSpinner message="Loading projects…" />
           ) : allProjects.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4">
               <div className="w-12 h-12 rounded-xl bg-[#F4F3FF] flex items-center justify-center">

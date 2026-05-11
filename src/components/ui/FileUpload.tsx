@@ -69,7 +69,7 @@ export default function FileUpload({
             or drag and drop
           </p>
           <p className="text-xs text-gray-400 mt-1">
-            SVG, PNG, JPG or GIF (max. 800×800px)
+            SVG, PNG, JPG or GIF (max {maxSizeMB} MB)
           </p>
         </div>
       </div>

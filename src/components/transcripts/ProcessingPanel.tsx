@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   Calendar,
-  Clock,
   ChevronDown,
+  Clock,
   Plus,
   RefreshCw01,
   Lightning01,
@@ -10,6 +10,7 @@ import {
 import type { Transcript, Firm, Prompt, Task } from '../../lib/api';
 import { useProcessTranscript, useSyncTranscripts } from '../../hooks/useTranscripts';
 import SlideOver from '../ui/SlideOver';
+import Select from '../ui/Select';
 import TranscriptStatusBadge from './TranscriptStatusBadge';
 import { formatDate, formatDurationSec } from '../../lib/transcriptUtils';
 
@@ -113,19 +114,12 @@ export default function ProcessingPanel({
           <label className="block text-xs font-medium text-[#414651] mb-1">
             Firm <span className="text-red-500">*</span>
           </label>
-          <div className="relative">
-            <select
-              value={firmId}
-              onChange={(e) => setFirmId(e.target.value)}
-              className="w-full appearance-none border border-[#D5D7DA] rounded-lg px-3 py-2 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent bg-white"
-            >
-              <option value="">Select a firm…</option>
-              {firms.map((f) => (
-                <option key={f.id} value={f.id}>{f.name}</option>
-              ))}
-            </select>
-            <ChevronDown width={16} height={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A4A7AE] pointer-events-none" />
-          </div>
+          <Select value={firmId} onChange={(e) => setFirmId(e.target.value)}>
+            <option value="">Select a firm…</option>
+            {firms.map((f) => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </Select>
         </div>
 
           {/* ── Section 1: Transcript Summary ─────────────────────────── */}
@@ -183,39 +177,25 @@ export default function ProcessingPanel({
                 <label className="block text-xs font-medium text-[#414651] mb-1">
                   Primary Prompt <span className="text-[#A4A7AE] font-normal">①</span>
                 </label>
-                <div className="relative">
-                  <select
-                    value={primaryPromptId}
-                    onChange={(e) => setPrimaryPromptId(e.target.value)}
-                    className="w-full appearance-none border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent bg-white"
-                  >
-                    <option value="">Project management</option>
-                    {prompts.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown width={16} height={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A4A7AE] pointer-events-none" />
-                </div>
+                <Select value={primaryPromptId} onChange={(e) => setPrimaryPromptId(e.target.value)}>
+                  <option value="">Project management</option>
+                  {prompts.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </Select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#414651] mb-1">
                   Secondary Prompt <span className="text-[#A4A7AE] font-normal">②</span>
                 </label>
-                <div className="relative">
-                  <select
-                    value={secondaryPromptId}
-                    onChange={(e) => setSecondaryPromptId(e.target.value)}
-                    className="w-full appearance-none border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent bg-white"
-                  >
-                    <option value="">Meeting notes</option>
-                    {prompts
-                      .filter((p) => p.id !== primaryPromptId)
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                  </select>
-                  <ChevronDown width={16} height={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A4A7AE] pointer-events-none" />
-                </div>
+                <Select value={secondaryPromptId} onChange={(e) => setSecondaryPromptId(e.target.value)}>
+                  <option value="">Meeting notes</option>
+                  {prompts
+                    .filter((p) => p.id !== primaryPromptId)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                </Select>
               </div>
               {/* Prompt description hint */}
               <div className="flex items-start gap-2 bg-[#F9FAFB] border border-[#F2F4F7] rounded-lg px-3 py-2.5">

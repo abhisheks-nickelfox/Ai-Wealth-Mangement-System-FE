@@ -6,6 +6,7 @@ import { useTasks } from '../hooks/useTasks';
 import { useUsers } from '../hooks/useUsers';
 import { formatDate, formatDurationSec } from '../lib/transcriptUtils';
 import TaskCard from '../components/tasks/TaskCard';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 import TaskDetailPanel from '../components/tasks/TaskDetailPanel';
 import TabBar from '../components/ui/TabBar';
 
@@ -131,7 +132,7 @@ export default function TranscriptTasksPage() {
 
       {/* Task list */}
       {loading ? (
-        <div className="py-16 text-center text-sm text-[#A4A7AE]">Loading tasks…</div>
+        <LoadingSpinner message="Loading tasks…" />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-3">
           <CheckCircle width={40} height={40} className="text-[#D5D7DA]" />

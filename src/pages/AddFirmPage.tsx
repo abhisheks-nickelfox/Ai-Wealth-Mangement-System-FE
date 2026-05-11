@@ -12,6 +12,7 @@ import {
 import type { Step1State, Step2State } from '../components/firms/FirmStepForms';
 import { useCreateFirm } from '../hooks/useFirms';
 import { useUsers } from '../hooks/useUsers';
+import { firmsApi } from '../lib/api';
 
 type StepId = 1 | 2 | 3;
 
@@ -67,13 +68,17 @@ export default function AddFirmPage() {
         location:           step1.location.trim()    || null,
         website:            step1.website.trim()     || null,
         description:        step1.description.trim() || null,
-        logo_url:           step1.logoPreview        ?? null,
         contact_name:       step2.contactName.trim()  || null,
         contact_role:       step2.contactRole.trim()  || null,
         contact_email:      step2.contactEmail.trim() || null,
         contact_phone:      e164                      || null,
         account_manager_id: selectedManagerId         || null,
       });
+
+      // Upload logo to S3 after firm is created so we have the firm ID for the key
+      if (step1.logoPreview) {
+        await firmsApi.uploadLogo(firm.id, step1.logoPreview);
+      }
 
       setShowToast(true);
       setTimeout(() => navigate(`/firms/${firm.id}`), 1500);

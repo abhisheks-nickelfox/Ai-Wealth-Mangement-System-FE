@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { FilterLines } from '@untitled-ui/icons-react';
 import type { AppNotification } from '../lib/api';
+import { timeAgo } from '../lib/transcriptUtils';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 import SearchInput from '../components/ui/SearchInput';
 import SlideOver from '../components/ui/SlideOver';
 import Checkbox from '../components/ui/Checkbox';
@@ -9,21 +11,7 @@ import {
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
 } from '../hooks/useNotifications';
-
-// ── Relative time helper ──────────────────────────────────────────────────────
-
-function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-
-  if (diffSec < 60) return 'Just now';
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} min${diffMin === 1 ? '' : 's'} ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
-}
+import { useFirms } from '../hooks/useFirms';
 
 // ── Inbox item row ────────────────────────────────────────────────────────────
 
@@ -73,32 +61,13 @@ function InboxRow({ item, onMarkRead }: InboxRowProps) {
 
 // ── Filter panel ──────────────────────────────────────────────────────────────
 
-const CLIENTS = [
-  'Ancora',
-  'Accelerated Wealth Partners',
-  'Azimuth Capital',
-  'Badgley Phelps',
-  'Brand Asset Management',
-  'Coastal Bridge Advisors',
-  'Fairway Wealth',
-  'Focus Partners Wealth',
-  'FPW | Bordeaux Wealth',
-  'ICON Wealth',
-  'IDA Wealth',
-  'Kovitz',
-  'Family Office Partners',
-  'The Fiduciary Group',
-  'Portfolio Strategy Group',
-  'SagePoint Capital Partners',
-  'SCS Financial',
-];
-
 interface FilterPanelProps {
   open: boolean;
   onClose: () => void;
+  firmNames: string[];
 }
 
-function FilterPanel({ open, onClose }: FilterPanelProps) {
+function FilterPanel({ open, onClose, firmNames }: FilterPanelProps) {
   const [assignedToMe, setAssignedToMe] = useState(true);
   const [todayOverdue, setTodayOverdue] = useState(true);
   const [clientSearch, setClientSearch] = useState('');
@@ -111,7 +80,7 @@ function FilterPanel({ open, onClose }: FilterPanelProps) {
     );
   }
 
-  const filtered = CLIENTS.filter((c) =>
+  const filtered = firmNames.filter((c) =>
     c.toLowerCase().includes(clientSearch.toLowerCase()),
   );
   const visible = showAll ? filtered : filtered.slice(0, 8);
@@ -230,6 +199,8 @@ export default function InboxPage() {
   const { data: notifications, isLoading, isError } = useNotifications();
   const { mutate: markRead } = useMarkNotificationRead();
   const { mutate: markAllRead, isPending: isMarkingAll } = useMarkAllNotificationsRead();
+  const { data: firms } = useFirms();
+  const firmNames = firms?.map((f) => f.name) ?? [];
 
   const hasUnread = notifications?.some((n) => !n.read) ?? false;
 
@@ -265,11 +236,7 @@ export default function InboxPage() {
       </div>
 
       {/* States */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-20">
-          <p className="text-sm text-[#A4A7AE]">Loading notifications...</p>
-        </div>
-      )}
+      {isLoading && <LoadingSpinner message="Loading notifications…" />}
 
       {isError && (
         <div className="flex items-center justify-center py-20">
@@ -298,7 +265,7 @@ export default function InboxPage() {
       )}
 
       {/* Filter slide-over */}
-      <FilterPanel open={filterOpen} onClose={() => setFilterOpen(false)} />
+      <FilterPanel open={filterOpen} onClose={() => setFilterOpen(false)} firmNames={firmNames} />
     </main>
   );
 }

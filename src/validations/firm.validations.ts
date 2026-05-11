@@ -21,9 +21,12 @@ export const firmStep1Schema = Yup.object({
     .required('Firm website is required'),
   description: Yup.string()
     .trim()
-    .min(10, 'Description must be at least 10 characters')
-    .max(500, 'Description must be 500 characters or fewer')
-    .required('Description is required'),
+    .optional()
+    .test('min-length', 'Description must be at least 10 characters', (val) => {
+      if (!val || !val.trim()) return true;
+      return val.trim().length >= 10;
+    })
+    .max(500, 'Description must be 500 characters or fewer'),
 });
 
 export const firmStep2Schema = Yup.object({
@@ -45,5 +48,5 @@ export const firmStep2Schema = Yup.object({
       if (!val || !val.trim()) return false;
       return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
     }),
-  contactPhone: Yup.string().optional(),
+  // contactPhone validated manually in onSubmit (outside Formik state)
 });

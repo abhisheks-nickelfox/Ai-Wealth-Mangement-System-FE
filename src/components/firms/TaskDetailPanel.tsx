@@ -7,7 +7,7 @@ import Avatar from '../ui/Avatar';
 import AvatarStack from '../ui/AvatarStack';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
-import AttachmentsSection from '../tasks/AttachmentsSection';
+import AttachmentsSection, { type AttachmentsSectionHandle } from '../tasks/AttachmentsSection';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import type { Task, User, Project } from '../../lib/api';
 import { TASK_STATUS_BADGE } from './TaskRow';
@@ -92,9 +92,10 @@ export default function TaskDetailPanel({
   const [showPicker,   setShowPicker]   = useState(false);
   const [showProject,  setShowProject]  = useState(false);
 
-  const priorityRef = useRef<HTMLDivElement>(null);
-  const pickerRef   = useRef<HTMLDivElement>(null);
-  const projectRef  = useRef<HTMLDivElement>(null);
+  const priorityRef    = useRef<HTMLDivElement>(null);
+  const pickerRef      = useRef<HTMLDivElement>(null);
+  const projectRef     = useRef<HTMLDivElement>(null);
+  const attachmentsRef = useRef<AttachmentsSectionHandle>(null);
   useClickOutside(priorityRef, () => setShowPriority(false));
   useClickOutside(pickerRef,   () => setShowPicker(false));
   useClickOutside(projectRef,  () => setShowProject(false));
@@ -158,6 +159,7 @@ export default function TaskDetailPanel({
     setSaving(true);
     try {
       await onSave?.(task.id, { title, description, priority, assignee_ids: assigneeIds, deadline, project_id: projectId });
+      await attachmentsRef.current?.commit();
       onClose();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save task. Please try again.');
@@ -468,7 +470,7 @@ export default function TaskDetailPanel({
 
         {/* Attachments — universal per project */}
         <div className="pt-2 border-t border-[#F2F4F7]">
-          <AttachmentsSection projectId={task.project_id ?? null} />
+          <AttachmentsSection ref={attachmentsRef} projectId={task.project_id ?? null} />
         </div>
 
         {/* Save error */}

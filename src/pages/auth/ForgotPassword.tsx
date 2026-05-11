@@ -3,6 +3,7 @@ import { Formik, Form } from 'formik';
 import { ArrowLeft, Key01 } from '@untitled-ui/icons-react';
 import AuthLayout from '../../components/layout/AuthLayout';
 import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
 import { authApi } from '../../lib/api';
 import { forgotPasswordSchema } from '../../validations/auth.validations';
 
@@ -49,13 +50,9 @@ export default function ForgotPassword() {
               error={touched.email && errors.email ? errors.email : undefined}
             />
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full bg-brand-700 hover:bg-brand-800 disabled:opacity-60 text-white font-semibold text-sm rounded-lg py-2.5 transition-colors"
-            >
-              {isSubmitting ? 'Sending…' : 'Reset password'}
-            </button>
+            <Button type="submit" variant="primary" className="w-full justify-center" loading={isSubmitting}>
+              Reset password
+            </Button>
           </Form>
         )}
       </Formik>
