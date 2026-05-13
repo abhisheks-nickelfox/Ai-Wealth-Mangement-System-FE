@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, Edit01, Trash01 } from '@untitled-ui/icons-react';
 import Avatar from '../ui/Avatar';
 import DropdownMenu from '../ui/DropdownMenu';
+import { ChatTab } from '../chat/ChatTab';
 import iconDropbox  from '../../assets/quick-links/icon-dropbox.svg';
 import iconReports  from '../../assets/quick-links/icon-reports.svg';
 import iconHubspot  from '../../assets/quick-links/icon-hubspot.svg';
@@ -17,17 +18,6 @@ export interface FirmDetailsTabProps {
   users: User[];
 }
 
-// ── Mock chat messages (grouped: before "Today" separator and after) ──────────
-
-export const MESSAGES_BEFORE: { id: number; sender: string; time: string; text: string; isSelf: boolean }[] = [
-  { id: 1, sender: 'You',           time: 'Thursday 11:41am', text: 'Awesome! Thanks.',                                   isSelf: true  },
-  { id: 2, sender: 'Demi Wilkinson', time: 'Thursday 11:44am', text: 'Good timing—was just looking at this.',              isSelf: false },
-];
-
-export const MESSAGES_TODAY: { id: number; sender: string; time: string; text: string; isSelf: boolean }[] = [
-  { id: 3, sender: 'Phoenix Baker',  time: 'Friday 2:20pm',    text: 'Hey Olivia, can you please review the latest design?', isSelf: false },
-  { id: 4, sender: 'You',            time: 'Friday 2:20pm',    text: "Sure thing, I'll have a look today.",                isSelf: true  },
-];
 
 // ── Reusable contact row (avatar + name/role + phone/mail/calendar) ───────────
 
@@ -72,17 +62,6 @@ export function ContactRow({ name, role, avatarSrc, phone, email }: ContactRowPr
         </button>
       </div>
     </div>
-  );
-}
-
-// ── Double-check SVG ──────────────────────────────────────────────────────────
-
-export function DoubleCheck() {
-  return (
-    <svg width="16" height="10" viewBox="0 0 16 10" fill="none" aria-hidden="true">
-      <path d="M1 5L4.5 8.5L10 2" stroke="#12B76A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M6 5L9.5 8.5L15 2" stroke="#12B76A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
   );
 }
 
@@ -189,89 +168,10 @@ export function OverviewTab({ firm, users, onEditFirm, onDeleteFirm }: FirmDetai
           ))}
         </div>
 
-        {/* Chat area */}
+        {/* Chat / Requests area */}
         {commTab === 'communications' ? (
-          <div className="flex flex-col gap-[22px]">
-            {/* Messages before today */}
-            {MESSAGES_BEFORE.map((msg) => (
-              msg.isSelf ? (
-                /* "me" message — right-aligned */
-                <div key={msg.id} className="flex flex-col items-end gap-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[12.5px] font-medium text-[#6b7280]">{msg.sender}</span>
-                    <span className="text-[12px] text-[#9ca3af]">{msg.time}</span>
-                    <DoubleCheck />
-                  </div>
-                  <div className="bg-white border border-[#e5e7eb] rounded-[10px] px-3.5 py-2.5 text-[13.5px] leading-[1.5] text-[#0f172a]">
-                    {msg.text}
-                  </div>
-                </div>
-              ) : (
-                /* "them" message — left-aligned */
-                <div key={msg.id} className="flex items-start gap-3">
-                  <div className="relative shrink-0">
-                    <Avatar name={msg.sender} size="sm" />
-                    <span
-                      className="absolute bottom-0 right-0 rounded-full border-2 border-white bg-[#22c55e]"
-                      style={{ width: 10, height: 10 }}
-                      aria-hidden="true"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <div className="bg-[#f4f5f7] rounded-[10px] px-3.5 py-2.5 text-[13.5px] leading-[1.5] text-[#0f172a]">
-                      {msg.text}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-[13px] text-[#0f172a]">{msg.sender}</span>
-                      <span className="text-[12px] text-[#9ca3af]">{msg.time}</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            ))}
-
-            {/* "Today" day separator */}
-            <div className="flex items-center gap-3 my-2">
-              <div className="flex-1 h-px bg-[#eef0f3]" />
-              <span className="text-[12.5px] text-[#6b7280] font-medium">Today</span>
-              <div className="flex-1 h-px bg-[#eef0f3]" />
-            </div>
-
-            {/* Messages today */}
-            {MESSAGES_TODAY.map((msg) => (
-              msg.isSelf ? (
-                <div key={msg.id} className="flex flex-col items-end gap-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[12.5px] font-medium text-[#6b7280]">{msg.sender}</span>
-                    <span className="text-[12px] text-[#9ca3af]">{msg.time}</span>
-                    <DoubleCheck />
-                  </div>
-                  <div className="bg-white border border-[#e5e7eb] rounded-[10px] px-3.5 py-2.5 text-[13.5px] leading-[1.5] text-[#0f172a]">
-                    {msg.text}
-                  </div>
-                </div>
-              ) : (
-                <div key={msg.id} className="flex items-start gap-3">
-                  <div className="relative shrink-0">
-                    <Avatar name={msg.sender} size="sm" />
-                    <span
-                      className="absolute bottom-0 right-0 rounded-full border-2 border-white bg-[#22c55e]"
-                      style={{ width: 10, height: 10 }}
-                      aria-hidden="true"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <div className="bg-[#f4f5f7] rounded-[10px] px-3.5 py-2.5 text-[13.5px] leading-[1.5] text-[#0f172a]">
-                      {msg.text}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-[13px] text-[#0f172a]">{msg.sender}</span>
-                      <span className="text-[12px] text-[#9ca3af]">{msg.time}</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            ))}
+          <div className="flex flex-col min-h-0" style={{ height: 420 }}>
+            <ChatTab scope="firm" scopeId={firm.id} />
           </div>
         ) : (
           <p className="text-[13px] text-[#9ca3af]">No requests yet.</p>

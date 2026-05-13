@@ -12,7 +12,6 @@ import { useTasksByFirm } from '../hooks/useTasks';
 import { useUsers } from '../hooks/useUsers';
 import { ProjectsTab } from '../components/firms/ProjectsTab';
 import { OverviewTab, ComingSoon } from '../components/firms/FirmOverviewTab';
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type TabId =
@@ -20,7 +19,6 @@ type TabId =
   | 'client-requests'
   | 'projects'
   | 'time-reports'
-  | 'notes'
   | 'firm-details';
 
 interface TabDef {
@@ -33,7 +31,6 @@ const TABS: TabDef[] = [
   { id: 'client-requests', label: 'Client Requests' },
   { id: 'projects',        label: 'Projects' },
   { id: 'time-reports',    label: 'Time Reports' },
-  { id: 'notes',           label: 'Notes' },
   { id: 'firm-details',    label: 'Firm Details' },
 ];
 

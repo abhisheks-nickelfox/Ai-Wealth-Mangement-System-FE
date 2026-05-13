@@ -5,7 +5,6 @@ import {
   ChevronRight,
   ChevronDown,
   X,
-  Send01,
   ArrowRight,
   Plus,
 } from '@untitled-ui/icons-react';
@@ -13,7 +12,7 @@ import Avatar from '../components/ui/Avatar';
 import AvatarStack from '../components/ui/AvatarStack';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import AttachmentsSection from '../components/tasks/AttachmentsSection';
-import { useMessages, useSendMessage } from '../hooks/useMessages';
+import { ChatTab } from '../components/chat/ChatTab';
 import { useFirmDetail, useProjects, useUpdateProject } from '../hooks/useFirms';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { useTasksByFirm, useCreateTask, useUpdateTask } from '../hooks/useTasks';
@@ -35,35 +34,9 @@ import { projectsApi } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
 import TaskIcon from '../components/icons/TaskIcon';
 import ProjectIcon from '../components/icons/ProjectIcon';
-import type { Task, Message, Project, User } from '../lib/api';
+import type { Task, Project, User } from '../lib/api';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-}
-
-function formatDayLabel(iso: string) {
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-  const sameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  if (sameDay(d, today)) return 'Today';
-  if (sameDay(d, yesterday)) return 'Yesterday';
-  return d.toLocaleDateString('en-US', { weekday: 'long' });
-}
-
-function groupByDay(messages: Message[]) {
-  const out: { date: string; messages: Message[] }[] = [];
-  for (const m of messages) {
-    const label = formatDayLabel(m.created_at);
-    const last = out[out.length - 1];
-    if (last && last.date === label) last.messages.push(m);
-    else out.push({ date: label, messages: [m] });
-  }
-  return out;
-}
 
 const WORKFLOW_LABEL: Record<Project['workflow_status'], string> = {
   todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review', approved: 'Approved', completed: 'Completed',
@@ -78,82 +51,8 @@ const TABS: { id: ActivityTab; label: string }[] = [
   { id: 'notes',  label: 'Notes' },
 ];
 
-function DateDivider({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 my-3">
-      <div className="flex-1 h-px bg-[#E9EAEB]" />
-      <span className="text-[11px] font-medium text-[#A4A7AE] shrink-0">{label}</span>
-      <div className="flex-1 h-px bg-[#E9EAEB]" />
-    </div>
-  );
-}
-
-function MessageRow({ message, currentUserId }: { message: Message; currentUserId?: string }) {
-  const isMe = message.user_id === currentUserId;
-
-  if (isMe) {
-    return (
-      <div className="flex flex-col items-end gap-1 mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-[#A4A7AE]">{formatTime(message.created_at)}</span>
-          <span className="text-[12px] font-semibold text-[#414651]">You</span>
-        </div>
-        <div className="max-w-[80%] bg-white border border-[#E9EAEB] rounded-2xl rounded-tr-sm px-3.5 py-2.5 text-[13px] text-[#181D27] leading-relaxed shadow-sm">
-          {message.body}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex gap-2.5 mb-4">
-      <Avatar name={message.user.name} src={message.user.avatar_url ?? undefined} size="sm" online className="shrink-0 mt-0.5" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-[12px] font-semibold text-[#181D27]">{message.user.name}</span>
-          <span className="text-[11px] text-[#A4A7AE]">{formatTime(message.created_at)}</span>
-        </div>
-        <div className="max-w-[85%] bg-white border border-[#E9EAEB] rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-[13px] text-[#414651] leading-relaxed shadow-sm">
-          {message.body}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ActivityPanel({ projectId, onClose }: { projectId: string; onClose?: () => void }) {
   const [activeTab, setActiveTab] = useState<ActivityTab>('recent');
-  const [draft, setDraft]         = useState('');
-  const textareaRef               = useRef<HTMLTextAreaElement>(null);
-  const scrollRef                 = useRef<HTMLDivElement>(null);
-
-  const { data: messages = [], isLoading } = useMessages('project', projectId);
-  const sendMessage                        = useSendMessage();
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages.length]);
-
-  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    setDraft(e.target.value);
-    const el = e.target;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  }
-
-  async function handleSend() {
-    const body = draft.trim();
-    if (!body || sendMessage.isPending) return;
-    setDraft('');
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
-    await sendMessage.mutateAsync({ scope: 'project', scope_id: projectId, body });
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-  }
-
-  const groups = groupByDay(messages);
 
   return (
     <aside className="w-[380px] shrink-0 flex flex-col border-l border-[#E9EAEB] bg-white h-full isolate">
@@ -186,49 +85,7 @@ function ActivityPanel({ projectId, onClose }: { projectId: string; onClose?: ()
       <div className="h-px bg-[#E9EAEB] shrink-0" />
 
       {activeTab === 'recent' ? (
-        <>
-          {/* Messages */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-2 min-h-0">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-10"><LoadingSpinner /></div>
-            ) : messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
-                <span className="text-3xl">💬</span>
-                <p className="text-[13px] text-[#717680]">No messages yet. Start the conversation.</p>
-              </div>
-            ) : (
-              groups.map((g) => (
-                <div key={g.date}>
-                  <DateDivider label={g.date} />
-                  {g.messages.map((m) => <MessageRow key={m.id} message={m} />)}
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="shrink-0 border-t border-[#E9EAEB] px-4 py-3">
-            <div className="flex items-end gap-2 rounded-xl border border-[#E9EAEB] bg-white px-3.5 py-2.5 focus-within:border-[#7F56D9] focus-within:ring-2 focus-within:ring-[#7F56D9]/10 transition-all">
-              <textarea
-                ref={textareaRef}
-                value={draft}
-                onChange={handleChange}
-                onKeyDown={handleKeyDown}
-                rows={1}
-                placeholder="Message"
-                className="flex-1 resize-none text-[13px] text-[#181D27] placeholder-[#A4A7AE] outline-none bg-transparent leading-relaxed"
-              />
-              <button
-                type="button"
-                onClick={handleSend}
-                disabled={!draft.trim() || sendMessage.isPending}
-                className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[#7F56D9] hover:bg-[#6941C6] text-white"
-              >
-                <Send01 width={13} height={13} />
-              </button>
-            </div>
-          </div>
-        </>
+        <ChatTab scope="project" scopeId={projectId} />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center gap-2 py-16 text-center px-4">
           <span className="text-3xl">{activeTab === 'files' ? '📎' : '📝'}</span>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HelpCircle, ChevronDown, ChevronRight, Plus, X } from '@untitled-ui/icons-react';
+import { HelpCircle, ChevronDown, ChevronRight, Plus, X, MessageSquare01 } from '@untitled-ui/icons-react';
+import { ChatTab } from '../chat/ChatTab';
 import { useTransitionTask, useUpdateTask } from '../../hooks/useTasks';
 import ProjectIcon from '../icons/ProjectIcon';
 import TaskIcon from '../icons/TaskIcon';
@@ -35,6 +36,35 @@ interface TaskDetailPanelProps {
   onSave?:             (taskId: string, data: TaskDetailData) => Promise<void>;
   onViewTask?:         () => void;
   viewLabel?:          string;
+}
+
+// ── ChatSection — collapsible chat for a single task/sub-task ────────────────
+
+function ChatSection({ taskId }: { taskId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-[#F9FAFB] transition-colors"
+      >
+        <span className="flex items-center gap-2 text-[13px] font-semibold text-[#414651]">
+          <MessageSquare01 width={15} height={15} className="text-[#7F56D9]" />
+          Chat
+        </span>
+        <ChevronDown
+          width={15} height={15}
+          className={`text-[#A4A7AE] transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open && (
+        <div style={{ height: 380 }} className="flex flex-col">
+          <ChatTab scope="task" scopeId={taskId} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -567,6 +597,11 @@ export default function TaskDetailPanel({
         {/* Attachments — universal per project */}
         <div className="pt-2 border-t border-[#F2F4F7]">
           <AttachmentsSection ref={attachmentsRef} projectId={task.project_id ?? null} />
+        </div>
+
+        {/* Chat — real-time SSE per task/sub-task */}
+        <div className="border-t border-[#F2F4F7]">
+          <ChatSection taskId={task.id} />
         </div>
 
         {/* Save error */}

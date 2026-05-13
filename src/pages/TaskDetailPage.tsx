@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useClickOutside } from '../hooks/useClickOutside';
 import {
@@ -8,7 +8,6 @@ import {
   Edit01,
   Trash01,
   FileCheck01,
-  Send01,
   Plus,
 } from '@untitled-ui/icons-react';
 import Avatar from '../components/ui/Avatar';
@@ -19,7 +18,6 @@ import { useQuery } from '@tanstack/react-query';
 import { tasksApi } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
 import AttachmentsSection from '../components/tasks/AttachmentsSection';
-import { useMessages, useSendMessage } from '../hooks/useMessages';
 import { useFirmDetail, useProjects } from '../hooks/useFirms';
 import { useUsers } from '../hooks/useUsers';
 import { useCreateTask, useUpdateTask } from '../hooks/useTasks';
@@ -35,7 +33,8 @@ import {
   formatDeadline,
 } from '../components/firms/TaskRow';
 
-import type { Task, Message } from '../lib/api';
+import type { Task } from '../lib/api';
+import { ChatTab } from '../components/chat/ChatTab';
 import TaskIcon from '../components/icons/TaskIcon';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,40 +55,8 @@ function calcPickerPos(rect: DOMRect, dropdownW = 230, dropdownH = 280) {
   return { top, left };
 }
 
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-}
 
-function formatDateDivider(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
 
-  const sameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
-
-  if (sameDay(d, today)) return 'Today';
-  if (sameDay(d, yesterday)) return 'Yesterday';
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-}
-
-function groupMessagesByDate(messages: Message[]): { date: string; messages: Message[] }[] {
-  const groups: { date: string; messages: Message[] }[] = [];
-  for (const msg of messages) {
-    const label = formatDateDivider(msg.created_at);
-    const last = groups[groups.length - 1];
-    if (last && last.date === label) {
-      last.messages.push(msg);
-    } else {
-      groups.push({ date: label, messages: [msg] });
-    }
-  }
-  return groups;
-}
 
 function formatHoursSpent(hours: number | null | undefined): string {
   if (!hours) return '—';
@@ -127,49 +94,6 @@ function EmptyActivityState({ tab }: { tab: ActivityTab }) {
   );
 }
 
-// ── Date divider ──────────────────────────────────────────────────────────────
-
-function DateDivider({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 py-2">
-      <div className="flex-1 h-px bg-[#E9EAEB]" />
-      <span className="text-[11px] font-semibold text-[#A4A7AE] shrink-0">{label}</span>
-      <div className="flex-1 h-px bg-[#E9EAEB]" />
-    </div>
-  );
-}
-
-// ── MessageBubble ─────────────────────────────────────────────────────────────
-
-function MessageBubble({ message }: { message: Message }) {
-  const userName = message.user?.name ?? 'Unknown';
-  const userAvatar = message.user?.avatar_url ?? undefined;
-
-  return (
-    <div className="flex flex-col gap-1.5 mb-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Avatar
-            name={userName}
-            src={userAvatar}
-            size="sm"
-            online
-          />
-          <span className="text-[13px] font-semibold text-[#181D27]">
-            {userName}
-          </span>
-        </div>
-        <span className="text-[11px] text-[#A4A7AE] shrink-0">
-          {formatTime(message.created_at)}
-        </span>
-      </div>
-      <div className="ml-10 bg-white rounded-lg border border-[#E9EAEB] px-3 py-2.5 text-[13px] text-[#414651] leading-relaxed">
-        {message.body}
-      </div>
-    </div>
-  );
-}
-
 // ── Activity Panel ────────────────────────────────────────────────────────────
 
 interface ActivityPanelProps {
@@ -178,46 +102,6 @@ interface ActivityPanelProps {
 
 function ActivityPanel({ taskId }: ActivityPanelProps) {
   const [activeTab, setActiveTab] = useState<ActivityTab>('recent');
-  const [draft, setDraft]         = useState('');
-  const textareaRef               = useRef<HTMLTextAreaElement>(null);
-  const scrollRef                 = useRef<HTMLDivElement>(null);
-
-  const { data: messages = [], isLoading } = useMessages('task', taskId);
-  const sendMessage                        = useSendMessage();
-
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages.length]);
-
-  // Auto-resize textarea
-  function handleTextareaChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    setDraft(e.target.value);
-    const el = e.target;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-  }
-
-  async function handleSend() {
-    const body = draft.trim();
-    if (!body || sendMessage.isPending) return;
-    setDraft('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
-    await sendMessage.mutateAsync({ scope: 'task', scope_id: taskId, body });
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  }
-
-  const groups = groupMessagesByDate(messages);
 
   return (
     <aside
@@ -243,58 +127,7 @@ function ActivityPanel({ taskId }: ActivityPanelProps) {
 
       {/* Content area */}
       {activeTab === 'recent' ? (
-        <>
-          {/* Messages scroll area */}
-          <div
-            ref={scrollRef}
-            className="flex-1 overflow-y-auto px-4 py-3 min-h-0"
-          >
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <LoadingSpinner />
-              </div>
-            ) : messages.length === 0 ? (
-              <EmptyActivityState tab="recent" />
-            ) : (
-              groups.map((group) => (
-                <div key={group.date}>
-                  <DateDivider label={group.date} />
-                  {group.messages.map((msg) => (
-                    <MessageBubble key={msg.id} message={msg} />
-                  ))}
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Message input */}
-          <div className="shrink-0 border-t border-[#E9EAEB] bg-white px-3 py-2.5">
-            <div className="flex items-end gap-2 rounded-lg border border-[#E9EAEB] px-3 py-2 focus-within:border-[#7F56D9] focus-within:ring-2 focus-within:ring-[#7F56D9]/10 transition-all bg-white">
-              <textarea
-                ref={textareaRef}
-                value={draft}
-                onChange={handleTextareaChange}
-                onKeyDown={handleKeyDown}
-                rows={1}
-                placeholder="Message..."
-                className="flex-1 resize-none text-[13px] text-[#181D27] placeholder-[#A4A7AE] outline-none bg-transparent leading-relaxed"
-                aria-label="Type a message"
-              />
-              <button
-                type="button"
-                onClick={handleSend}
-                disabled={!draft.trim() || sendMessage.isPending}
-                aria-label="Send message"
-                className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[#7F56D9] hover:bg-[#6941C6] text-white"
-              >
-                <Send01 width={14} height={14} aria-hidden="true" />
-              </button>
-            </div>
-            <p className="text-[10px] text-[#A4A7AE] mt-1.5 pl-0.5">
-              Press Enter to send, Shift+Enter for new line
-            </p>
-          </div>
-        </>
+        <ChatTab scope="task" scopeId={taskId} />
       ) : (
         <EmptyActivityState tab={activeTab} />
       )}

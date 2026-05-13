@@ -737,8 +737,10 @@ export interface Message {
   body:       string;
   created_at: string;
   updated_at: string;
-  user:       MessageAuthor;
+  author:     MessageAuthor;
   reactions:  MessageReaction[];
+  /** IDs of users who have read this message */
+  read_by:    string[];
 }
 
 export const messagesApi = {
@@ -748,6 +750,9 @@ export const messagesApi = {
 
   create: (payload: { scope: string; scope_id: string; body: string; parent_id?: string }) =>
     request<{ data: Message }>('POST', '/messages', payload).then((r) => r.data),
+
+  markRead: (scope: string, scopeId: string) =>
+    request<{ marked: number }>('POST', '/messages/read', { scope, scope_id: scopeId }),
 
   addReaction: (messageId: string, emoji: string) =>
     request<{ data: MessageReaction[] }>('POST', `/messages/${messageId}/reactions`, { emoji })
