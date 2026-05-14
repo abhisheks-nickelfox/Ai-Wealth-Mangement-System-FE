@@ -6,6 +6,7 @@ import Button from '../ui/Button';
 import Avatar from '../ui/Avatar';
 import FileUpload from '../ui/FileUpload';
 import PhoneInput, { getPhoneValidationError } from '../ui/PhoneInput';
+import CountryPicker from '../ui/CountryPicker';
 import type { User } from '../../lib/api';
 import { firmStep1Schema, firmStep2Schema } from '../../validations/firm.validations';
 
@@ -20,6 +21,7 @@ export const STEPS = [
 export interface Step1State {
   name: string;
   location: string;
+  address: string;
   website: string;
   logoFile: File | null;
   logoPreview: string | null;
@@ -75,6 +77,7 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error, apiName
       initialValues={{
         name:        state.name,
         location:    state.location,
+        address:     state.address,
         website:     state.website,
         description: state.description,
       }}
@@ -88,6 +91,7 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error, apiName
         onChange({
           name:        values.name,
           location:    values.location,
+          address:     values.address,
           website:     values.website,
           description: values.description,
         });
@@ -95,7 +99,7 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error, apiName
       }}
       enableReinitialize
     >
-      {({ values, errors, touched, handleChange, handleBlur, isSubmitting }) => {
+      {({ values, errors, touched, handleChange, handleBlur, isSubmitting, setFieldValue, setFieldTouched }) => {
         const displayNameError = apiNameError || (touched.name && errors.name ? errors.name : '');
 
         return (
@@ -117,15 +121,24 @@ export function Step1Form({ state, onChange, onSubmit, isPending, error, apiName
               required
             />
 
-            <Input
+            <CountryPicker
               label="Location"
-              name="location"
               value={values.location}
-              onChange={(e) => { handleChange(e); onChange({ location: e.target.value }); }}
-              onBlur={handleBlur}
-              placeholder="United States"
+              onChange={(val) => { setFieldValue('location', val); onChange({ location: val }); }}
+              onBlur={() => setFieldTouched('location', true)}
+              placeholder="Select a country"
               error={touched.location && errors.location ? errors.location : undefined}
               required
+            />
+
+            <Input
+              label="Address"
+              name="address"
+              value={values.address}
+              onChange={(e) => { handleChange(e); onChange({ address: e.target.value }); }}
+              onBlur={handleBlur}
+              placeholder="123 Main St, New York, NY 10001"
+              error={touched.address && errors.address ? errors.address : undefined}
             />
 
             <Input

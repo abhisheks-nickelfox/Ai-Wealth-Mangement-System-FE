@@ -14,6 +14,15 @@ export function useCreateTask() {
   });
 }
 
+export function useTask(id: string | null) {
+  return useQuery({
+    queryKey:  queryKeys.tasks.detail(id ?? ''),
+    queryFn:   () => tasksApi.get(id!),
+    enabled:   !!id,
+    staleTime: 60_000,
+  });
+}
+
 export function useTasks(params?: { firm_id?: string; session_id?: string; status?: string; project_id?: string }) {
   return useQuery({
     queryKey:  [...queryKeys.tasks.all, params],

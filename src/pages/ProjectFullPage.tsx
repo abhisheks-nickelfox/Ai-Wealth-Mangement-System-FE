@@ -16,7 +16,7 @@ import { ChatTab } from '../components/chat/ChatTab';
 import { useFirmDetail, useProjects, useUpdateProject } from '../hooks/useFirms';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { useTasksByFirm, useCreateTask, useUpdateTask } from '../hooks/useTasks';
-import { useUsers } from '../hooks/useUsers';
+import { useActiveUsers } from '../hooks/useUsers';
 import AddTaskModal from '../components/firms/AddTaskModal';
 import TaskDetailPanel from '../components/firms/TaskDetailPanel';
 import ProjectDetailPanel from '../components/firms/ProjectDetailPanel';
@@ -342,7 +342,7 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
     enabled:  !!projectId,
   });
   const { data: allTasks = [] }         = useTasksByFirm(firmId!);
-  const { data: users    = [] }         = useUsers();
+  const { data: users    = [] }         = useActiveUsers();
   const { data: projects = [] }         = useProjects(firmId);
   const createTask                      = useCreateTask();
   const updateTask                      = useUpdateTask();

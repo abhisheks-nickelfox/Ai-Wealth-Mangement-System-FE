@@ -19,7 +19,7 @@ import { tasksApi } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
 import AttachmentsSection from '../components/tasks/AttachmentsSection';
 import { useFirmDetail, useProjects } from '../hooks/useFirms';
-import { useUsers } from '../hooks/useUsers';
+import { useActiveUsers } from '../hooks/useUsers';
 import { useCreateTask, useUpdateTask } from '../hooks/useTasks';
 import TaskDetailPanel from '../components/firms/TaskDetailPanel';
 import type { TaskDetailData } from '../components/firms/TaskDetailPanel';
@@ -277,7 +277,7 @@ export default function TaskDetailPage() {
     enabled:  !!taskId,
   });
   const { data: projects = [] } = useProjects(firmId);
-  const { data: users    = [] } = useUsers();
+  const { data: users    = [] } = useActiveUsers();
   const createTask              = useCreateTask();
   const updateTask              = useUpdateTask();
 

@@ -9,7 +9,7 @@ import { useDeleteFirm } from '../hooks/useFirms';
 import { useToast } from '../hooks/useToast';
 import { useFirmDetail } from '../hooks/useFirms';
 import { useTasksByFirm } from '../hooks/useTasks';
-import { useUsers } from '../hooks/useUsers';
+import { useActiveUsers } from '../hooks/useUsers';
 import { ProjectsTab } from '../components/firms/ProjectsTab';
 import { OverviewTab, ComingSoon } from '../components/firms/FirmOverviewTab';
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ export default function FirmDetailPage() {
 
   const { data: firm = null, isLoading: firmLoading, error: firmError } = useFirmDetail(id!);
   const { data: tasks = [],  isLoading: tasksLoading }                  = useTasksByFirm(id!);
-  const { data: users = [] }                                             = useUsers();
+  const { data: users = [] }                                             = useActiveUsers();
 
   const loading = firmLoading || tasksLoading;
   const error   = firmError ? (firmError as Error).message : null;

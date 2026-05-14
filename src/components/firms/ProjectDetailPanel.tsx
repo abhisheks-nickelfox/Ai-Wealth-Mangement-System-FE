@@ -7,7 +7,7 @@ import Input from '../ui/Input';
 import AttachmentsSection, { type AttachmentsSectionHandle } from '../tasks/AttachmentsSection';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useTasks } from '../../hooks/useTasks';
-import type { User } from '../../lib/api';
+import type { User, Task } from '../../lib/api';
 import { TASK_STATUS_BADGE } from './TaskRow';
 import TaskIcon from '../icons/TaskIcon';
 
@@ -35,10 +35,11 @@ interface ProjectDetailPanelProps {
   onClose:     () => void;
   project:     ProjectDetail | null;
   users:       User[];
-  onSave?:     (updated: ProjectDetail) => Promise<void>;
-  onViewTask?: (projectId: string) => void;
-  onArchive?:  (projectId: string) => void;
-  onDelete?:   (project: ProjectDetail) => void;
+  onSave?:       (updated: ProjectDetail) => Promise<void>;
+  onViewTask?:   (projectId: string) => void;
+  onOpenTask?:   (task: Task) => void;
+  onArchive?:    (projectId: string) => void;
+  onDelete?:     (project: ProjectDetail) => void;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -62,7 +63,7 @@ const PRIORITY_OPTIONS: { value: 'high' | 'medium' | 'low'; label: string; dot: 
 
 export default function ProjectDetailPanel({
   open, onClose, project, users,
-  onSave, onViewTask,
+  onSave, onViewTask, onOpenTask,
 }: ProjectDetailPanelProps) {
 
   // ── state ──
@@ -352,7 +353,13 @@ export default function ProjectDetailPanel({
                   className="flex items-center gap-2.5 px-3 py-2 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] transition-colors group"
                 >
                   <TaskIcon width={12} height={12} className="text-[#A4A7AE] shrink-0" />
-                  <span className="flex-1 min-w-0 text-[13px] text-[#344054] truncate">{task.title}</span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenTask?.(task)}
+                    className="flex-1 min-w-0 text-[13px] text-[#344054] truncate text-left hover:text-[#7F56D9] transition-colors"
+                  >
+                    {task.title}
+                  </button>
                   {(() => {
                     const s = TASK_STATUS_BADGE[task.status];
                     return s ? (

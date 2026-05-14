@@ -31,6 +31,7 @@ export default function EditFirmPage() {
   const [step1, setStep1] = useState<Step1State>({
     name:        '',
     location:    '',
+    address:     '',
     website:     '',
     logoFile:    null,
     logoPreview: null,
@@ -52,6 +53,7 @@ export default function EditFirmPage() {
       setStep1({
         name:        firm.name ?? '',
         location:    firm.location ?? '',
+        address:     firm.address ?? '',
         website:     firm.website ?? '',
         logoFile:    null,
         logoPreview: firm.logo_url ?? null,
@@ -98,6 +100,7 @@ export default function EditFirmPage() {
         payload: {
           name:               step1.name.trim(),
           location:           step1.location.trim()    || null,
+          address:            step1.address.trim()     || null,
           website:            step1.website.trim()     || null,
           description:        step1.description.trim() || null,
           logo_url:           logoUrl,

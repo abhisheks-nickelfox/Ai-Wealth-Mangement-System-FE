@@ -29,6 +29,7 @@ export default function AddFirmPage() {
   const [step1, setStep1] = useState<Step1State>({
     name:        '',
     location:    '',
+    address:     '',
     website:     '',
     logoFile:    null,
     logoPreview: null,
@@ -66,6 +67,7 @@ export default function AddFirmPage() {
       const firm = await createFirm.mutateAsync({
         name:               step1.name.trim(),
         location:           step1.location.trim()    || null,
+        address:            step1.address.trim()     || null,
         website:            step1.website.trim()     || null,
         description:        step1.description.trim() || null,
         contact_name:       step2.contactName.trim()  || null,

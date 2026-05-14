@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Formik, Form } from 'formik';
 import {
   Mail01,
@@ -21,10 +21,11 @@ import DeleteConfirmModal from '../components/ui/DeleteConfirmModal';
 import SettingsRow from '../components/ui/SettingsRow';
 import SlideOver from '../components/ui/SlideOver';
 import { useAuth } from '../context/AuthContext';
+import { useClickOutside } from '../hooks/useClickOutside';
 import { profileApi, authApi } from '../lib/api';
 import { useSkills, useCreateSkill, useUpdateSkill, useDeleteSkill, useSetSkillMembers } from '../hooks/useSkills';
 import { useOrgSettings, useUploadOrgLogo } from '../hooks/useOrgSettings';
-import { useUsers } from '../hooks/useUsers';
+import { useUsers, useActiveUsers } from '../hooks/useUsers';
 import { useTaskTypes, useCreateTaskType, useUpdateTaskType, useDeleteTaskType } from '../hooks/useTaskTypes';
 import type { User, Skill, TaskType } from '../lib/api';
 import AddSkillsModal from '../components/users/AddSkillsModal';
@@ -446,6 +447,93 @@ function MemberAvatarStack({ members, max = 5 }: { members: { id: string; name: 
   );
 }
 
+// ── Inline member picker for skill/task-type rows ────────────────────────────
+
+interface MemberPickerCellProps {
+  members: { id: string; name: string; avatar_url: string | null }[];
+  allUsers: { id: string; name: string; avatar_url: string | null; status?: string }[];
+  onSave: (userIds: string[]) => void;
+  isPending?: boolean;
+}
+
+function MemberPickerCell({ members, allUsers, onSave, isPending }: MemberPickerCellProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => setOpen(false));
+
+  const memberSet = new Set(members.map((m) => m.id));
+  const activeUsers = allUsers.filter((u) => u.status === 'Active' || !u.status);
+
+  function toggle(userId: string) {
+    const next = memberSet.has(userId)
+      ? [...memberSet].filter((id) => id !== userId)
+      : [...memberSet, userId];
+    onSave(next);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={isPending}
+        className="flex items-center gap-1.5 group"
+        title="Manage members"
+      >
+        <div className="flex -space-x-2">
+          {members.length > 0
+            ? members.slice(0, 3).map((m) => (
+                <div key={m.id} className="w-7 h-7 rounded-full border-2 border-white overflow-hidden shrink-0">
+                  <Avatar src={m.avatar_url ?? undefined} name={m.name} size="xs" />
+                </div>
+              ))
+            : null}
+        </div>
+        {members.length > 3 && (
+          <span className="text-xs text-[#535862]">+{members.length - 3}</span>
+        )}
+        <span className={`w-6 h-6 rounded-full border border-dashed flex items-center justify-center transition-colors shrink-0
+          ${open ? 'border-[#7F56D9] text-[#7F56D9]' : 'border-gray-300 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9]'}`}>
+          <Plus width={10} height={10} />
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 z-50 mt-1 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[220px] max-h-56 overflow-y-auto">
+          {activeUsers.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-[#717680]">No active users</p>
+          ) : (
+            activeUsers.map((u) => {
+              const checked = memberSet.has(u.id);
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => toggle(u.id)}
+                  className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
+                >
+                  <div className="w-6 h-6 rounded-full overflow-hidden shrink-0">
+                    <Avatar src={u.avatar_url ?? undefined} name={u.name} size="xs" />
+                  </div>
+                  <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
+                  <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors
+                    ${checked ? 'bg-[#7F56D9] border-[#7F56D9]' : 'border-[#D0D5DD]'}`}>
+                    {checked && (
+                      <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                        <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Shared: pagination ────────────────────────────────────────────────────────
 
 function pageNumbers(_page: number, totalPages: number): (number | '...')[] {
@@ -667,6 +755,8 @@ function TaskTypePanel({ taskType, open, onClose, onSaved }: TaskTypePanelProps)
 function TaskTypeManagement() {
   const { data: taskTypes = [], isLoading, refetch } = useTaskTypes();
   const deleteTaskType = useDeleteTaskType();
+  const updateTaskType = useUpdateTaskType();
+  const { data: allUsers = [] } = useActiveUsers();
 
   const [panelOpen,     setPanelOpen]     = useState(false);
   const [editingType,   setEditingType]   = useState<TaskType | null>(null);
@@ -726,13 +816,21 @@ function TaskTypeManagement() {
                 key={tt.id}
                 className="grid grid-cols-[200px_1fr_180px_160px_72px] items-center px-4 py-4 border-b border-[#E9EAEB] last:border-b-0 bg-white hover:bg-gray-50/50 transition-colors"
               >
-                <div>
+                <button
+                  onClick={() => openEdit(tt)}
+                  className="text-left hover:opacity-80 transition-opacity"
+                >
                   <TagPreview name={tt.name} color={color} />
-                </div>
+                </button>
                 <p className="text-sm text-[#535862] pr-4 line-clamp-1">
                   {tt.description || 'No description available.'}
                 </p>
-                <MemberAvatarStack members={tt.members} max={3} />
+                <MemberPickerCell
+                  members={tt.members}
+                  allUsers={allUsers}
+                  isPending={updateTaskType.isPending}
+                  onSave={(userIds) => updateTaskType.mutate({ id: tt.id, payload: { member_ids: userIds } })}
+                />
                 <span className="text-sm font-semibold text-[#6941C6]">
                   {String(tt.task_count).padStart(2, '0')} Tasks
                 </span>
@@ -795,6 +893,8 @@ const SKILLS_PER_PAGE = 6;
 function SkillManagement() {
   const { data: skills = [], isLoading, refetch } = useSkills();
   const deleteSkill = useDeleteSkill();
+  const setSkillMembers = useSetSkillMembers();
+  const { data: allUsers = [] } = useActiveUsers();
   const [showAdd,          setShowAdd]          = useState(false);
   const [editingSkill,     setEditingSkill]     = useState<Skill | null>(null);
   const [page,             setPage]             = useState(1);
@@ -852,9 +952,12 @@ function SkillManagement() {
                 className="grid grid-cols-[200px_1fr_180px_160px_72px] items-center px-4 py-4 border-b border-[#E9EAEB] last:border-b-0 bg-white hover:bg-gray-50/50 transition-colors"
               >
                 {/* Skill badge */}
-                <div>
+                <button
+                  onClick={() => setEditingSkill(skill)}
+                  className="text-left hover:opacity-80 transition-opacity"
+                >
                   <TagPreview name={skill.name} color={color} />
-                </div>
+                </button>
 
                 {/* Description */}
                 <p className="text-sm text-[#535862] pr-4 line-clamp-1">
@@ -862,13 +965,16 @@ function SkillManagement() {
                 </p>
 
                 {/* Members with skill */}
-                <div>
-                  <MemberAvatarStack members={skill.members ?? []} max={3} />
-                </div>
+                <MemberPickerCell
+                  members={skill.members ?? []}
+                  allUsers={allUsers}
+                  isPending={setSkillMembers.isPending}
+                  onSave={(userIds) => setSkillMembers.mutate({ id: skill.id, user_ids: userIds })}
+                />
 
                 {/* On going usage */}
                 <span className="text-sm font-semibold text-[#6941C6]">
-                  — Tasks
+                  {String(skill.task_count ?? 0).padStart(2, '0')} Tasks
                 </span>
 
                 {/* Actions */}

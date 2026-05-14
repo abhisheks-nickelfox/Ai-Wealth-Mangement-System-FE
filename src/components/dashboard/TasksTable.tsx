@@ -1,9 +1,12 @@
-import { useState, useMemo, useEffect } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, FilterLines } from '@untitled-ui/icons-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronDown, ChevronLeft, ChevronRight, FilterLines, Check } from '@untitled-ui/icons-react';
 import AvatarStack from '../ui/AvatarStack';
-import { PriorityBadge, TaskStatusBadge } from '../tasks/TaskBadges';
-import { useTasks } from '../../hooks/useTasks';
+import { TaskStatusBadge } from '../tasks/TaskBadges';
+import { useTasks, useUpdateTask } from '../../hooks/useTasks';
 import { useFirms } from '../../hooks/useFirms';
+import { useActiveUsers } from '../../hooks/useUsers';
+import Avatar from '../ui/Avatar';
 import type { Task } from '../../lib/api';
 
 // ── Dot colors cycling per firm ───────────────────────────────────────────────
@@ -15,19 +18,29 @@ function dotColorForFirm(firmId: string | null, _firmNames: string[]): string {
   return DOT_COLORS[Math.abs(firmId.charCodeAt(0) + firmId.charCodeAt(firmId.length - 1)) % DOT_COLORS.length];
 }
 
+// ── Priority styles ───────────────────────────────────────────────────────────
+
+const PRIORITY_STYLES: Record<string, { label: string; bg: string; text: string }> = {
+  low:    { label: 'Low',    bg: '#F2F4F7', text: '#344054' },
+  normal: { label: 'Medium', bg: '#EFF8FF', text: '#1570EF' },
+  high:   { label: 'High',   bg: '#FEF0C7', text: '#B54708' },
+  urgent: { label: 'Urgent', bg: '#FEF3F2', text: '#B42318' },
+};
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface RowData {
-  id:        string;
-  name:      string;
-  dot:       string;
-  client:    string;
-  assignees: { name: string; bg: string }[];
-  dueDate:   string;
-  priority:  Task['priority'];
-  status:    Task['status'];
+  id:         string;
+  firmId:     string | null;
+  name:       string;
+  dot:        string;
+  client:     string;
+  assignees:  { name: string; bg: string }[];
+  assigneeId: string | null;
+  dueDate:    string;
+  priority:   Task['priority'];
+  status:     Task['status'];
 }
-
 
 // ── Project dot (concentric rings) ───────────────────────────────────────────
 
@@ -41,14 +54,146 @@ function ProjectDot({ color }: { color: string }) {
   );
 }
 
+// ── Priority dropdown ─────────────────────────────────────────────────────────
+
+function PriorityDropdown({ row }: { row: RowData }) {
+  const [open, setOpen] = useState(false);
+  const ref             = useRef<HTMLDivElement>(null);
+  const updateTask      = useUpdateTask();
+  const style           = PRIORITY_STYLES[row.priority] ?? PRIORITY_STYLES.normal;
+
+  useEffect(() => {
+    if (!open) return;
+    function handleMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [open]);
+
+  function select(priority: Task['priority']) {
+    updateTask.mutate({ id: row.id, payload: { priority, firm_id: row.firmId ?? undefined } });
+    setOpen(false);
+  }
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border transition-opacity hover:opacity-80"
+        style={{ backgroundColor: style.bg, color: style.text, borderColor: style.bg }}
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-current" />
+        {style.label}
+        <ChevronDown width={10} height={10} className="ml-0.5 opacity-60" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[110px]">
+          {(Object.keys(PRIORITY_STYLES) as Task['priority'][]).map((p) => {
+            const ps = PRIORITY_STYLES[p];
+            return (
+              <button
+                key={p}
+                onClick={() => select(p)}
+                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 transition-colors text-left"
+              >
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold"
+                  style={{ backgroundColor: ps.bg, color: ps.text }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                  {ps.label}
+                </span>
+                {p === row.priority && <Check width={12} height={12} className="ml-auto text-[#7F56D9]" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Assignee picker ───────────────────────────────────────────────────────────
+
+function AssigneePicker({ row }: { row: RowData }) {
+  const [open, setOpen]  = useState(false);
+  const ref              = useRef<HTMLDivElement>(null);
+  const updateTask       = useUpdateTask();
+  const { data: users = [] } = useActiveUsers();
+
+  useEffect(() => {
+    if (!open) return;
+    function handleMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [open]);
+
+  function select(userId: string | null) {
+    updateTask.mutate({ id: row.id, payload: { assignee_id: userId, firm_id: row.firmId ?? undefined } });
+    setOpen(false);
+  }
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 rounded hover:opacity-80 transition-opacity"
+      >
+        {row.assignees.length > 0 ? (
+          <AvatarStack avatars={row.assignees} max={3} showAddButton={false} />
+        ) : (
+          <span className="w-6 h-6 rounded-full border border-dashed border-gray-300 flex items-center justify-center text-[11px] text-gray-400 hover:border-[#7F56D9] hover:text-[#7F56D9] transition-colors">
+            +
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[180px] max-h-48 overflow-y-auto">
+          {/* Unassign option */}
+          <button
+            onClick={() => select(null)}
+            className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 transition-colors text-left"
+          >
+            <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-400 shrink-0">—</span>
+            <span className="text-[12px] text-gray-500">Unassign</span>
+            {!row.assigneeId && <Check width={12} height={12} className="ml-auto text-[#7F56D9]" />}
+          </button>
+          <div className="border-t border-gray-100 my-1" />
+          {users.map((u) => (
+            <button
+              key={u.id}
+              onClick={() => select(u.id)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 transition-colors text-left"
+            >
+              <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] text-gray-800 font-medium truncate">{u.name}</p>
+                <p className="text-[10px] text-gray-400 truncate">{u.member_role ?? u.role}</p>
+              </div>
+              {u.id === row.assigneeId && <Check width={12} height={12} className="ml-auto text-[#7F56D9] shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Row component ─────────────────────────────────────────────────────────────
 
 interface RowProps {
-  row:       RowData;
-  depth?:    number;
+  row:    RowData;
+  depth?: number;
 }
 
 function ProjectRow({ row, depth = 0 }: RowProps) {
+  const navigate = useNavigate();
+
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
 
@@ -60,9 +205,13 @@ function ProjectRow({ row, depth = 0 }: RowProps) {
         >
           <span className="w-5 shrink-0" />
           <ProjectDot color={row.dot} />
-          <span className="text-[13px] font-semibold leading-tight text-gray-900">
+          <button
+            onClick={() => row.firmId && navigate(`/firms/${row.firmId}/tasks/${row.id}`)}
+            className="text-[13px] font-semibold leading-tight text-gray-900 hover:text-[#7F56D9] transition-colors text-left truncate max-w-[220px]"
+            title={row.name}
+          >
             {row.name}
-          </span>
+          </button>
         </div>
       </td>
 
@@ -73,7 +222,7 @@ function ProjectRow({ row, depth = 0 }: RowProps) {
 
       {/* Assignee */}
       <td className="py-2.5 pr-3">
-        <AvatarStack avatars={row.assignees} max={3} showAddButton={false} />
+        <AssigneePicker row={row} />
       </td>
 
       {/* Due date */}
@@ -83,7 +232,7 @@ function ProjectRow({ row, depth = 0 }: RowProps) {
 
       {/* Priority */}
       <td className="py-2.5 pr-3">
-        <PriorityBadge priority={row.priority} />
+        <PriorityDropdown row={row} />
       </td>
 
       {/* Status */}
@@ -99,14 +248,14 @@ function ProjectRow({ row, depth = 0 }: RowProps) {
 const PAGE_SIZE = 20;
 
 export default function TasksTable() {
-  const [firmFilter,  setFirmFilter]  = useState('All Firms');
-  const [firmOpen,    setFirmOpen]    = useState(false);
+  const [firmFilter,     setFirmFilter]     = useState('All Firms');
+  const [firmOpen,       setFirmOpen]       = useState(false);
   const [assigneeFilter, setAssigneeFilter] = useState('All Assignees');
   const [assigneeOpen,   setAssigneeOpen]   = useState(false);
   const [page, setPage] = useState(1);
 
-  const { data: tasks   = [] } = useTasks();
-  const { data: firms   = [] } = useFirms();
+  const { data: tasks = [] } = useTasks();
+  const { data: firms = [] } = useFirms();
 
   // Build unique assignee names from loaded tasks for the filter dropdown
   const assigneeNames = useMemo(() => {
@@ -119,14 +268,16 @@ export default function TasksTable() {
 
   // Map Task → RowData for the table
   const rows: RowData[] = useMemo(() => tasks.map((task) => ({
-    id:        task.id,
-    name:      task.title,
-    dot:       dotColorForFirm(task.firm_id, firms.map((f) => f.id)),
-    client:    task.firms?.name ?? '—',
-    assignees: task.assignee ? [{ name: task.assignee.name, bg: '#D6BBFB' }] : [],
-    dueDate:   task.deadline ?? '—',
-    priority:  task.priority,
-    status:    task.status,
+    id:         task.id,
+    firmId:     task.firm_id,
+    name:       task.title,
+    dot:        dotColorForFirm(task.firm_id, firms.map((f) => f.id)),
+    client:     task.firms?.name ?? '—',
+    assignees:  task.assignee ? [{ name: task.assignee.name, bg: '#D6BBFB' }] : [],
+    assigneeId: task.assignee_id,
+    dueDate:    task.deadline ?? '—',
+    priority:   task.priority,
+    status:     task.status,
   })), [tasks, firms]);
 
   const filtered = rows.filter((r) => {

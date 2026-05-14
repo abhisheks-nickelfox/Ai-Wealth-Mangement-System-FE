@@ -780,6 +780,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         onClose={() => setSelectedProject(null)}
         project={selectedProject}
         users={users}
+        onOpenTask={(task) => { setSelectedProject(null); setSelectedTask(task); }}
         onViewTask={(projectId) => {
           const statusParam = encodeURIComponent(selectedProject?.status ?? '');
           setSelectedProject(null);

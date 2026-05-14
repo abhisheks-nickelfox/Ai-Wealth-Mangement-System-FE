@@ -10,6 +10,7 @@ import iconPhone    from '../../assets/contact-icons/icon-phone.svg';
 import iconMail     from '../../assets/contact-icons/icon-mail.svg';
 import iconCalendar from '../../assets/contact-icons/icon-calendar.svg';
 import type { Firm, User } from '../../lib/api';
+import { flagFromName } from '../../lib/countries';
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
@@ -189,9 +190,19 @@ export function OverviewTab({ firm, users, onEditFirm, onDeleteFirm }: FirmDetai
             <div style={{ marginBottom: 14 }}>
               <p className="text-[12px] font-semibold text-[#0f172a] mb-1.5">Location</p>
               <div className="flex items-center gap-2 text-[13px] text-[#0f172a]">
-                <span aria-hidden="true">🌏</span>
+                <span aria-hidden="true" className="text-xl leading-none">
+                  {flagFromName(firm.location) || '🌏'}
+                </span>
                 <span>{firm.location}</span>
               </div>
+            </div>
+          )}
+
+          {/* Address */}
+          {firm.address && (
+            <div style={{ marginBottom: 14 }}>
+              <p className="text-[12px] font-semibold text-[#0f172a] mb-1.5">Address</p>
+              <p className="text-[13px] text-[#0f172a] leading-snug">{firm.address}</p>
             </div>
           )}
 

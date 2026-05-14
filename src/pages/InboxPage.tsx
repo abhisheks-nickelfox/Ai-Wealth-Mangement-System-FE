@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { FilterLines, Mail01, XClose, CornerDownLeft, Send01 } from '@untitled-ui/icons-react';
-import type { AppNotification, Message } from '../lib/api';
+import type { AppNotification, Message, TimeLog } from '../lib/api';
+import { timeLogsApi } from '../lib/api';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import SearchInput from '../components/ui/SearchInput';
 import SlideOver from '../components/ui/SlideOver';
@@ -11,7 +13,8 @@ import {
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
 } from '../hooks/useNotifications';
-import { useFirms } from '../hooks/useFirms';
+import { useFirms, useProjects } from '../hooks/useFirms';
+import { useTask } from '../hooks/useTasks';
 import { useMessages, useSendMessage } from '../hooks/useMessages';
 import { useMessageStream } from '../hooks/useMessageStream';
 
@@ -120,23 +123,36 @@ function formatMessageTime(iso: string): string {
 
 // ── SVG icons ─────────────────────────────────────────────────────────────────
 
-function SubtaskIcon({ className = '' }: { className?: string }) {
+function FirmIcon({ className = '' }: { className?: string }) {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      className={className}
-      aria-hidden="true"
-    >
-      <rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.4" />
-      <rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.4" />
-      <rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M12 9v6M9 12h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">
+      <rect x="1" y="5" width="14" height="10" rx="1.2" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M5 5V3.5A1.5 1.5 0 0 1 6.5 2h3A1.5 1.5 0 0 1 11 3.5V5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M1 9h14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M6.5 9v2.5M9.5 9v2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }
+
+function ProjectIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">
+      <path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h3.5l1.5 2H13a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5v-8z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function TaskIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={className} aria-hidden="true">
+      <rect x="1.5" y="1.5" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.4" />
+      <rect x="8.5" y="1.5" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.4" />
+      <rect x="1.5" y="8.5" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M11.5 8.5v6M8.5 11.5h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 
 function FileIcon({ className = '' }: { className?: string }) {
   return (
@@ -154,14 +170,6 @@ function FileIcon({ className = '' }: { className?: string }) {
   );
 }
 
-function ActivityPersonIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-      <circle cx="5" cy="3.5" r="2" stroke="#98A2B3" strokeWidth="1.2" />
-      <path d="M1 9c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="#98A2B3" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function CheckIcon() {
   return (
@@ -253,23 +261,162 @@ interface ThreadPanelProps {
   onMarkRead: (id: string) => void;
 }
 
+// ── Feed types ────────────────────────────────────────────────────────────────
+
+interface ActivityLog {
+  id: string;
+  user_id: string;
+  log_type: string;
+  comment: string | null;
+  created_at: string;
+  users?: { name: string; email: string; avatar_url?: string | null } | null;
+}
+
+type FeedItem =
+  | { kind: 'message'; data: Message; ts: string }
+  | { kind: 'activity'; data: ActivityLog; ts: string };
+
+// ── Status dot colours ────────────────────────────────────────────────────────
+
+const STATUS_COLOURS: Record<string, string> = {
+  in_progress:     '#2E90FA',
+  internal_review: '#7F56D9',
+  client_review:   '#3538CD',
+  completed:       '#12B76A',
+  revisions:       '#F79009',
+  blocked:         '#F04438',
+  assigned:        '#F79009',
+  to_do:           '#98A2B3',
+};
+
+function fmtStatus(s: string): string {
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function extractToStatus(comment: string | null): string | null {
+  if (!comment) return null;
+  // Expect format like "status: old → new" or just capture the last word/phrase
+  const arrowMatch = comment.match(/→\s*(.+)$/);
+  if (arrowMatch) return arrowMatch[1].trim();
+  const toMatch = comment.match(/to\s+(\w+)$/i);
+  if (toMatch) return toMatch[1].trim();
+  return null;
+}
+
+// ── Activity item ─────────────────────────────────────────────────────────────
+
+function ActivityItem({ log }: { log: ActivityLog }) {
+  const actorName = log.users?.name ?? 'Someone';
+
+  let label: React.ReactNode;
+
+  if (log.log_type === 'revision') {
+    label = (
+      <>
+        <span className="font-medium text-[#344054]">{actorName}</span>
+        {' sent to '}
+        <span className="inline-flex items-center gap-1">
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: STATUS_COLOURS['revisions'] }}
+          />
+          <span>Revisions</span>
+        </span>
+      </>
+    );
+  } else {
+    // transition log — try to extract the destination status from comment
+    const toStatus = extractToStatus(log.comment);
+    const colour = toStatus ? (STATUS_COLOURS[toStatus] ?? '#98A2B3') : '#98A2B3';
+    label = (
+      <>
+        <span className="font-medium text-[#344054]">{actorName}</span>
+        {' changed status'}
+        {toStatus && (
+          <>
+            {': '}
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: colour }}
+              />
+              <span>{fmtStatus(toStatus)}</span>
+            </span>
+          </>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 py-1.5 px-1 text-[12px] text-[#667085]">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0 text-[#98A2B3]" aria-hidden="true">
+        <circle cx="7" cy="4.5" r="2.5" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M1.5 12.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      </svg>
+      <span className="leading-snug flex-1">{label}</span>
+      <span className="text-[#A4A7AE] shrink-0 text-[11px] ml-3">{formatMessageTime(log.created_at)}</span>
+    </div>
+  );
+}
+
 function ThreadPanel({ notification, onClose, onMarkRead }: ThreadPanelProps) {
   const [draft, setDraft] = useState('');
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scopeId = notification.ticket_id ?? '';
-  const { data: messages, isLoading: messagesLoading } = useMessages(
-    'task',
-    scopeId,
-  );
-  useMessageStream('task', scopeId);
+  const scope   = notification.scope   ?? 'task';
+  const scopeId = notification.scope_id ?? notification.ticket_id ?? '';
+  const { data: messages, isLoading: messagesLoading } = useMessages(scope, scopeId);
+  useMessageStream(scope, scopeId);
   const sendMessage = useSendMessage();
 
-  // Auto-scroll to bottom when messages arrive
+  // Fetch task + project details to build the breadcrumb (only for task scope)
+  const taskId = scope === 'task' ? (notification.scope_id ?? notification.ticket_id) : null;
+  const { data: task } = useTask(taskId);
+  const { data: projects } = useProjects(task?.project_id ? task.firm_id : undefined);
+  const project = projects?.find((p) => p.id === task?.project_id);
+
+  // Fetch time logs for activity feed — only for task scope
+  const { data: timeLogs } = useQuery<TimeLog[]>({
+    queryKey: ['timeLogs', scopeId],
+    queryFn: () => timeLogsApi.list(scopeId),
+    enabled: !!scopeId && scope === 'task',
+  });
+
+  const firmName = task?.firms?.name ?? '';
+
+  // Breadcrumb: scope first, then firm
+  let breadcrumbLeft: string | null = null;
+  if (task?.parent_task_id) {
+    breadcrumbLeft = 'Sub-task';
+  } else if (task?.project_id && project) {
+    breadcrumbLeft = project.name;
+  }
+  // If no project and no sub-task, show only firmName (no left label)
+
+  // Build combined chronological feed
+  const activityLogs: ActivityLog[] = (timeLogs ?? [])
+    .filter((l) => l.log_type === 'transition' || l.log_type === 'revision')
+    .map((l) => ({
+      id:         l.id,
+      user_id:    l.user_id,
+      log_type:   l.log_type,
+      comment:    l.comment,
+      created_at: l.created_at,
+      users:      l.users,
+    }));
+
+  const feed: FeedItem[] = [
+    ...(messages ?? []).map((m): FeedItem => ({ kind: 'message', data: m, ts: m.created_at })),
+    ...activityLogs.map((a): FeedItem => ({ kind: 'activity', data: a, ts: a.created_at })),
+  ].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+
+  // Auto-scroll to bottom when feed changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages?.length]);
+  }, [feed.length]);
 
   // Auto-resize textarea
   function handleDraftChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -283,9 +430,15 @@ function ThreadPanel({ notification, onClose, onMarkRead }: ThreadPanelProps) {
 
   function handleSend() {
     const body = draft.trim();
-    if (!body || !notification.ticket_id) return;
-    sendMessage.mutate({ scope: 'task', scope_id: notification.ticket_id, body });
+    if (!body || !scopeId) return;
+    sendMessage.mutate({
+      scope,
+      scope_id: scopeId,
+      body,
+      parent_id: replyTo?.id,
+    });
     setDraft('');
+    setReplyTo(null);
     if (textareaRef.current) textareaRef.current.style.height = '22px';
   }
 
@@ -301,28 +454,47 @@ function ThreadPanel({ notification, onClose, onMarkRead }: ThreadPanelProps) {
       {/* Thread header */}
       <div className="flex items-start justify-between px-5 py-4 border-b border-[#E9EAEB] shrink-0">
         <div className="min-w-0 flex-1 mr-3">
-          {/* Title row */}
+          {/* Title row — scope icon + actor avatar + title */}
           <div className="flex items-center gap-2">
-            <StatusCircle read={notification.read} />
-            <SubtaskIcon className="text-[#98A2B3] shrink-0" />
+            {notification.scope === 'firm' ? (
+              <FirmIcon className="text-[#98A2B3] shrink-0" />
+            ) : notification.scope === 'project' ? (
+              <ProjectIcon className="text-[#98A2B3] shrink-0" />
+            ) : (
+              <TaskIcon className="text-[#98A2B3] shrink-0" />
+            )}
+            {notification.actor && (
+              <Avatar
+                name={notification.actor.name}
+                src={notification.actor.avatar_url ?? undefined}
+                size="xs"
+              />
+            )}
             <span className="text-[15px] font-semibold text-[#181D27] truncate">
               {notification.title}
             </span>
           </div>
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-2 mt-1 text-[12px] text-[#667085]">
-            <FileIcon className="text-[#98A2B3] shrink-0" />
-            <span>IDA Wealth management</span>
-            <span className="text-[#D0D5DD]">|</span>
-            <span>Project</span>
-          </div>
+          {/* Breadcrumb: scope first, then firm */}
+          {(breadcrumbLeft || firmName) && (
+            <div className="flex items-center gap-1.5 mt-1 text-[12px] text-[#667085]">
+              <FileIcon className="text-[#98A2B3] shrink-0" />
+              {breadcrumbLeft && <span>{breadcrumbLeft}</span>}
+              {breadcrumbLeft && firmName && (
+                <span className="text-[#D0D5DD]">|</span>
+              )}
+              {firmName && <span>{firmName}</span>}
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
+          {/* "/ Clear all" button */}
           <button
             onClick={() => onMarkRead(notification.id)}
-            className="text-[12px] font-semibold text-[#6941C6] flex items-center gap-1 hover:text-[#53389E] transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-[12px] font-semibold text-[#6941C6] hover:text-[#53389E] transition-colors rounded-lg hover:bg-[#F9F5FF]"
+            aria-label="Clear all notifications for this thread"
           >
-            Clear all
+            <span className="text-[#98A2B3] font-normal">/</span>
+            <span>Clear all</span>
           </button>
           <button
             onClick={onClose}
@@ -334,52 +506,65 @@ function ThreadPanel({ notification, onClose, onMarkRead }: ThreadPanelProps) {
         </div>
       </div>
 
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-0">
-        {/* Activity entry for the notification itself */}
-        <div className="flex items-start gap-2.5 py-2 text-[12px] text-[#667085]">
-          <div className="w-5 h-5 rounded-full bg-[#F2F4F7] flex items-center justify-center shrink-0 mt-0.5">
-            <ActivityPersonIcon />
-          </div>
-          <span>
-            {highlightMentions(notification.message)}{' '}
-            <span className="text-[#A4A7AE]">{formatMessageTime(notification.created_at)}</span>
-          </span>
-        </div>
-
-        {/* Messages */}
+      {/* Feed area — messages + activity mixed chronologically */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col bg-[#F9FAFB]">
         {messagesLoading && (
           <div className="flex justify-center py-4">
             <LoadingSpinner />
           </div>
         )}
 
-        {!messagesLoading && notification.ticket_id && messages && messages.length === 0 && (
+        {!messagesLoading && feed.length === 0 && scopeId && (
           <p className="text-[12px] text-[#A4A7AE] text-center py-4">
-            No replies yet. Start the conversation.
+            No activity yet. Start the conversation.
           </p>
         )}
 
-        {!notification.ticket_id && (
+        {!scopeId && (
           <div className="text-[13px] text-[#414651] leading-relaxed py-2">
             {highlightMentions(notification.message)}
           </div>
         )}
 
-        {messages?.map((msg: Message) => (
-          <MessageItem
-            key={msg.id}
-            msg={msg}
-            notificationId={notification.id}
-            onMarkRead={onMarkRead}
-          />
-        ))}
+        {feed.map((item) => {
+          if (item.kind === 'activity') {
+            return <ActivityItem key={`activity-${item.data.id}`} log={item.data} />;
+          }
+          return (
+            <MessageItem
+              key={`message-${item.data.id}`}
+              msg={item.data}
+              notificationId={notification.id}
+              onMarkRead={onMarkRead}
+              onReply={(msg) => {
+                setReplyTo(msg);
+                textareaRef.current?.focus();
+              }}
+            />
+          );
+        })}
 
         <div ref={messagesEndRef} />
       </div>
 
       {/* Composer */}
       <div className="shrink-0 border-t border-[#E9EAEB] px-4 py-3">
+        {/* Reply-to banner */}
+        {replyTo && (
+          <div className="flex items-start justify-between gap-2 mb-2 px-3 py-2 bg-[#F9F5FF] border-l-2 border-[#7F56D9] rounded-r-lg">
+            <p className="text-[12px] text-[#6941C6] leading-snug min-w-0">
+              <span className="font-semibold">{replyTo.author.name}:</span>{' '}
+              {replyTo.body.slice(0, 60)}{replyTo.body.length > 60 ? '…' : ''}
+            </p>
+            <button
+              onClick={() => setReplyTo(null)}
+              aria-label="Dismiss reply"
+              className="shrink-0 text-[#98A2B3] hover:text-[#667085] transition-colors"
+            >
+              <XClose width={13} height={13} />
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2 bg-white rounded-xl border border-[#E9EAEB] px-3.5 py-2.5 focus-within:border-[#7F56D9] focus-within:ring-2 focus-within:ring-[#7F56D9]/10 transition-all">
           <textarea
             ref={textareaRef}
@@ -393,7 +578,7 @@ function ThreadPanel({ notification, onClose, onMarkRead }: ThreadPanelProps) {
           />
           <button
             onClick={handleSend}
-            disabled={!draft.trim() || sendMessage.isPending || !notification.ticket_id}
+            disabled={!draft.trim() || sendMessage.isPending || !scopeId}
             aria-label="Send reply"
             className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#7F56D9] hover:bg-[#6941C6] text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
           >
@@ -411,52 +596,48 @@ interface MessageItemProps {
   msg: Message;
   notificationId: string;
   onMarkRead: (id: string) => void;
+  onReply: (msg: Message) => void;
 }
 
-function MessageItem({ msg, notificationId, onMarkRead }: MessageItemProps) {
+function MessageItem({ msg, notificationId, onMarkRead, onReply }: MessageItemProps) {
   return (
-    <div className="flex flex-col mb-4">
-      {/* Author row */}
-      <div className="flex items-center gap-2.5 mb-2">
-        <Avatar
-          name={msg.author.name}
-          src={msg.author.avatar_url ?? undefined}
-          size="sm"
-        />
-        <span className="text-[13px] font-semibold text-[#181D27]">{msg.author.name}</span>
-        <span className="text-[11px] text-[#A4A7AE]">{formatMessageTime(msg.created_at)}</span>
+    <div className="rounded-xl border border-[#E4E7EC] bg-white mb-3 shadow-sm">
+      {/* Top: avatar + name + time + body */}
+      <div className="px-4 pt-4 pb-4">
+        <div className="flex items-center gap-2.5 mb-3">
+          <Avatar
+            name={msg.author.name}
+            src={msg.author.avatar_url ?? undefined}
+            size="sm"
+          />
+          <span className="text-[13px] font-semibold text-[#101828]">{msg.author.name}</span>
+          <span className="text-[12px] text-[#98A2B3] ml-1">{formatMessageTime(msg.created_at)}</span>
+        </div>
+        <p className="text-[13px] text-[#344054] leading-[1.6] pl-[38px]">
+          {highlightMentions(msg.body)}
+        </p>
       </div>
-      {/* Body */}
-      <div className="ml-0 text-[13px] text-[#414651] leading-relaxed mb-2">
-        {highlightMentions(msg.body)}
-      </div>
-      {/* Actions row */}
-      <div className="flex items-center gap-1">
-        <button
-          aria-label="React with thumbs up"
-          className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[#F2F4F7] text-[#98A2B3] transition-colors text-[13px]"
-        >
-          👍
-        </button>
-        <button
-          aria-label="React with smile"
-          className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[#F2F4F7] text-[#98A2B3] transition-colors text-[13px]"
-        >
-          😊
-        </button>
+      {/* Divider */}
+      <div className="h-px bg-[#F2F4F7]" />
+      {/* Reactions + actions row */}
+      <div className="flex items-center px-4 py-2.5">
+        <button aria-label="👍" className="text-[16px] hover:opacity-70 transition-opacity mr-2">👍</button>
+        <button aria-label="😊" className="text-[16px] hover:opacity-70 transition-opacity">😊</button>
         <div className="flex-1" />
         <button
           onClick={() => onMarkRead(notificationId)}
-          className="px-2.5 py-1 text-[12px] font-medium text-[#667085] hover:text-[#414651] transition-colors"
+          className="text-[13px] font-medium text-[#6941C6] hover:text-[#53389E] transition-colors mr-4"
         >
           Clear
         </button>
-        <button className="flex items-center gap-1 px-2.5 py-1 text-[12px] font-medium text-[#667085] hover:text-[#414651] transition-colors">
-          <CornerDownLeft width={13} height={13} />
+        <button
+          onClick={() => onReply(msg)}
+          className="flex items-center gap-1.5 text-[13px] font-medium text-[#344054] hover:text-[#101828] transition-colors"
+        >
+          <CornerDownLeft width={14} height={14} />
           Reply
         </button>
       </div>
-      <div className="h-px bg-[#F2F4F7] mt-2" />
     </div>
   );
 }
@@ -481,16 +662,25 @@ function InboxRow({ item, isSelected, onSelect, onMarkRead }: InboxRowProps) {
         isSelected ? 'bg-[#F9F5FF]' : 'hover:bg-[#FAFAFA]'
       }`}
     >
-      {/* Left section */}
+      {/* Left section — status dot + scope icon + actor avatar (all always shown) */}
       <div className="flex items-center gap-2 shrink-0">
         <StatusCircle read={item.read} />
         <span className="text-[#98A2B3]">
-          {item.ticket_id ? (
-            <SubtaskIcon className="text-[#98A2B3]" />
+          {item.scope === 'firm' ? (
+            <FirmIcon className="text-[#98A2B3]" />
+          ) : item.scope === 'project' ? (
+            <ProjectIcon className="text-[#98A2B3]" />
           ) : (
-            <FileIcon className="text-[#98A2B3]" />
+            <TaskIcon className="text-[#98A2B3]" />
           )}
         </span>
+        {item.actor && (
+          <Avatar
+            name={item.actor.name}
+            src={item.actor.avatar_url ?? undefined}
+            size="sm"
+          />
+        )}
       </div>
 
       {/* Middle section */}

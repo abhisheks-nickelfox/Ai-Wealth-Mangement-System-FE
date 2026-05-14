@@ -353,21 +353,24 @@ export default function UsersPage() {
                         key={user.id}
                         className={`border-b border-[#E9EAEB] ${isEven ? 'bg-[#FDFDFD]' : 'bg-white'}`}
                       >
-                        {/* Name */}
+                        {/* Name — clicking opens the edit/settings page */}
                         <td className="px-6 py-4 h-[72px]">
                           <div className="flex items-center gap-3">
                             <Checkbox checked={isChecked} onChange={() => toggleOne(user.id)} />
-                            <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => navigate(`/users/${user.id}/settings`)}
+                              className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
+                            >
                               <Avatar src={user.avatar_url ?? undefined} name={displayName} />
                               <div>
-                                <p className="text-sm font-medium text-[#181D27] whitespace-nowrap">
+                                <p className="text-sm font-medium text-[#181D27] whitespace-nowrap hover:text-[#7F56D9] transition-colors">
                                   {displayName}
                                 </p>
                                 <p className="text-sm text-[#535862] whitespace-nowrap">
                                   {rateDisplay}
                                 </p>
                               </div>
-                            </div>
+                            </button>
                           </div>
                         </td>
 

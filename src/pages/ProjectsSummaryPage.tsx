@@ -6,7 +6,7 @@ import {
   DotsVertical, Edit01, Trash01, X, SearchLg, Folder,
 } from '@untitled-ui/icons-react';
 import { useProjects, useFirms, useDeleteProject, useCreateProject } from '../hooks/useFirms';
-import { useUsers } from '../hooks/useUsers';
+import { useActiveUsers } from '../hooks/useUsers';
 import { useTasks } from '../hooks/useTasks';
 import AvatarStack from '../components/ui/AvatarStack';
 import Avatar from '../components/ui/Avatar';
@@ -655,7 +655,7 @@ export default function ProjectsSummaryPage() {
   const { data: allProjects = [], isLoading: projectsLoading } = useProjects();
   const { data: allTasks = [],    isLoading: tasksLoading    } = useTasks();
   const { data: firms = [] } = useFirms();
-  const { data: users = [] } = useUsers();
+  const { data: users = [] } = useActiveUsers();
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
   const createProject = useCreateProject();

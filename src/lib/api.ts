@@ -60,6 +60,7 @@ export interface Skill {
   description?: string | null;
   color?: string | null;
   created_at: string;
+  task_count: number;
   members: SkillMember[];
 }
 
@@ -251,6 +252,7 @@ export interface Firm {
   id: string;
   name: string;
   location: string | null;
+  address: string | null;
   website: string | null;
   logo_url: string | null;
   description: string | null;
@@ -588,14 +590,24 @@ export const orgSettingsApi = {
 
 // ── Notifications API ─────────────────────────────────────────────────────────
 
+export interface NotificationActor {
+  id:         string;
+  name:       string;
+  avatar_url: string | null;
+}
+
 export interface AppNotification {
-  id: string;
-  user_id: string;
-  ticket_id: string | null;
-  title: string;
-  message: string;
-  read: boolean;
+  id:         string;
+  user_id:    string;
+  ticket_id:  string | null;
+  scope:      string;
+  scope_id:   string | null;
+  actor_id:   string | null;
+  title:      string;
+  message:    string;
+  read:       boolean;
   created_at: string;
+  actor:      NotificationActor | null;
 }
 
 export const notificationsApi = {
@@ -621,6 +633,7 @@ export interface TimeLog {
   revision_cycle: number;
   created_at:     string;
   updated_at:     string;
+  users?:         { name: string; email: string; avatar_url?: string | null } | null;
 }
 
 export const timeLogsApi = {
@@ -712,6 +725,22 @@ export const taskTypesApi = {
     request<{ data: TaskType }>('PATCH', `/task-types/${id}`, payload).then((r) => r.data),
   delete: (id: string) =>
     request<void>('DELETE', `/task-types/${id}`),
+};
+
+// ── Mentionable Users API ─────────────────────────────────────────────────────
+
+export interface MentionUser {
+  id:         string;
+  name:       string;
+  first_name: string | null;
+  last_name:  string | null;
+  avatar_url: string | null;
+  status:     string;
+}
+
+export const mentionableUsersApi = {
+  list: () =>
+    request<{ data: MentionUser[] }>('GET', '/users/mentions').then((r) => r.data),
 };
 
 // ── Messages API ──────────────────────────────────────────────────────────────

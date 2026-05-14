@@ -10,7 +10,7 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { useMyTasks, useUpdateTask, useDeleteTask } from '../hooks/useTasks';
-import { useUsers } from '../hooks/useUsers';
+import { useActiveUsers } from '../hooks/useUsers';
 import { useFirms } from '../hooks/useFirms';
 import {
   TaskRow,
@@ -329,7 +329,7 @@ export default function MyTasksPage() {
   const subFilter      = searchParams.get('filter') ?? 'assigned-me';
 
   const { data: allTasks = [], isLoading } = useMyTasks(user?.id);
-  const { data: users   = [] }             = useUsers();
+  const { data: users   = [] }             = useActiveUsers();
   const { data: firms   = [] }             = useFirms();
   const updateTask                         = useUpdateTask();
   const deleteTask                         = useDeleteTask();

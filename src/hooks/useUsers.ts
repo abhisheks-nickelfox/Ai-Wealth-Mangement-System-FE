@@ -11,6 +11,15 @@ export function useUsers() {
   });
 }
 
+/** Same cache as useUsers but data is pre-filtered to Active members only. Use this for all assignee pickers. */
+export function useActiveUsers() {
+  const query = useUsers();
+  return {
+    ...query,
+    data: query.data?.filter((u) => u.status === 'Active') ?? [],
+  };
+}
+
 export function useUser(id: string) {
   return useQuery({
     queryKey:  queryKeys.users.detail(id),
