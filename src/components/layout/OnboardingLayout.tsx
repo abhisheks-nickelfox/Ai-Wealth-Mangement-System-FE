@@ -1,5 +1,5 @@
-import Logo from '../Logo';
-import AccountCard from '../AccountCard';
+import Logo from './Logo';
+import AccountCard from './AccountCard';
 import { useAuth } from '../../context/AuthContext';
 
 interface OnboardingLayoutProps {

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, X } from '@untitled-ui/icons-react';
-import { useClickOutside } from '../../hooks/useClickOutside';
 import Avatar from './Avatar';
 import type { User } from '../../lib/api';
 
@@ -20,14 +20,22 @@ export default function AssigneePicker({
   error,
 }: AssigneePickerProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useClickOutside(ref, () => setOpen(false));
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const selectedUsers = users.filter((u) => selected.includes(u.id));
   const extra = selectedUsers.length > 3 ? selectedUsers.length - 3 : 0;
 
+  function handleOpen() {
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen((v) => !v);
+  }
+
   return (
-    <div ref={ref} className="relative">
+    <div className="relative">
       <label className="block text-sm font-medium text-[#344054] mb-1.5 whitespace-nowrap">
         {label}
       </label>
@@ -55,8 +63,9 @@ export default function AssigneePicker({
         )}
 
         <button
+          ref={triggerRef}
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={handleOpen}
           className="w-7 h-7 rounded-full border-2 border-dashed border-[#D5D7DA] flex items-center justify-center text-[#A4A7AE] hover:border-[#7F56D9] hover:text-[#7F56D9] transition-colors shrink-0 ml-0.5"
         >
           <Plus width={12} height={12} />
@@ -67,34 +76,51 @@ export default function AssigneePicker({
         <p className="mt-1 text-xs text-red-500">{error}</p>
       )}
 
-      {open && (
-        <div className="absolute top-full mt-1 left-0 z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[220px] max-h-52 overflow-y-auto">
-          {users.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-[#717680]">No team members</p>
-          ) : (
-            users.map((u) => {
-              const checked = selected.includes(u.id);
-              return (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => onToggle(u.id)}
-                  className="flex items-center gap-2.5 w-full px-3 py-2 hover:bg-[#F9FAFB] text-left"
-                >
-                  <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
-                  <span className="flex-1 text-sm text-[#344054] truncate">{u.name}</span>
-                  {checked && (
-                    <span className="w-4 h-4 rounded-full bg-[#7F56D9] flex items-center justify-center shrink-0">
-                      <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
-                        <path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </span>
-                  )}
-                </button>
-              );
-            })
-          )}
-        </div>
+      {open && dropdownPos && createPortal(
+        <>
+          {/* Backdrop to close on outside click */}
+          <div
+            className="fixed inset-0"
+            style={{ zIndex: 9998 }}
+            onClick={() => setOpen(false)}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: dropdownPos.top,
+              left: dropdownPos.left,
+              zIndex: 9999,
+            }}
+            className="bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[220px] max-h-52 overflow-y-auto"
+          >
+            {users.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-[#717680]">No team members</p>
+            ) : (
+              users.map((u) => {
+                const checked = selected.includes(u.id);
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onToggle(u.id); }}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 hover:bg-[#F9FAFB] text-left"
+                  >
+                    <Avatar name={u.name} src={u.avatar_url ?? undefined} size="xs" />
+                    <span className="flex-1 text-sm text-[#344054] truncate">{u.name}</span>
+                    {checked && (
+                      <span className="w-4 h-4 rounded-full bg-[#7F56D9] flex items-center justify-center shrink-0">
+                        <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+                          <path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </>,
+        document.body,
       )}
     </div>
   );

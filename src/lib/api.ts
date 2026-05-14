@@ -376,6 +376,7 @@ export interface Task {
   firm_id:         string;
   project_id:      string | null;
   parent_task_id:  string | null;
+  task_type_id:    string | null;
   assignee_id:     string | null;
   title:           string;
   description:     string | null;
@@ -444,13 +445,15 @@ export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
 export interface CreateTaskPayload {
   firm_id:         string;
   title:           string;
-  type:            'task' | 'design' | 'development' | 'account_management';
+  type?:           string;
+  task_type_id?:   string;
   priority?:       'low' | 'normal' | 'high' | 'urgent';
   description?:    string;
   project_id?:     string;
   assignee_id?:    string;
   assignee_ids?:   string[];
   deadline?:       string;
+  start_date?:     string;
   estimated_hours?: number;
   initial_status?: string;
   parent_task_id?: string;
@@ -621,7 +624,7 @@ export const notificationsApi = {
     request<{ data: { count: number } }>('GET', '/notifications/unread-count').then((r) => r.data.count),
 };
 
-// ── Time Logs API ─────────────────────────────────────────────────────────────
+// ── Time Logs API (legacy — kept for InboxPage activity feed) ────────────────
 
 export interface TimeLog {
   id:             string;
@@ -639,12 +642,100 @@ export interface TimeLog {
 export const timeLogsApi = {
   list: (taskId: string) =>
     request<{ data: TimeLog[] }>('GET', `/tasks/${taskId}/time-logs`).then((r) => r.data),
-  create: (taskId: string, payload: { hours: number; comment?: string; log_type?: string }) =>
-    request<{ data: TimeLog }>('POST', `/tasks/${taskId}/time-logs`, payload).then((r) => r.data),
-  update: (taskId: string, logId: string, payload: { hours?: number; comment?: string }) =>
-    request<{ data: TimeLog }>('PATCH', `/tasks/${taskId}/time-logs/${logId}`, payload).then((r) => r.data),
-  delete: (taskId: string, logId: string) =>
-    request<void>('DELETE', `/tasks/${taskId}/time-logs/${logId}`),
+};
+
+// ── Time Entries API ──────────────────────────────────────────────────────────
+
+export interface TimeEntry {
+  id:               string;
+  task_id:          string | null;
+  project_id:       string | null;
+  user_id:          string;
+  started_at:       string;
+  ended_at:         string | null;
+  duration_seconds: number | null;
+  description:      string | null;
+  is_billable:      boolean;
+  is_running:       boolean;
+  created_at:       string;
+  updated_at:       string;
+  user?:            { id: string; name: string; email: string; avatar_url: string | null };
+  task?:            { id: string; title: string; firm_id: string };
+}
+
+export interface SubtaskTimeSummary {
+  task_id:       string;
+  title:         string;
+  total_seconds: number;
+  entries:       TimeEntry[];
+}
+
+export interface TaskDirectTimeSummary {
+  task_id:       string;
+  title:         string;
+  total_seconds: number;
+  own_seconds:   number;
+  entries:       TimeEntry[];
+  subtasks:      SubtaskTimeSummary[];
+}
+
+export interface TaskTimeEntrySummary {
+  own_entries:       TimeEntry[];
+  subtask_summary:   SubtaskTimeSummary[];
+  own_total_seconds: number;
+  total_seconds:     number;
+}
+
+export interface ProjectTaskTimeSummary {
+  task_id:       string;
+  title:         string;
+  total_seconds: number;
+  own_seconds:   number;
+  entries:       TimeEntry[];
+  subtasks:      SubtaskTimeSummary[];
+}
+
+export interface ProjectTimeEntrySummary {
+  project_id:    string;
+  total_seconds: number;
+  tasks:         ProjectTaskTimeSummary[];
+}
+
+export const timeEntriesApi = {
+  list: (taskId: string) =>
+    request<TaskTimeEntrySummary>('GET', `/tasks/${taskId}/time-entries`),
+  create: (taskId: string, payload: { started_at: string; ended_at?: string; duration_seconds?: number; description?: string }) =>
+    request<TimeEntry>('POST', `/tasks/${taskId}/time-entries`, payload),
+  start: (taskId: string) =>
+    request<TimeEntry>('POST', `/tasks/${taskId}/time-entries/start`),
+  stop: (taskId: string, entryId: string) =>
+    request<TimeEntry>('PATCH', `/tasks/${taskId}/time-entries/${entryId}/stop`),
+  update: (taskId: string, entryId: string, payload: Partial<{ started_at: string; ended_at: string; duration_seconds: number; description: string }>) =>
+    request<TimeEntry>('PATCH', `/tasks/${taskId}/time-entries/${entryId}`, payload),
+  delete: (taskId: string, entryId: string) =>
+    request<void>('DELETE', `/tasks/${taskId}/time-entries/${entryId}`),
+  runningTimer: () =>
+    request<TimeEntry | null>('GET', '/tasks/me/running-timer'),
+};
+
+export interface ProjectDirectTimeEntrySummary {
+  project_entries:   TimeEntry[];
+  task_summary:      TaskDirectTimeSummary[];
+  own_total_seconds: number;
+  total_seconds:     number;
+}
+
+export const projectTimeEntriesApi = {
+  list:   (projectId: string) =>
+    request<ProjectDirectTimeEntrySummary>('GET', `/projects/${projectId}/time-entries`),
+  start:  (projectId: string) =>
+    request<TimeEntry>('POST', `/projects/${projectId}/time-entries/start`),
+  stop:   (projectId: string, entryId: string) =>
+    request<TimeEntry>('PATCH', `/projects/${projectId}/time-entries/${entryId}/stop`),
+  create: (projectId: string, payload: { started_at: string; ended_at?: string; duration_seconds?: number; description?: string }) =>
+    request<TimeEntry>('POST', `/projects/${projectId}/time-entries`, payload),
+  delete: (projectId: string, entryId: string) =>
+    request<void>('DELETE', `/projects/${projectId}/time-entries/${entryId}`),
 };
 
 // ── Dashboard API ─────────────────────────────────────────────────────────────
@@ -764,6 +855,8 @@ export interface Message {
   user_id:    string;
   parent_id:  string | null;
   body:       string;
+  /** True for automatic activity log entries (assignee added/removed, etc.) */
+  is_system?: boolean;
   created_at: string;
   updated_at: string;
   author:     MessageAuthor;
@@ -777,7 +870,7 @@ export const messagesApi = {
     request<{ data: Message[] }>('GET', `/messages?scope=${scope}&scope_id=${scopeId}`)
       .then((r) => r.data),
 
-  create: (payload: { scope: string; scope_id: string; body: string; parent_id?: string }) =>
+  create: (payload: { scope: string; scope_id: string; body: string; parent_id?: string; is_system?: boolean }) =>
     request<{ data: Message }>('POST', '/messages', payload).then((r) => r.data),
 
   markRead: (scope: string, scopeId: string) =>

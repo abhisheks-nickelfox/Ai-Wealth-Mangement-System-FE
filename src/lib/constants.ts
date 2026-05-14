@@ -42,6 +42,47 @@ export const TASK_STATUS_LABELS: Record<string, string> = {
   blocked:         'Blocked',
 };
 
+export const TASK_STATUS_BADGE: Record<string, { label: string; className: string }> = {
+  draft:             { label: 'Draft',       className: 'bg-gray-100 text-gray-500' },
+  to_do:             { label: 'To Do',       className: 'bg-gray-100 text-gray-500' },
+  assigned:          { label: 'Assigned',    className: 'bg-blue-50 text-blue-600' },
+  in_progress:       { label: 'In Progress', className: 'bg-purple-50 text-purple-600' },
+  revisions:         { label: 'Revisions',   className: 'bg-orange-50 text-orange-600' },
+  internal_review:   { label: 'In Review',   className: 'bg-yellow-50 text-yellow-700' },
+  client_review:     { label: 'Client Rev',  className: 'bg-indigo-50 text-indigo-600' },
+  compliance_review: { label: 'Compliance',  className: 'bg-amber-50 text-amber-700' },
+  approved:          { label: 'Approved',    className: 'bg-green-50 text-green-700' },
+  closed:            { label: 'Closed',      className: 'bg-gray-200 text-gray-600' },
+  completed:         { label: 'Completed',   className: 'bg-green-50 text-green-600' },
+  blocked:           { label: 'Blocked',     className: 'bg-red-50 text-red-600' },
+  discarded:         { label: 'Discarded',   className: 'bg-red-50 text-red-600' },
+};
+
+export const PRIORITY_BADGE: Record<string, { label: string; className: string }> = {
+  urgent: { label: 'Urgent', className: 'bg-red-50 text-red-600' },
+  high:   { label: 'High',   className: 'bg-orange-50 text-orange-600' },
+  normal: { label: 'Medium', className: 'bg-yellow-50 text-yellow-700' },
+  low:    { label: 'Low',    className: 'bg-green-50 text-green-600' },
+};
+
+export const PRIORITY_COLORS: Record<string, { label: string; bg: string; text: string }> = {
+  low:    { label: 'Low',    bg: '#F2F4F7', text: '#344054' },
+  normal: { label: 'Medium', bg: '#EFF8FF', text: '#1570EF' },
+  high:   { label: 'High',   bg: '#FEF0C7', text: '#B54708' },
+  urgent: { label: 'Urgent', bg: '#FEF3F2', text: '#B42318' },
+};
+
+export const TASK_STATUS_DOT: Record<string, string> = {
+  to_do:           '#A4A7AE',
+  assigned:        '#7F56D9',
+  in_progress:     '#2E90FA',
+  revisions:       '#F79009',
+  internal_review: '#7F56D9',
+  client_review:   '#444CE7',
+  completed:       '#17B26A',
+  blocked:         '#F04438',
+};
+
 export const EXPERIENCE_OPTIONS = [
   '0-2 Years',
   '2-5 Years',

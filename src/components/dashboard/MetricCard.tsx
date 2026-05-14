@@ -4,6 +4,8 @@ import { DonutChart } from './DonutChart';
 import { FocusItem } from './FocusItem';
 import { useTasks } from '../../hooks/useTasks';
 import { useFirms } from '../../hooks/useFirms';
+import { PRIORITY_COLORS } from '../../lib/constants';
+import type { Task } from '../../lib/api';
 
 // ── Status → colour mapping ────────────────────────────────────────────────────
 
@@ -28,6 +30,29 @@ const FOCUS_ITEMS = [
 ];
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+function TaskMiniRow({ task, dotColor }: { task: Task; dotColor: string }) {
+  const pc = PRIORITY_COLORS[task.priority] ?? PRIORITY_COLORS.normal;
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+      <span className="flex-1 text-[12px] text-gray-800 font-medium truncate" title={task.title}>
+        {task.title}
+      </span>
+      {task.firms?.name && (
+        <span className="text-[11px] text-gray-400 truncate max-w-[80px] shrink-0">
+          {task.firms.name}
+        </span>
+      )}
+      <span
+        className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0"
+        style={{ backgroundColor: pc.bg, color: pc.text }}
+      >
+        {pc.label}
+      </span>
+    </div>
+  );
+}
 
 function LegendRow({
   label, count, color, selected, onClick,
@@ -251,43 +276,9 @@ export default function MetricCard() {
                   No tasks in this status
                 </p>
               ) : (
-                filteredTasks.map((task) => {
-                  const priorityColors: Record<string, { bg: string; text: string }> = {
-                    low:    { bg: '#F2F4F7', text: '#344054' },
-                    normal: { bg: '#EFF8FF', text: '#1570EF' },
-                    high:   { bg: '#FEF0C7', text: '#B54708' },
-                    urgent: { bg: '#FEF3F2', text: '#B42318' },
-                  };
-                  const pc = priorityColors[task.priority] ?? priorityColors.normal;
-                  return (
-                    <div
-                      key={task.id}
-                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: selectedConfig.color }}
-                      />
-                      <span
-                        className="flex-1 text-[12px] text-gray-800 font-medium truncate"
-                        title={task.title}
-                      >
-                        {task.title}
-                      </span>
-                      {task.firms?.name && (
-                        <span className="text-[11px] text-gray-400 truncate max-w-[80px] shrink-0">
-                          {task.firms.name}
-                        </span>
-                      )}
-                      <span
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0"
-                        style={{ backgroundColor: pc.bg, color: pc.text }}
-                      >
-                        {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                      </span>
-                    </div>
-                  );
-                })
+                filteredTasks.map((task) => (
+                  <TaskMiniRow key={task.id} task={task} dotColor={selectedConfig.color} />
+                ))
               )}
             </div>
           </>

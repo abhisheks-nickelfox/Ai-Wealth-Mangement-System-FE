@@ -3,11 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { FilterLines, Mail01, XClose, CornerDownLeft, Send01 } from '@untitled-ui/icons-react';
 import type { AppNotification, Message, TimeLog } from '../lib/api';
 import { timeLogsApi } from '../lib/api';
+import { formatDateShort, formatMessageTime } from '../lib/dateUtils';
+import { TASK_STATUS_DOT } from '../lib/constants';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import SearchInput from '../components/ui/SearchInput';
 import SlideOver from '../components/ui/SlideOver';
 import Checkbox from '../components/ui/Checkbox';
 import Avatar from '../components/ui/Avatar';
+import EmptyState from '../components/ui/EmptyState';
 import {
   useNotifications,
   useMarkNotificationRead,
@@ -94,31 +97,6 @@ function highlightMentions(text: string): React.ReactNode {
       part
     ),
   );
-}
-
-function formatDateShort(iso: string): string {
-  const date = new Date(iso);
-  return `${MONTH_NAMES[date.getMonth()]} ${date.getDate()}`;
-}
-
-function formatMessageTime(iso: string): string {
-  const now = new Date();
-  const date = new Date(iso);
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterdayStart = new Date(todayStart);
-  yesterdayStart.setDate(todayStart.getDate() - 1);
-  const itemDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-  const h = date.getHours();
-  const m = date.getMinutes();
-  const ampm = h >= 12 ? 'pm' : 'am';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  const min = String(m).padStart(2, '0');
-  const timeStr = `${hour12}:${min} ${ampm}`;
-
-  if (itemDay >= todayStart) return `Today at ${timeStr}`;
-  if (itemDay >= yesterdayStart) return `Yesterday at ${timeStr}`;
-  return `${MONTH_NAMES[date.getMonth()]} ${date.getDate()} at ${timeStr}`;
 }
 
 // ── SVG icons ─────────────────────────────────────────────────────────────────
@@ -276,18 +254,6 @@ type FeedItem =
   | { kind: 'message'; data: Message; ts: string }
   | { kind: 'activity'; data: ActivityLog; ts: string };
 
-// ── Status dot colours ────────────────────────────────────────────────────────
-
-const STATUS_COLOURS: Record<string, string> = {
-  in_progress:     '#2E90FA',
-  internal_review: '#7F56D9',
-  client_review:   '#3538CD',
-  completed:       '#12B76A',
-  revisions:       '#F79009',
-  blocked:         '#F04438',
-  assigned:        '#F79009',
-  to_do:           '#98A2B3',
-};
 
 function fmtStatus(s: string): string {
   return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -318,7 +284,7 @@ function ActivityItem({ log }: { log: ActivityLog }) {
         <span className="inline-flex items-center gap-1">
           <span
             className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
-            style={{ backgroundColor: STATUS_COLOURS['revisions'] }}
+            style={{ backgroundColor: TASK_STATUS_DOT['revisions'] }}
           />
           <span>Revisions</span>
         </span>
@@ -327,7 +293,7 @@ function ActivityItem({ log }: { log: ActivityLog }) {
   } else {
     // transition log — try to extract the destination status from comment
     const toStatus = extractToStatus(log.comment);
-    const colour = toStatus ? (STATUS_COLOURS[toStatus] ?? '#98A2B3') : '#98A2B3';
+    const colour = toStatus ? (TASK_STATUS_DOT[toStatus] ?? '#98A2B3') : '#98A2B3';
     label = (
       <>
         <span className="font-medium text-[#344054]">{actorName}</span>
@@ -973,22 +939,19 @@ export default function InboxPage() {
           )}
 
           {!isLoading && !isError && allNotifications.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 gap-2">
-              <p className="text-sm font-medium text-[#181D27]">No notifications yet.</p>
-              <p className="text-sm text-[#A4A7AE]">You're all caught up.</p>
-            </div>
+            <EmptyState
+              title="No notifications yet."
+              description="You're all caught up."
+              className="py-20"
+            />
           )}
 
           {!isLoading && !isError && allNotifications.length > 0 && filtered.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 gap-2">
-              <p className="text-sm font-medium text-[#181D27]">No results match your filters.</p>
-              <button
-                onClick={() => setActiveFilters(DEFAULT_FILTERS)}
-                className="text-sm text-[#6941C6] font-medium hover:text-[#53389E] transition-colors"
-              >
-                Clear filters
-              </button>
-            </div>
+            <EmptyState
+              title="No results match your filters."
+              action={{ label: 'Clear filters', onClick: () => setActiveFilters(DEFAULT_FILTERS) }}
+              className="py-20"
+            />
           )}
 
           {!isLoading && !isError && groups.length > 0 &&

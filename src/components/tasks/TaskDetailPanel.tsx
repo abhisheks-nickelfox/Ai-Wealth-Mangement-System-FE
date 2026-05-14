@@ -1,353 +1,599 @@
-import { useState, useEffect } from 'react';
-import {
-  ChevronDown,
-  AlertCircle,
-  Users01,
-  Archive,
-} from '@untitled-ui/icons-react';
-import Avatar from '../ui/Avatar';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { HelpCircle, ChevronDown, ChevronRight, Plus, X, MessageSquare01 } from '@untitled-ui/icons-react';
+import CountBadge from '../ui/CountBadge';
+import AvatarNameRow from '../ui/AvatarNameRow';
+import PanelFooter from '../ui/PanelFooter';
+import { TASK_STATUS_DOT } from '../../lib/constants';
+import { ChatTab } from '../chat/ChatTab';
+import { useTransitionTask, useUpdateTask } from '../../hooks/useTasks';
+import ProjectIcon from '../icons/ProjectIcon';
+import TaskIcon from '../icons/TaskIcon';
+import AvatarStack from '../ui/AvatarStack';
+import AssigneePickerDropdown from '../ui/AssigneePickerDropdown';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
-import Select from '../ui/Select';
-import FileUpload from '../ui/FileUpload';
-import type { Task, User } from '../../lib/api';
-import { useUpdateTask, useDiscardTask, useArchiveTask, useAssignApproveTask, useResolveTask } from '../../hooks/useTasks';
-import { PriorityBadge, TaskStatusBadge } from './TaskBadges';
-import { formatDateInput } from '../../lib/transcriptUtils';
-import ApprovalConfirmModal from './ApprovalConfirmModal';
+import AttachmentsSection, { type AttachmentsSectionHandle } from './AttachmentsSection';
+import { useClickOutside } from '../../hooks/useClickOutside';
+import { useAssignableUsers } from '../../hooks/useAssignableUsers';
+import type { Task, User, Project } from '../../lib/api';
+import { TASK_STATUS_BADGE } from './TaskRow';
 
-export interface TaskDetailPanelProps {
-  task: Task | null;
-  open: boolean;
-  onClose: () => void;
-  users: User[];
-  onSaved: (updated: Task) => void;
-  onIgnored: (id: string) => void;
-  onApproved: (updated: Task) => void;
-  onArchived: (updated: Task) => void;
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface TaskDetailData {
+  title:        string;
+  description:  string;
+  priority:     'low' | 'normal' | 'high' | 'urgent';
+  assignee_ids: string[];
+  deadline:     string;
+  project_id:   string | null;
 }
 
-export default function TaskDetailPanel({ task, open, onClose, users, onSaved, onIgnored, onApproved, onArchived }: TaskDetailPanelProps) {
-  const [sourceTab, setSourceTab] = useState<'quote' | 'transcript' | 'video'>('quote');
-  const [sourceOpen, setSourceOpen] = useState(true);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<Task['priority']>('normal');
-  const [deadline, setDeadline] = useState('');
-  const [assigneeId, setAssigneeId] = useState('');
-  const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [error, setError] = useState('');
+interface TaskDetailPanelProps {
+  open:                boolean;
+  onClose:             () => void;
+  task:                Task | null;
+  users:               User[];
+  projects?:           Project[];
+  firmId?:             string;
+  parentTaskDeadline?: string;
+  onSave?:             (taskId: string, data: TaskDetailData) => Promise<void>;
+  onViewTask?:         () => void;
+  viewLabel?:          string;
+}
 
-  const updateTask      = useUpdateTask();
-  const discardTask     = useDiscardTask();
-  const archiveTask     = useArchiveTask();
-  const assignApprove   = useAssignApproveTask();
-  const resolveTask     = useResolveTask();
+// ── ChatSection — collapsible chat for a single task/sub-task ────────────────
 
+function ChatSection({ taskId }: { taskId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-[#F9FAFB] transition-colors"
+      >
+        <span className="flex items-center gap-2 text-[13px] font-semibold text-[#414651]">
+          <MessageSquare01 width={15} height={15} className="text-[#7F56D9]" />
+          Chat
+        </span>
+        <ChevronDown
+          width={15} height={15}
+          className={`text-[#A4A7AE] transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open && (
+        <div style={{ height: 380 }} className="flex flex-col">
+          <ChatTab scope="task" scopeId={taskId} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const PRIORITY_OPTIONS: { value: 'low' | 'normal' | 'high' | 'urgent'; label: string; dot: string }[] = [
+  { value: 'urgent', label: 'Urgent', dot: 'bg-red-500'    },
+  { value: 'high',   label: 'High',   dot: 'bg-orange-400' },
+  { value: 'normal', label: 'Medium', dot: 'bg-yellow-400' },
+  { value: 'low',    label: 'Low',    dot: 'bg-green-500'  },
+];
+
+const STATUS_LABELS: Record<string, string> = {
+  to_do:           'To Do',
+  assigned:        'Assigned',
+  in_progress:     'In Progress',
+  revisions:       'Revisions',
+  internal_review: 'Internal Review',
+  client_review:   'Client Review',
+  completed:       'Completed',
+  blocked:         'Blocked',
+};
+
+
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  to_do:           ['assigned', 'in_progress', 'blocked'],
+  assigned:        ['in_progress', 'blocked'],
+  in_progress:     ['revisions', 'internal_review', 'blocked'],
+  revisions:       ['in_progress'],
+  internal_review: ['client_review', 'revisions'],
+  client_review:   ['completed', 'revisions'],
+  completed:       [],
+  blocked:         ['to_do', 'in_progress'],
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  task:               'Task',
+  design:             'Design',
+  development:        'Development',
+  account_management: 'Account Management',
+};
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export default function TaskDetailPanel({
+  open,
+  onClose,
+  task,
+  users,
+  projects = [],
+  firmId,
+  parentTaskDeadline,
+  onSave,
+  onViewTask,
+  viewLabel = 'View Task',
+}: TaskDetailPanelProps) {
+  const navigate = useNavigate();
+  const [title,        setTitle]        = useState('');
+  const [description,  setDescription]  = useState('');
+  const [priority,     setPriority]     = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
+  const [assigneeIds,  setAssigneeIds]  = useState<string[]>([]);
+  const [deadline,     setDeadline]     = useState('');
+  const [projectId,    setProjectId]    = useState<string | null>(null);
+  const [taskStatus,   setTaskStatus]   = useState('');
+  const [saving,        setSaving]       = useState(false);
+  const [deadlineError, setDeadlineError] = useState('');
+  const [saveError,     setSaveError]     = useState('');
+  const [statusError,   setStatusError]   = useState('');
+
+  const [showPriority,  setShowPriority]  = useState(false);
+  const [showPicker,    setShowPicker]    = useState(false);
+  const [showProject,   setShowProject]   = useState(false);
+  const [showStatus,    setShowStatus]    = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
+
+  const priorityRef    = useRef<HTMLDivElement>(null);
+  const pickerRef      = useRef<HTMLDivElement>(null);
+  const projectRef     = useRef<HTMLDivElement>(null);
+  const statusRef      = useRef<HTMLDivElement>(null);
+  const attachmentsRef = useRef<AttachmentsSectionHandle>(null);
+  useClickOutside(priorityRef, () => setShowPriority(false));
+  // pickerRef: no useClickOutside — AssigneePickerDropdown owns its own fixed backdrop
+  useClickOutside(projectRef,  () => setShowProject(false));
+  useClickOutside(statusRef,   () => setShowStatus(false));
+
+  const transitionTask = useTransitionTask();
+  const updateTask     = useUpdateTask();
+
+  // Sync fields when task changes or panel opens
   useEffect(() => {
     if (task && open) {
       setTitle(task.title);
       setDescription(task.description ?? '');
-      setPriority(task.priority);
-      setDeadline(formatDateInput(task.deadline));
-      setAssigneeId(task.assignee_id ?? '');
-      setError('');
-      setShowConfirm(false);
+      setPriority(task.priority ?? 'normal');
+      setDeadline(task.deadline ?? '');
+      setProjectId(task.project_id ?? null);
+      setTaskStatus(task.status ?? 'to_do');
+      setStatusError('');
+      // Prefer assignees[] (multi), fall back to single assignee_id
+      if (task.assignees && task.assignees.length > 0) {
+        setAssigneeIds(task.assignees.map((a) => a.id));
+      } else if (task.assignee_id) {
+        setAssigneeIds([task.assignee_id]);
+      } else {
+        setAssigneeIds([]);
+      }
     }
   }, [task, open]);
 
-  const selectedAssignee = users.find((u) => u.id === assigneeId) ?? null;
+  const assignableUsers = useAssignableUsers(task?.task_type_id, users);
 
-  async function handleSave() {
-    if (!task) return;
-    setError('');
-    try {
-      const updated = await updateTask.mutateAsync({ id: task.id, payload: { title, description, priority, deadline: deadline || null } });
-      onSaved(updated);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Save failed.');
+  if (!task) return null;
+
+  const assignedUsers = users.filter((u) => assigneeIds.includes(u.id));
+
+  const toggleAssignee = (userId: string) => {
+    setAssigneeIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  };
+
+  const priorityOpt = PRIORITY_OPTIONS.find((p) => p.value === priority) ?? PRIORITY_OPTIONS[1];
+
+  const handleSave = async () => {
+    if (!title.trim()) return;
+
+    setSaveError('');
+
+    if (taskStatus === 'completed') {
+      setSaveError('This task is completed and cannot be edited.');
+      return;
     }
-  }
 
-  async function handleIgnore() {
-    if (!task) return;
-    setError('');
-    try {
-      await discardTask.mutateAsync(task.id);
-      onIgnored(task.id);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to ignore task.');
+    if (deadline) {
+      if (parentTaskDeadline && deadline > parentTaskDeadline) {
+        setDeadlineError(`Sub-task due date cannot exceed the parent task due date (${parentTaskDeadline})`);
+        return;
+      }
+      if (projectId) {
+        const proj = projects.find((p) => p.id === projectId);
+        if (proj?.end_date && deadline > proj.end_date) {
+          setDeadlineError(`Task due date cannot exceed the project end date (${proj.end_date})`);
+          return;
+        }
+      }
     }
-  }
+    setDeadlineError('');
 
-  async function handleResolve() {
-    if (!task) return;
-    setError('');
+    setSaving(true);
     try {
-      const updated = await resolveTask.mutateAsync(task.id);
-      onSaved(updated);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to resolve task.');
+      await onSave?.(task.id, { title, description, priority, assignee_ids: assigneeIds, deadline, project_id: projectId });
+      await attachmentsRef.current?.commit();
+      onClose();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save task. Please try again.');
+    } finally {
+      setSaving(false);
     }
-  }
+  };
 
-  async function handleArchive() {
-    if (!task) return;
-    setError('');
+  const handleStatusChange = async (nextStatus: string) => {
+    if (nextStatus === taskStatus) { setShowStatus(false); return; }
+    setShowStatus(false);
+    setStatusError('');
+    setTransitioning(true);
     try {
-      const updated = await archiveTask.mutateAsync({ id: task.id, archived: !task.archived });
-      onArchived(updated);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to archive task.');
+      const validNext = VALID_TRANSITIONS[taskStatus] ?? [];
+      if (validNext.includes(nextStatus)) {
+        await transitionTask.mutateAsync({ id: task.id, status: nextStatus });
+      } else {
+        await updateTask.mutateAsync({ id: task.id, payload: { status: nextStatus } });
+      }
+      setTaskStatus(nextStatus);
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : 'Failed to update task status.');
+    } finally {
+      setTransitioning(false);
     }
-  }
+  };
 
-  async function handleConfirmApprove() {
-    if (!task || !assigneeId) return;
-    const updated = await assignApprove.mutateAsync({
-      id: task.id,
-      payload: { assignee_id: assigneeId, priority, deadline: deadline || undefined },
-    });
-    setShowConfirm(false);
-    onApproved(updated);
-  }
-
-  const excerptText = task?.description?.slice(0, 300) ?? 'No transcript excerpt available.';
+  // Breadcrumb: Firm › Type › Status
+  const firmName    = task.firms?.name ?? '';
+  const typeLabel   = TYPE_LABELS[task.type]   ?? task.type;
+  const statusLabel = STATUS_LABELS[taskStatus] ?? taskStatus;
 
   return (
-    <>
-      <SlideOver
-        open={open}
-        onClose={onClose}
-        title={task?.title ?? 'Task Details'}
-        subtitle={task ? undefined : undefined}
-        width="max-w-[560px]"
-      >
-        {/* Status badge beneath title (SlideOver header only renders title/subtitle) */}
-        {task && (
-          <div className="-mt-2 mb-3">
-            <TaskStatusBadge status={task.status} />
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      title={task.title}
+      subtitle={statusLabel}
+      width="max-w-[440px]"
+    >
+      <div className="flex flex-col gap-5">
+
+        {/* Breadcrumb */}
+        {firmName && (
+          <nav className="flex items-center gap-1 text-[11px] text-[#717680] flex-wrap">
+            <span className="font-medium text-[#414651]">{firmName}</span>
+            <ChevronRight width={11} height={11} className="shrink-0" />
+            <span>{typeLabel}</span>
+            <ChevronRight width={11} height={11} className="shrink-0" />
+            <span className={`font-medium ${taskStatus === 'completed' ? 'text-[#12B76A]' : 'text-[#7F56D9]'}`}>{statusLabel}</span>
+          </nav>
+        )}
+
+        {/* Meta pills */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-2.5 py-1 rounded-full bg-[#F2F4F7] text-[12px] font-medium text-[#414651]">
+            {typeLabel}
+          </span>
+          {task.firms?.name && (
+            <span className="px-2.5 py-1 rounded-full bg-[#F4F3FF] text-[12px] font-medium text-[#6941C6]">
+              {task.firms.name}
+            </span>
+          )}
+        </div>
+
+        {/* Title */}
+        <Input
+          label="Task name"
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+        />
+
+        {/* Description */}
+        <div>
+          <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
+            Description
+            <HelpCircle width={14} height={14} className="text-[#A4A7AE]" />
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe the task…"
+            rows={4}
+            className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white resize-none"
+          />
+        </div>
+
+        {/* Priority */}
+        <div ref={priorityRef} className="relative">
+          <label className="block text-sm font-medium text-[#344054] mb-1.5">Priority</label>
+          <button
+            type="button"
+            onClick={() => setShowPriority((v) => !v)}
+            className="w-full flex items-center gap-2 border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white hover:border-[#7F56D9] outline-none transition-colors"
+          >
+            <span className={`w-2 h-2 rounded-full shrink-0 ${priorityOpt.dot}`} />
+            <span className="flex-1 text-left">{priorityOpt.label}</span>
+            <ChevronDown width={15} height={15} className="text-[#717680] shrink-0" />
+          </button>
+          {showPriority && (
+            <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1">
+              {PRIORITY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => { setPriority(opt.value); setShowPriority(false); }}
+                  className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors ${
+                    priority === opt.value ? 'text-[#6941C6] font-medium' : 'text-[#344054]'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${opt.dot}`} />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Status */}
+        <div ref={statusRef} className="relative">
+          <label className="block text-sm font-medium text-[#344054] mb-1.5">Status</label>
+          <button
+            type="button"
+            disabled={transitioning}
+            onClick={() => { setShowStatus((v) => !v); setStatusError(''); }}
+            className={`w-full flex items-center gap-2 border rounded-lg px-3 py-2.5 text-sm text-[#181D27] bg-white hover:border-[#7F56D9] outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${statusError ? 'border-red-400' : 'border-[#D5D7DA]'}`}
+          >
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: TASK_STATUS_DOT[taskStatus] ?? '#9CA3AF' }} />
+            <span className="flex-1 text-left">{statusLabel}</span>
+            <ChevronDown width={15} height={15} className="text-[#717680] shrink-0" />
+          </button>
+          {showStatus && (
+            <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 max-h-52 overflow-y-auto">
+              {Object.entries(STATUS_LABELS).map(([s, label]) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => handleStatusChange(s)}
+                  className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors ${
+                    s === taskStatus ? 'text-[#6941C6] font-medium' : 'text-[#344054]'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: TASK_STATUS_DOT[s] ?? '#9CA3AF' }} />
+                  <span className="flex-1 text-left">{label}</span>
+                  {s === taskStatus && (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
+                      <path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+          {statusError && (
+            <div className="mt-2 flex items-start gap-2 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0 mt-0.5 text-red-500">
+                <path d="M7 1.75C4.1 1.75 1.75 4.1 1.75 7S4.1 12.25 7 12.25 12.25 9.9 12.25 7 9.9 1.75 7 1.75zm0 4.375v2.625M7 9.625h.007" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <p className="text-xs text-red-600 leading-relaxed">{statusError}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Project — hidden for sub-tasks */}
+        {projects.length > 0 && !task?.parent_task_id && (
+          <div ref={projectRef} className="relative">
+            <label className="block text-sm font-medium text-[#344054] mb-1.5">Project</label>
+            <button
+              type="button"
+              onClick={() => setShowProject((v) => !v)}
+              className="w-full flex items-center gap-2 border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm bg-white hover:border-[#7F56D9] outline-none transition-colors"
+            >
+              <ProjectIcon width={14} height={14} className={projectId ? 'text-[#7F56D9]' : 'text-[#A4A7AE]'} />
+              <span className={`flex-1 text-left truncate ${projectId ? 'text-[#181D27]' : 'text-[#A4A7AE]'}`}>
+                {projects.find((p) => p.id === projectId)?.name ?? 'No Project'}
+              </span>
+              <ChevronDown width={15} height={15} className="text-[#717680] shrink-0" />
+            </button>
+            {showProject && (
+              <div className="absolute top-full mt-1 left-0 right-0 z-20 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 max-h-52 overflow-y-auto">
+                <button
+                  type="button"
+                  onClick={() => { setProjectId(null); setShowProject(false); }}
+                  className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors ${
+                    !projectId ? 'text-[#6941C6] font-medium' : 'text-[#717680]'
+                  }`}
+                >
+                  <span className="flex-1 text-left">No Project</span>
+                  {!projectId && (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  )}
+                </button>
+                {projects.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => { setProjectId(p.id); setShowProject(false); }}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2 text-sm hover:bg-[#F9FAFB] transition-colors ${
+                      projectId === p.id ? 'text-[#6941C6] font-medium' : 'text-[#344054]'
+                    }`}
+                  >
+                    <ProjectIcon width={13} height={13} className="text-[#7F56D9] shrink-0" />
+                    <span className="flex-1 text-left truncate">{p.name}</span>
+                    {projectId === p.id && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7L5.5 10.5L12 3.5" stroke="#7F56D9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Body */}
-        <div className="flex flex-col gap-5">
-          {task?.firms?.name && <p className="text-sm text-[#535862]">{task.firms.name}</p>}
-
-          {/* Source Quote */}
-          <div className="border border-[#E9EAEB] rounded-xl overflow-hidden">
-            <button
-              onClick={() => setSourceOpen((v) => !v)}
-              className="flex items-center justify-between w-full px-4 py-3 text-sm font-semibold text-[#181D27] hover:bg-[#FAFAFA] transition-colors"
-            >
-              <span>Source Quote</span>
-              <ChevronDown width={16} height={16} className={`text-[#A4A7AE] transition-transform ${sourceOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {sourceOpen && (
-              <>
-                <div className="flex border-t border-b border-[#E9EAEB] bg-[#F9FAFB]">
-                  {([['quote', 'Source Quote'], ['transcript', 'Full meeting Transcript'], ['video', 'Video']] as const).map(([key, label]) => (
-                    <button
-                      key={key}
-                      onClick={() => setSourceTab(key)}
-                      className={`flex-1 px-3 py-2.5 text-xs font-medium transition-colors ${sourceTab === key ? 'text-[#7F56D9] border-b-2 border-[#7F56D9] bg-white' : 'text-[#717680] hover:text-[#414651]'}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div className="px-4 py-4">
-                  {sourceTab === 'quote' && (
-                    <blockquote className="border-l-4 border-[#7F56D9] pl-4">
-                      <p className="text-sm text-[#535862] italic leading-relaxed">"{excerptText}"</p>
-                    </blockquote>
-                  )}
-                  {sourceTab === 'transcript' && (
-                    <p className="text-sm text-[#535862] leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto">
-                      {task?.description ?? 'No transcript available.'}
-                    </p>
-                  )}
-                  {sourceTab === 'video' && (
-                    <p className="text-sm text-[#A4A7AE] text-center py-4">No video available for this transcript.</p>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Priority */}
-          <div>
-            <label className="block text-sm font-medium text-[#414651] mb-1.5">Priority <span className="text-red-500">*</span></label>
-            <Select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as Task['priority'])}
-            >
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </Select>
-          </div>
-
-          {/* Task name */}
+        {/* Deadline */}
+        <div>
           <Input
-            label="Task name"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
+            label="Deadline"
+            type="date"
+            value={deadline}
+            onChange={(e) => { setDeadline(e.target.value); setDeadlineError(''); }}
+            max={(() => {
+              const projEnd = projects.find((p) => p.id === projectId)?.end_date;
+              if (parentTaskDeadline && projEnd) return projEnd < parentTaskDeadline ? projEnd : parentTaskDeadline;
+              return parentTaskDeadline ?? projEnd ?? undefined;
+            })()}
           />
+          {deadlineError && (
+            <p className="mt-1 text-xs text-red-500">{deadlineError}</p>
+          )}
+        </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-[#414651] mb-1.5">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              placeholder="A little about the task..."
-              className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent resize-none"
-            />
-          </div>
+        {/* Assignees — multi-select */}
+        <div>
+          <p className="text-sm font-semibold text-[#181D27] mb-0.5">Assignees</p>
+          <p className="text-xs text-[#717680] mb-3">Team members responsible for this task.</p>
 
-          {/* Due date + Assignee */}
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Due date"
-              type="date"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-            />
-            <div>
-              <label className="block text-sm font-medium text-[#414651] mb-1.5">Assignee</label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setAssigneePickerOpen((v) => !v)}
-                  className="w-full flex items-center gap-2 border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-left hover:bg-[#FAFAFA] transition-colors"
-                >
-                  {selectedAssignee ? (
-                    <>
-                      <Avatar name={selectedAssignee.name} size="xs" />
-                      <span className="flex-1 truncate text-[#181D27]">{selectedAssignee.name}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Users01 width={16} height={16} className="text-[#A4A7AE]" />
-                      <span className="flex-1 text-[#A4A7AE]">Select assignee</span>
-                    </>
-                  )}
-                  <ChevronDown width={14} height={14} className="text-[#A4A7AE] shrink-0" />
-                </button>
-                {assigneePickerOpen && (
-                  <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-[#E9EAEB] rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
+          {/* Current assignees */}
+          {assignedUsers.length > 0 ? (
+            <div className="flex flex-col gap-2.5 mb-3">
+              {assignedUsers.map((u) => (
+                <AvatarNameRow
+                  key={u.id}
+                  name={u.name}
+                  avatarUrl={u.avatar_url}
+                  subtitle={u.email}
+                  action={
                     <button
                       type="button"
-                      onClick={() => { setAssigneeId(''); setAssigneePickerOpen(false); }}
-                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#717680] hover:bg-[#FAFAFA] transition-colors"
+                      onClick={() => toggleAssignee(u.id)}
+                      className="text-xs font-semibold text-red-500 hover:text-red-600 transition-colors flex items-center gap-1"
                     >
-                      Unassigned
+                      <X width={12} height={12} /> Remove
                     </button>
-                    {users.map((u) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { setAssigneeId(u.id); setAssigneePickerOpen(false); }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#181D27] hover:bg-[#FAFAFA] transition-colors"
-                      >
-                        <Avatar name={u.name} size="xs" src={u.avatar_url ?? undefined} />
-                        <span className="flex-1 truncate">{u.name}</span>
-                        {u.id === assigneeId && <span className="w-1.5 h-1.5 rounded-full bg-[#7F56D9]" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                  }
+                />
+              ))}
             </div>
-          </div>
+          ) : (
+            <p className="text-[13px] text-[#A4A7AE] mb-3">No assignees</p>
+          )}
 
-          {/* Attach a file */}
-          <div>
-            <label className="block text-sm font-medium text-[#414651] mb-1.5">Attach a file</label>
-            <FileUpload
-              accept="image/svg+xml,image/png,image/jpeg,image/gif"
-              onFile={() => {}}
+          {/* Add assignee picker */}
+          <div ref={pickerRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowPicker((v) => !v)}
+              className="flex items-center gap-1.5 text-sm text-[#344054] font-medium hover:text-[#181D27] transition-colors"
+            >
+              <span className="w-6 h-6 rounded-full border-2 border-dashed border-[#D5D7DA] flex items-center justify-center text-[#A4A7AE] hover:border-[#7F56D9] hover:text-[#7F56D9] transition-colors">
+                <Plus width={11} height={11} />
+              </span>
+              Add assignee
+            </button>
+            <AssigneePickerDropdown
+              open={showPicker}
+              onClose={() => setShowPicker(false)}
+              anchorRef={pickerRef as React.RefObject<HTMLElement | null>}
+              users={assignableUsers}
+              selected={assigneeIds}
+              onToggle={toggleAssignee}
             />
           </div>
-
-          {error && (
-            <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              <AlertCircle width={15} height={15} className="shrink-0 mt-0.5" />
-              {error}
-            </div>
-          )}
         </div>
+
+        {/* Sub Tasks — only for top-level tasks */}
+        {!task.parent_task_id && (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-sm font-semibold text-[#181D27]">Sub Tasks</p>
+              {(task.subtasks ?? []).length > 0 && (
+                <CountBadge count={task.subtasks!.length} />
+              )}
+            </div>
+
+            {(task.subtasks ?? []).length > 0 ? (
+              <div className="rounded-lg border border-[#E9EAEB] overflow-hidden mb-2">
+                {task.subtasks!.map((sub) => (
+                  <div
+                    key={sub.id}
+                    className="flex items-center gap-2.5 px-3 py-2 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
+                    onClick={() => {
+                      if (firmId) {
+                        onClose();
+                        navigate(`/firms/${firmId}/tasks/${sub.id}`);
+                      }
+                    }}
+                  >
+                    <TaskIcon width={12} height={12} className="text-[#A4A7AE] shrink-0" />
+                    <span className="flex-1 min-w-0 text-[13px] text-[#344054] truncate group-hover:text-[#6941C6] transition-colors">
+                      {sub.title}
+                    </span>
+                    {(() => {
+                      const s = TASK_STATUS_BADGE[sub.status];
+                      return s ? (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${s.style}`}>
+                          {s.label}
+                        </span>
+                      ) : null;
+                    })()}
+                    {(sub.assignees ?? []).length > 0 && (
+                      <AvatarStack
+                        avatars={(sub.assignees ?? []).map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
+                        max={4}
+                        showAddButton={false}
+                      />
+                    )}
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${
+                      sub.priority === 'urgent' ? 'bg-red-100 text-red-600'
+                      : sub.priority === 'high' ? 'bg-orange-100 text-orange-600'
+                      : sub.priority === 'normal' ? 'bg-yellow-100 text-yellow-600'
+                      : 'bg-green-100 text-green-600'
+                    }`}>
+                      {sub.priority === 'normal' ? 'Medium' : sub.priority ? sub.priority.charAt(0).toUpperCase() + sub.priority.slice(1) : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] text-[#A4A7AE] mb-2">No sub-tasks yet.</p>
+            )}
+          </div>
+        )}
+
+        {/* Attachments — universal per project */}
+        <div className="pt-2 border-t border-[#F2F4F7]">
+          <AttachmentsSection ref={attachmentsRef} projectId={task.project_id ?? null} />
+        </div>
+
+        {/* Chat — real-time SSE per task/sub-task */}
+        <div className="border-t border-[#F2F4F7]">
+          <ChatSection taskId={task.id} />
+        </div>
+
+        {/* Save error */}
+        {saveError && (
+          <div className="mx-4 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+            {saveError}
+          </div>
+        )}
 
         {/* Footer */}
-        <div className="flex items-center gap-2 pt-4 mt-4 border-t border-[#E9EAEB]">
-          <button
-            onClick={handleSave}
-            disabled={updateTask.isPending}
-            className="px-3.5 py-2.5 text-sm font-semibold text-[#414651] border border-[#D5D7DA] rounded-lg bg-white hover:bg-gray-50 disabled:opacity-60 transition-colors"
-          >
-            {updateTask.isPending ? 'Saving…' : 'Save'}
-          </button>
-          <button
-            onClick={handleIgnore}
-            disabled={discardTask.isPending || !!task?.archived || !['to_do', 'draft', 'assigned'].includes(task?.status ?? '')}
-            title={!['to_do', 'draft', 'assigned'].includes(task?.status ?? '') ? 'Can only ignore tasks in to_do, draft, or assigned status' : undefined}
-            className="px-3.5 py-2.5 text-sm font-semibold text-white bg-[#DC2626] hover:bg-[#B91C1C] disabled:opacity-60 rounded-lg transition-colors"
-          >
-            {discardTask.isPending ? 'Ignoring…' : 'Ignore'}
-          </button>
-          {['in_progress', 'revisions'].includes(task?.status ?? '') && (
-            <button
-              onClick={handleResolve}
-              disabled={resolveTask.isPending || !!task?.archived}
-              className="px-3.5 py-2.5 text-sm font-semibold text-white bg-[#16A34A] hover:bg-[#15803D] disabled:opacity-60 rounded-lg transition-colors"
-            >
-              {resolveTask.isPending ? 'Resolving…' : 'Mark Complete'}
-            </button>
-          )}
-          <button
-            onClick={handleArchive}
-            disabled={archiveTask.isPending}
-            title={task?.archived ? 'Unarchive task' : 'Archive task'}
-            className={`flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-60 ${
-              task?.archived
-                ? 'text-[#7F56D9] border border-[#7F56D9] bg-white hover:bg-[#F4EBFF]'
-                : 'text-[#414651] border border-[#D5D7DA] bg-white hover:bg-gray-50'
-            }`}
-          >
-            <Archive width={14} height={14} />
-            {archiveTask.isPending ? '…' : task?.archived ? 'Unarchive' : 'Archive'}
-          </button>
-          <button
-            onClick={() => {
-              if (!assigneeId) { setError('Please select an assignee before approving.'); return; }
-              setError('');
-              setShowConfirm(true);
-            }}
-            disabled={!!task?.archived}
-            className="ml-auto px-3.5 py-2.5 text-sm font-semibold text-white bg-[#7F56D9] hover:bg-[#6941C6] disabled:opacity-60 rounded-lg transition-colors"
-          >
-            Approve
-          </button>
-        </div>
-      </SlideOver>
+        <PanelFooter
+          onSave={handleSave}
+          onCancel={onClose}
+          saving={saving}
+          disabled={!title.trim()}
+          secondaryAction={onViewTask ? { label: viewLabel, onClick: onViewTask } : undefined}
+        />
 
-      <ApprovalConfirmModal
-        open={showConfirm}
-        task={task}
-        assigneeName={selectedAssignee?.name ?? ''}
-        assigneeId={assigneeId}
-        deadline={deadline}
-        onCancel={() => setShowConfirm(false)}
-        onConfirm={handleConfirmApprove}
-      />
-    </>
+      </div>
+    </SlideOver>
   );
 }
-
-// Re-export PriorityBadge so callers that were importing it from here still work
-export { PriorityBadge };

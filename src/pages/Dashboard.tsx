@@ -2,10 +2,11 @@ import { useState } from 'react';
 import MetricCard from '../components/dashboard/MetricCard';
 import QuickLinks from '../components/dashboard/QuickLinks';
 import TasksTable from '../components/dashboard/TasksTable';
-import DateRangePicker from '../components/DateRangePicker';
+import DateRangePicker from '../components/ui/DateRangePicker';
 import WelcomeGuide from '../components/ui/WelcomeGuide';
 import TabBar from '../components/ui/TabBar';
 import TimeFilterBar from '../components/ui/TimeFilterBar';
+import EmptyState from '../components/ui/EmptyState';
 import type { TimeFilter } from '../components/ui/TimeFilterBar';
 import { useAuth } from '../context/AuthContext';
 
@@ -77,14 +78,10 @@ export default function Dashboard() {
           </>
         )}
         {activeTab === 'timesheets' && (
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-10 text-center">
-            <p className="text-sm text-gray-400">Timesheet view coming soon.</p>
-          </div>
+          <EmptyState title="Timesheets" description="Timesheet view coming soon." />
         )}
         {activeTab === 'transcripts' && (
-          <div className="bg-gray-50 border border-gray-200 rounded-xl p-10 text-center">
-            <p className="text-sm text-gray-400">Transcripts view coming soon.</p>
-          </div>
+          <EmptyState title="Transcripts" description="Transcripts view coming soon." />
         )}
       </div>
     </main>

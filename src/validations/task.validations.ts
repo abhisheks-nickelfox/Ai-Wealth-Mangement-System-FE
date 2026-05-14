@@ -68,7 +68,7 @@ export const taskInitialValues = (
   description: '',
   projectId:   defaultProjectId,
   priority:    defaultPriority,
-  startDate:   '',
+  startDate:   new Date().toISOString().slice(0, 10),
   endDate:     '',
   assigneeIds: [],
 });

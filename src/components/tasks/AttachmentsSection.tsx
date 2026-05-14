@@ -5,6 +5,7 @@ import {
   useDeleteProjectAttachment,
 } from '../../hooks/useProjectAttachments';
 import type { ProjectAttachment } from '../../lib/api';
+import CountBadge from '../ui/CountBadge';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -206,10 +207,11 @@ interface Props {
 const AttachmentsSection = forwardRef<AttachmentsSectionHandle, Props>(
   function AttachmentsSection({ projectId, className = '', immediate = false }, ref) {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [dragOver,       setDragOver]       = useState(false);
-    const [pendingFiles,   setPendingFiles]   = useState<File[]>([]);
-    const [deleteIds,      setDeleteIds]      = useState<Set<string>>(new Set());
-    const [commitError,    setCommitError]    = useState('');
+    const [dragOver,          setDragOver]          = useState(false);
+    const [pendingFiles,      setPendingFiles]      = useState<File[]>([]);
+    const [deleteIds,         setDeleteIds]         = useState<Set<string>>(new Set());
+    const [commitError,       setCommitError]       = useState('');
+    const [confirmDeleteId,   setConfirmDeleteId]   = useState<string | null>(null);
 
     const { data: savedAttachments = [] } = useProjectAttachments(projectId);
     const upload  = useUploadProjectAttachment(projectId ?? '');
@@ -257,7 +259,8 @@ const AttachmentsSection = forwardRef<AttachmentsSectionHandle, Props>(
 
     async function toggleDelete(id: string) {
       if (immediate) {
-        await destroy.mutateAsync(id);
+        // Show confirmation first; actual delete fires in confirmDelete()
+        setConfirmDeleteId(id);
       } else {
         setDeleteIds((prev) => {
           const next = new Set(prev);
@@ -265,6 +268,12 @@ const AttachmentsSection = forwardRef<AttachmentsSectionHandle, Props>(
           return next;
         });
       }
+    }
+
+    async function confirmDelete() {
+      if (!confirmDeleteId) return;
+      await destroy.mutateAsync(confirmDeleteId).catch(() => {});
+      setConfirmDeleteId(null);
     }
 
     const totalCount = savedAttachments.length - deleteIds.size + pendingFiles.length;
@@ -291,9 +300,7 @@ const AttachmentsSection = forwardRef<AttachmentsSectionHandle, Props>(
           <div className="flex items-center gap-2">
             <span className="text-[13px] font-semibold text-[#181D27]">Attachments</span>
             {totalCount > 0 && (
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#F4F3FF] text-[10px] font-bold text-[#7F56D9]">
-                {totalCount}
-              </span>
+              <CountBadge count={totalCount} />
             )}
           </div>
           <button
@@ -390,6 +397,43 @@ const AttachmentsSection = forwardRef<AttachmentsSectionHandle, Props>(
             ].filter(Boolean).join(' · ')}{' '}
             — changes apply on Save.
           </p>
+        )}
+
+        {/* Delete confirmation modal */}
+        {confirmDeleteId && (
+          <>
+            <div className="fixed inset-0 z-[100] bg-black/30" onClick={() => setConfirmDeleteId(null)} />
+            <div className="fixed inset-0 z-[101] flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full">
+                <h3 className="text-[15px] font-semibold text-[#181D27] mb-2">Remove attachment?</h3>
+                <p className="text-[13px] text-[#717680] mb-5">
+                  {(() => {
+                    const att = savedAttachments.find((a) => a.id === confirmDeleteId);
+                    return att
+                      ? `"${att.file_name}" will be permanently deleted.`
+                      : 'This attachment will be permanently deleted.';
+                  })()}
+                </p>
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="px-4 py-2 rounded-lg border border-[#D5D7DA] text-[13px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDelete}
+                    disabled={destroy.isPending}
+                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[13px] font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {destroy.isPending ? 'Removing…' : 'Remove'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
     );

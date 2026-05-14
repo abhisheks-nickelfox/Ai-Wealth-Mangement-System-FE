@@ -21,11 +21,11 @@ import DeleteConfirmModal from '../components/ui/DeleteConfirmModal';
 import SettingsRow from '../components/ui/SettingsRow';
 import SlideOver from '../components/ui/SlideOver';
 import { useAuth } from '../context/AuthContext';
-import { useClickOutside } from '../hooks/useClickOutside';
+import AssigneePickerDropdown from '../components/ui/AssigneePickerDropdown';
 import { profileApi, authApi } from '../lib/api';
 import { useSkills, useCreateSkill, useUpdateSkill, useDeleteSkill, useSetSkillMembers } from '../hooks/useSkills';
 import { useOrgSettings, useUploadOrgLogo } from '../hooks/useOrgSettings';
-import { useUsers, useActiveUsers } from '../hooks/useUsers';
+import { useActiveUsers } from '../hooks/useUsers';
 import { useTaskTypes, useCreateTaskType, useUpdateTaskType, useDeleteTaskType } from '../hooks/useTaskTypes';
 import type { User, Skill, TaskType } from '../lib/api';
 import AddSkillsModal from '../components/users/AddSkillsModal';
@@ -130,7 +130,7 @@ interface AddSkillPanelProps {
 function AddSkillPanel({ onClose, onCreated }: AddSkillPanelProps) {
   const createSkill    = useCreateSkill();
   const setSkillMembers = useSetSkillMembers();
-  const { data: allUsers = [] } = useUsers();
+  const { data: allUsers = [] } = useActiveUsers();
 
   const [skillType,   setSkillType]   = useState('');
   const [description, setDescription] = useState('');
@@ -138,10 +138,10 @@ function AddSkillPanel({ onClose, onCreated }: AddSkillPanelProps) {
   const [memberIds,   setMemberIds]   = useState<string[]>([]);
   const [showPicker,  setShowPicker]  = useState(false);
   const [error,       setError]       = useState('');
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const isBusy = createSkill.isPending || setSkillMembers.isPending;
-  const selectedMembers  = allUsers.filter((u: User) => memberIds.includes(u.id));
-  const availableMembers = allUsers.filter((u: User) => !memberIds.includes(u.id));
+  const selectedMembers = allUsers.filter((u: User) => memberIds.includes(u.id));
 
   function toggleMember(id: string) {
     setMemberIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -210,7 +210,7 @@ function AddSkillPanel({ onClose, onCreated }: AddSkillPanelProps) {
           <label className="block text-sm font-medium text-[#414651] mb-3">Team with Skill</label>
           <div className="flex items-center gap-2 flex-wrap">
             <MemberAvatarStack members={selectedMembers} />
-            <div className="relative">
+            <div ref={pickerRef} className="relative">
               <button
                 type="button"
                 onClick={() => setShowPicker((p) => !p)}
@@ -218,25 +218,14 @@ function AddSkillPanel({ onClose, onCreated }: AddSkillPanelProps) {
               >
                 <Plus width={14} height={14} />
               </button>
-              {showPicker && (
-                <div className="absolute left-0 top-10 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg w-56 max-h-52 overflow-y-auto">
-                  {availableMembers.length === 0 ? (
-                    <p className="text-xs text-[#717680] px-3 py-2">All members added</p>
-                  ) : (
-                    availableMembers.map((u: User) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { toggleMember(u.id); setShowPicker(false); }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#181D27] hover:bg-gray-50 transition-colors"
-                      >
-                        <Avatar src={u.avatar_url ?? undefined} name={u.name} size="xs" />
-                        <span className="truncate">{u.name}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
+              <AssigneePickerDropdown
+                open={showPicker}
+                onClose={() => setShowPicker(false)}
+                anchorRef={pickerRef as React.RefObject<HTMLElement | null>}
+                users={allUsers}
+                selected={memberIds}
+                onToggle={toggleMember}
+              />
             </div>
             {selectedMembers.map((u: User) => (
               <button
@@ -266,7 +255,7 @@ interface EditSkillPanelProps {
 function EditSkillPanel({ skill, onClose }: EditSkillPanelProps) {
   const updateSkill     = useUpdateSkill();
   const setSkillMembers = useSetSkillMembers();
-  const { data: allUsers = [] } = useUsers();
+  const { data: allUsers = [] } = useActiveUsers();
 
   const [name,        setName]        = useState(skill.name);
   const [description, setDescription] = useState(skill.description ?? '');
@@ -274,10 +263,10 @@ function EditSkillPanel({ skill, onClose }: EditSkillPanelProps) {
   const [memberIds,   setMemberIds]   = useState<string[]>((skill.members ?? []).map((m) => m.id));
   const [showPicker,  setShowPicker]  = useState(false);
   const [error,       setError]       = useState('');
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const isBusy = updateSkill.isPending || setSkillMembers.isPending;
-  const selectedMembers  = allUsers.filter((u: User) => memberIds.includes(u.id));
-  const availableMembers = allUsers.filter((u: User) => !memberIds.includes(u.id));
+  const selectedMembers = allUsers.filter((u: User) => memberIds.includes(u.id));
 
   function toggleMember(id: string) {
     setMemberIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -343,7 +332,7 @@ function EditSkillPanel({ skill, onClose }: EditSkillPanelProps) {
           <label className="block text-sm font-medium text-[#414651] mb-3">Team with Skill</label>
           <div className="flex items-center gap-2 flex-wrap">
             <MemberAvatarStack members={selectedMembers} />
-            <div className="relative">
+            <div ref={pickerRef} className="relative">
               <button
                 type="button"
                 onClick={() => setShowPicker((p) => !p)}
@@ -351,25 +340,14 @@ function EditSkillPanel({ skill, onClose }: EditSkillPanelProps) {
               >
                 <Plus width={14} height={14} />
               </button>
-              {showPicker && (
-                <div className="absolute left-0 top-10 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg w-56 max-h-52 overflow-y-auto">
-                  {availableMembers.length === 0 ? (
-                    <p className="text-xs text-[#717680] px-3 py-2">All members added</p>
-                  ) : (
-                    availableMembers.map((u: User) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { toggleMember(u.id); setShowPicker(false); }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#181D27] hover:bg-gray-50 transition-colors"
-                      >
-                        <Avatar src={u.avatar_url ?? undefined} name={u.name} size="xs" />
-                        <span className="truncate">{u.name}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
+              <AssigneePickerDropdown
+                open={showPicker}
+                onClose={() => setShowPicker(false)}
+                anchorRef={pickerRef as React.RefObject<HTMLElement | null>}
+                users={allUsers}
+                selected={memberIds}
+                onToggle={toggleMember}
+              />
             </div>
             {selectedMembers.map((u: User) => (
               <button
@@ -459,9 +437,8 @@ interface MemberPickerCellProps {
 function MemberPickerCell({ members, allUsers, onSave, isPending }: MemberPickerCellProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  useClickOutside(ref, () => setOpen(false));
 
-  const memberSet = new Set(members.map((m) => m.id));
+  const memberSet   = new Set(members.map((m) => m.id));
   const activeUsers = allUsers.filter((u) => u.status === 'Active' || !u.status);
 
   function toggle(userId: string) {
@@ -481,55 +458,28 @@ function MemberPickerCell({ members, allUsers, onSave, isPending }: MemberPicker
         title="Manage members"
       >
         <div className="flex -space-x-2">
-          {members.length > 0
-            ? members.slice(0, 3).map((m) => (
-                <div key={m.id} className="w-7 h-7 rounded-full border-2 border-white overflow-hidden shrink-0">
-                  <Avatar src={m.avatar_url ?? undefined} name={m.name} size="xs" />
-                </div>
-              ))
-            : null}
+          {members.slice(0, 4).map((m) => (
+            <div key={m.id} className="w-7 h-7 rounded-full border-2 border-white overflow-hidden shrink-0">
+              <Avatar src={m.avatar_url ?? undefined} name={m.name} size="xs" />
+            </div>
+          ))}
         </div>
-        {members.length > 3 && (
-          <span className="text-xs text-[#535862]">+{members.length - 3}</span>
+        {members.length > 4 && (
+          <span className="text-xs text-[#535862]">+{members.length - 4}</span>
         )}
         <span className={`w-6 h-6 rounded-full border border-dashed flex items-center justify-center transition-colors shrink-0
           ${open ? 'border-[#7F56D9] text-[#7F56D9]' : 'border-gray-300 text-gray-400 group-hover:border-[#7F56D9] group-hover:text-[#7F56D9]'}`}>
           <Plus width={10} height={10} />
         </span>
       </button>
-
-      {open && (
-        <div className="absolute top-full left-0 z-50 mt-1 bg-white border border-[#E9EAEB] rounded-lg shadow-lg py-1 min-w-[220px] max-h-56 overflow-y-auto">
-          {activeUsers.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-[#717680]">No active users</p>
-          ) : (
-            activeUsers.map((u) => {
-              const checked = memberSet.has(u.id);
-              return (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => toggle(u.id)}
-                  className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-[#F9FAFB] transition-colors"
-                >
-                  <div className="w-6 h-6 rounded-full overflow-hidden shrink-0">
-                    <Avatar src={u.avatar_url ?? undefined} name={u.name} size="xs" />
-                  </div>
-                  <span className="flex-1 text-[13px] text-[#181D27] truncate">{u.name}</span>
-                  <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors
-                    ${checked ? 'bg-[#7F56D9] border-[#7F56D9]' : 'border-[#D0D5DD]'}`}>
-                    {checked && (
-                      <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                        <path d="M1 3.5L3.5 6L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
+      <AssigneePickerDropdown
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={ref as React.RefObject<HTMLElement | null>}
+        users={activeUsers}
+        selected={[...memberSet]}
+        onToggle={toggle}
+      />
     </div>
   );
 }
@@ -597,7 +547,7 @@ function TaskTypePanel({ taskType, open, onClose, onSaved }: TaskTypePanelProps)
   const isEdit = !!taskType;
   const createTaskType = useCreateTaskType();
   const updateTaskType = useUpdateTaskType();
-  const { data: allUsers = [] } = useUsers();
+  const { data: allUsers = [] } = useActiveUsers();
 
   const [name,        setName]        = useState(taskType?.name ?? '');
   const [description, setDescription] = useState(taskType?.description ?? '');
@@ -605,6 +555,7 @@ function TaskTypePanel({ taskType, open, onClose, onSaved }: TaskTypePanelProps)
   const [memberIds,   setMemberIds]   = useState<string[]>(taskType?.members.map((m) => m.id) ?? []);
   const [showPicker,  setShowPicker]  = useState(false);
   const [error,       setError]       = useState('');
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const isBusy = createTaskType.isPending || updateTaskType.isPending;
 
@@ -634,7 +585,6 @@ function TaskTypePanel({ taskType, open, onClose, onSaved }: TaskTypePanelProps)
   }
 
   const selectedMembers = allUsers.filter((u: User) => memberIds.includes(u.id));
-  const availableMembers = allUsers.filter((u: User) => !memberIds.includes(u.id));
 
   function toggleMember(id: string) {
     setMemberIds((prev) =>
@@ -706,7 +656,7 @@ function TaskTypePanel({ taskType, open, onClose, onSaved }: TaskTypePanelProps)
           <label className="block text-sm font-medium text-[#414651] mb-3">Default Team</label>
           <div className="flex items-center gap-2 flex-wrap">
             <MemberAvatarStack members={selectedMembers} />
-            <div className="relative">
+            <div ref={pickerRef} className="relative">
               <button
                 type="button"
                 onClick={() => setShowPicker((p) => !p)}
@@ -714,25 +664,14 @@ function TaskTypePanel({ taskType, open, onClose, onSaved }: TaskTypePanelProps)
               >
                 <Plus width={14} height={14} />
               </button>
-              {showPicker && (
-                <div className="absolute left-0 top-10 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg w-56 max-h-52 overflow-y-auto">
-                  {availableMembers.length === 0 ? (
-                    <p className="text-xs text-[#717680] px-3 py-2">All members added</p>
-                  ) : (
-                    availableMembers.map((u: User) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => { toggleMember(u.id); setShowPicker(false); }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#181D27] hover:bg-gray-50 transition-colors"
-                      >
-                        <Avatar src={u.avatar_url ?? undefined} name={u.name} size="xs" />
-                        <span className="truncate">{u.name}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
+              <AssigneePickerDropdown
+                open={showPicker}
+                onClose={() => setShowPicker(false)}
+                anchorRef={pickerRef as React.RefObject<HTMLElement | null>}
+                users={allUsers}
+                selected={memberIds}
+                onToggle={toggleMember}
+              />
             </div>
             {selectedMembers.map((u: User) => (
               <button

@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router-dom';
-import Sidebar from '../Sidebar';
-import TopBar from '../TopBar';
-import ErrorBoundary from '../ErrorBoundary';
+import Sidebar from './Sidebar';
+import TopBar from './TopBar';
+import ErrorBoundary from '../ui/ErrorBoundary';
 
 export default function AppLayout() {
   return (

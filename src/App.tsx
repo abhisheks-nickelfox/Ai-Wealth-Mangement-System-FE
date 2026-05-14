@@ -3,10 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import NetworkErrorToast from './components/ui/NetworkErrorToast';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { TimerProvider } from './context/TimerContext';
 import AppLayout from './components/layout/AppLayout';
 import Dashboard from './pages/Dashboard';
-import UsersPage from './pages/UsersPage';
-import AddUserPage from './pages/AddUserPage';
+import UsersPage from './pages/users/UsersPage';
+import AddUserPage from './pages/users/AddUserPage';
 import Login from './pages/auth/Login';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetLinkSent from './pages/auth/ResetLinkSent';
@@ -15,17 +16,17 @@ import EmailPreview from './pages/auth/EmailPreview';
 import OnboardingPage from './pages/onboarding/OnboardingPage';
 import SettingsPage from './pages/SettingsPage';
 import InboxPage from './pages/InboxPage';
-import TranscriptsFlowPage from './pages/TranscriptsFlowPage';
-import TranscriptTasksPage from './pages/TranscriptTasksPage';
-import FirmDetailPage from './pages/FirmDetailPage';
-import AddFirmPage from './pages/AddFirmPage';
-import EditFirmPage from './pages/EditFirmPage';
-import EditUserSettingsPage from './pages/EditUserSettingsPage';
-import SharedProjectPage from './pages/SharedProjectPage';
-import TaskDetailPage from './pages/TaskDetailPage';
-import ProjectFullPage from './pages/ProjectFullPage';
-import MyTasksPage from './pages/MyTasksPage';
-import ProjectsSummaryPage from './pages/ProjectsSummaryPage';
+import TranscriptsFlowPage from './pages/transcripts/TranscriptsFlowPage';
+import TranscriptTasksPage from './pages/transcripts/TranscriptTasksPage';
+import FirmDetailPage from './pages/firms/FirmDetailPage';
+import AddFirmPage from './pages/firms/AddFirmPage';
+import EditFirmPage from './pages/firms/EditFirmPage';
+import EditUserSettingsPage from './pages/users/EditUserSettingsPage';
+import SharedProjectPage from './pages/projects/SharedProjectPage';
+import TaskDetailPage from './pages/tasks/TaskDetailPage';
+import ProjectFullPage from './pages/projects/ProjectFullPage';
+import MyTasksPage from './pages/tasks/MyTasksPage';
+import ProjectsSummaryPage from './pages/projects/ProjectsSummaryPage';
 
 // ── Redirects to /login when no token is present ─────────────────────────────
 
@@ -70,6 +71,7 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <TimerProvider>
       <BrowserRouter>
         <AuthProvider>
           <Routes>
@@ -112,6 +114,7 @@ export default function App() {
         </Routes>
         </AuthProvider>
       </BrowserRouter>
+      </TimerProvider>
       <NetworkErrorToast />
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

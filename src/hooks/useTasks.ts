@@ -62,13 +62,97 @@ export function useUpdateTask() {
         status?:       string;
       };
     }) => tasksApi.update(id, payload),
+    onMutate: async ({ id, payload }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.tasks.detail(id) });
+      const previous = qc.getQueryData<Task>(queryKeys.tasks.detail(id));
+      if (previous) {
+        qc.setQueryData<Task>(queryKeys.tasks.detail(id), {
+          ...previous,
+          ...(payload.status      !== undefined && { status:      payload.status as Task['status'] }),
+          ...(payload.priority    !== undefined && { priority:    payload.priority }),
+          ...(payload.title       !== undefined && { title:       payload.title }),
+          ...(payload.description !== undefined && { description: payload.description }),
+          ...(payload.deadline    !== undefined && { deadline:    payload.deadline }),
+          ...(payload.project_id  !== undefined && { project_id:  payload.project_id }),
+        });
+      }
+
+      // Optimistically patch the parent task's embedded subtask entry so assignee
+      // changes in SubTaskRow feel instant without waiting for the API response.
+      if (previous?.parent_task_id && payload.assignee_ids !== undefined) {
+        const parentKey  = queryKeys.tasks.detail(previous.parent_task_id);
+        const parentData = qc.getQueryData<Task>(parentKey);
+        if (parentData?.subtasks) {
+          qc.setQueryData<Task>(parentKey, {
+            ...parentData,
+            subtasks: parentData.subtasks.map((s) => {
+              if (s.id !== id) return s;
+              // Build a minimal assignees list from existing data for instant feedback
+              const existingAssignees = s.assignees ?? [];
+              const nextAssignees = payload.assignee_ids!.map((uid) => {
+                const found = existingAssignees.find((a) => a.id === uid);
+                return found ?? { id: uid, name: uid, email: '', avatar_url: null };
+              });
+              return { ...s, assignees: nextAssignees };
+            }),
+          });
+        }
+      }
+
+      return { previous, id };
+    },
     onSuccess: (data, { payload }) => {
-      // Prefer firm_id from response data, fall back to what was in the payload
+      // Preserve subtasks: the update endpoint returns the task without subtasks.
+      // Merging prevents the parent task's subtask list from vanishing after any update.
+      const existing = qc.getQueryData<Task>(queryKeys.tasks.detail(data.id));
+      qc.setQueryData<Task>(queryKeys.tasks.detail(data.id), {
+        ...data,
+        subtasks: data.subtasks ?? existing?.subtasks ?? [],
+      });
+
+      // If this is a subtask, patch the parent task's embedded subtask entry so that
+      // changes (e.g. new assignees) are reflected in the parent task detail page
+      // without a full refetch.
+      if (data.parent_task_id) {
+        const parentKey  = queryKeys.tasks.detail(data.parent_task_id);
+        const parentData = qc.getQueryData<Task>(parentKey);
+        if (parentData?.subtasks) {
+          qc.setQueryData<Task>(parentKey, {
+            ...parentData,
+            subtasks: parentData.subtasks.map((s) =>
+              s.id === data.id ? { ...s, ...data } : s
+            ),
+          });
+        }
+      }
+
       const firmId = data.firm_id ?? payload.firm_id;
       if (firmId) {
         qc.invalidateQueries({ queryKey: queryKeys.tasks.byFirm(firmId) });
       } else {
         qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      }
+      // Refresh chat if assignees changed so activity log entries appear immediately
+      if (payload.assignee_ids !== undefined) {
+        qc.invalidateQueries({ queryKey: queryKeys.messages.byScope('task', data.id) });
+      }
+    },
+    onError: (_err, { id }, context) => {
+      if (context?.previous) {
+        qc.setQueryData(queryKeys.tasks.detail(id), context.previous);
+        // Restore parent task's subtask entry too
+        if (context.previous.parent_task_id) {
+          const parentKey  = queryKeys.tasks.detail(context.previous.parent_task_id);
+          const parentData = qc.getQueryData<Task>(parentKey);
+          if (parentData?.subtasks) {
+            qc.setQueryData<Task>(parentKey, {
+              ...parentData,
+              subtasks: parentData.subtasks.map((s) =>
+                s.id === id ? context.previous! : s
+              ),
+            });
+          }
+        }
       }
     },
   });
