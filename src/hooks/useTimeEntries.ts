@@ -30,7 +30,8 @@ export function useStopTimer(taskId: string) {
   const qc = useQueryClient()
   const { stopTimer } = useTimer()
   return useMutation({
-    mutationFn: (entryId: string) => timeEntriesApi.stop(taskId, entryId),
+    mutationFn: ({ entryId, description }: { entryId: string; description?: string }) =>
+      timeEntriesApi.stop(taskId, entryId, description),
     onSuccess: () => {
       stopTimer()
       qc.invalidateQueries({ queryKey: ['time-entries', taskId] })
@@ -88,7 +89,8 @@ export function useStopProjectTimer(projectId: string) {
   const qc = useQueryClient()
   const { stopTimer } = useTimer()
   return useMutation({
-    mutationFn: (entryId: string) => projectTimeEntriesApi.stop(projectId, entryId),
+    mutationFn: ({ entryId, description }: { entryId: string; description?: string }) =>
+      projectTimeEntriesApi.stop(projectId, entryId, description),
     onSuccess: () => {
       stopTimer()
       qc.invalidateQueries({ queryKey: PROJ_TIME_KEY(projectId) })

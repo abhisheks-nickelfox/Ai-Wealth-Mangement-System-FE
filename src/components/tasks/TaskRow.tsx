@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useDoubleClick } from '../../hooks/useDoubleClick';
 import {
   ChevronRight,
   ChevronDown,
@@ -104,6 +105,7 @@ export interface TaskRowProps {
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
   onOpenDetail?: (task: Task) => void;
+  onNavigate?: (task: Task) => void;
   onAssigneeChange?: (taskId: string, assigneeId: string | null) => void;
   onProjectChange?: (taskId: string, projectId: string | null) => void;
   onAddSubTask?: (parentTask: Task) => void;
@@ -111,12 +113,16 @@ export interface TaskRowProps {
 
 export function TaskRow({
   task, usersMap, projects = [], indented = false, depth = 0,
-  onEdit, onDelete, onOpenDetail, onAssigneeChange, onProjectChange, onAddSubTask,
+  onEdit, onDelete, onOpenDetail, onNavigate, onAssigneeChange, onProjectChange, onAddSubTask,
 }: TaskRowProps) {
   const [contextOpen,       setContextOpen]       = useState(false);
   const [pickerOpen,        setPickerOpen]        = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [subExpanded,       setSubExpanded]       = useState(true);
+  const handleTitleClick = useDoubleClick(
+    () => onOpenDetail?.(task),
+    () => onNavigate?.(task),
+  );
 
   const assigneeAnchorRef = useRef<HTMLDivElement>(null);
   const projectPickerRef  = useRef<HTMLDivElement>(null);
@@ -172,7 +178,7 @@ export function TaskRow({
         {/* Title */}
         <button
           type="button"
-          onClick={() => onOpenDetail?.(task)}
+          onClick={(e) => { e.stopPropagation(); handleTitleClick(); }}
           className="flex-1 min-w-0 text-[13px] text-[#181D27] truncate text-left hover:text-[#7F56D9] transition-colors"
         >
           {task.title}

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useDoubleClick } from '../../hooks/useDoubleClick';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAssignableUsers } from '../../hooks/useAssignableUsers';
@@ -35,8 +36,9 @@ import { queryKeys } from '../../lib/queryKeys';
 import TaskIcon from '../../components/icons/TaskIcon';
 import ProjectIcon from '../../components/icons/ProjectIcon';
 import ProjectTimesheetPanel from '../../components/timesheet/ProjectTimesheetPanel';
-import { useProjectTimeEntries } from '../../hooks/useTimeEntries';
-import { formatSeconds } from '../../lib/timeUtils';
+import { useProjectTimeEntries, useStartProjectTimer, useStopProjectTimer } from '../../hooks/useTimeEntries';
+import { useTimer } from '../../context/TimerContext';
+import { formatSeconds, formatElapsed } from '../../lib/timeUtils';
 import type { Task, Project, User } from '../../lib/api';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -114,11 +116,13 @@ function NestedSubTaskRow({
   users,
   onOpen,
   onUpdateAssignees,
+  onNavigate,
 }: {
   task: Task;
   users: User[];
   onOpen: (t: Task) => void;
   onUpdateAssignees?: (taskId: string, ids: string[]) => void;
+  onNavigate?: (t: Task) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef                   = useRef<HTMLDivElement>(null);
@@ -127,10 +131,12 @@ function NestedSubTaskRow({
   const assignees = task.assignees ?? [];
   const { text: dt, overdue: subOverdue } = formatDeadline(task.deadline ?? null);
 
+  const handleRowClick = useDoubleClick(() => onOpen(task), () => onNavigate?.(task));
+
   return (
     <div
       className="flex items-center px-4 py-2 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group bg-[#FAFAFA]"
-      onClick={() => onOpen(task)}
+      onClick={handleRowClick}
     >
       {/* Left — indented */}
       <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
@@ -191,12 +197,14 @@ function SubTaskRow({
   onOpen,
   onUpdateAssignees,
   onAddSubTask,
+  onNavigate,
 }: {
   task: Task;
   users: User[];
   onOpen: (t: Task) => void;
   onUpdateAssignees?: (taskId: string, ids: string[]) => void;
   onAddSubTask?: (parentId: string, parentDeadline?: string) => void;
+  onNavigate?: (t: Task) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef                   = useRef<HTMLDivElement>(null);
@@ -205,10 +213,12 @@ function SubTaskRow({
   const assignees     = task.assignees ?? [];
   const { text: dateText, overdue } = formatDeadline(task.deadline ?? null);
 
+  const handleRowClick = useDoubleClick(() => onOpen(task), () => onNavigate?.(task));
+
   return (
     <div
       className="flex items-center px-4 py-2.5 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
-      onClick={() => onOpen(task)}
+      onClick={handleRowClick}
     >
       {/* Left: dot + icon + title + hover sub-task button */}
       <div className="flex items-center gap-2 flex-1 min-w-0 pr-4">
@@ -312,6 +322,10 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
   const updateTask                            = useUpdateTask();
   const [showTimesheet, setShowTimesheet]     = useState(false);
   const timesheetBtnRef                       = useRef<HTMLDivElement>(null);
+  const { running, elapsed }                  = useTimer();
+  const isTimerRunningHere                    = running?.projectId === projectId;
+  const startProjectTimer                     = useStartProjectTimer(projectId!);
+  const stopProjectTimer                      = useStopProjectTimer(projectId!);
 
   const projectTasks = allTasks.filter((t) => t.project_id === projectId && !t.parent_task_id);
 
@@ -450,7 +464,9 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
           <div>
             <div className="flex items-center gap-2.5 mb-1">
               <ProjectIcon width={20} height={20} className="text-[#A4A7AE] shrink-0" />
-              <h1 className="text-[20px] font-semibold text-[#181D27] leading-tight">{project.name}</h1>
+              <h1
+                className="text-[20px] font-semibold text-[#181D27] leading-tight"
+              >{project.name}</h1>
             </div>
             <p className="text-[12px] text-[#A4A7AE] ml-[28px]">
               Created on {new Date(project.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -556,16 +572,36 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
           {/* Timesheet */}
           <div>
             <SectionLabel className="mb-2">Timesheet</SectionLabel>
-            <div ref={timesheetBtnRef} className="relative">
+            <div ref={timesheetBtnRef} className="relative flex items-center gap-2">
+              {/* Clock icon — start/stop project timer */}
+              <button
+                type="button"
+                disabled={startProjectTimer.isPending || stopProjectTimer.isPending}
+                onClick={() => isTimerRunningHere
+                  ? stopProjectTimer.mutate({ entryId: running!.entryId })
+                  : startProjectTimer.mutate()
+                }
+                className={`flex items-center justify-center w-6 h-6 rounded-full transition-colors disabled:opacity-50 ${
+                  isTimerRunningHere
+                    ? 'bg-[#FEF3F2] text-[#F04438] hover:bg-[#FEE4E2]'
+                    : 'bg-[#F4F3FF] text-[#7F56D9] hover:bg-[#EBE9FE]'
+                }`}
+                title={isTimerRunningHere ? 'Stop timer' : 'Start timer'}
+              >
+                {isTimerRunningHere
+                  ? <span className="w-2 h-2 rounded-[2px] bg-[#F04438]" />
+                  : <Clock width={13} height={13} />
+                }
+              </button>
+              {/* Text — opens timesheet panel */}
               <button
                 type="button"
                 onClick={() => setShowTimesheet((v) => !v)}
-                className="flex items-center gap-1.5 text-[13px] font-semibold text-[#7F56D9] hover:text-[#6941C6] transition-colors"
+                className="text-[13px] font-semibold text-[#7F56D9] hover:text-[#6941C6] transition-colors"
               >
-                <Clock width={14} height={14} />
                 {projectTimeData && projectTimeData.total_seconds > 0
                   ? formatSeconds(projectTimeData.total_seconds)
-                  : 'View time'}
+                  : 'Log time'}
               </button>
               <ProjectTimesheetPanel
                 projectId={projectId!}
@@ -574,6 +610,13 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
                 anchorRef={timesheetBtnRef as React.RefObject<HTMLElement | null>}
               />
             </div>
+            {isTimerRunningHere && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#F04438] animate-pulse shrink-0" />
+                <span className="text-[11px] font-mono font-semibold text-[#F04438]">{formatElapsed(elapsed)}</span>
+                <span className="text-[11px] text-[#A4A7AE]">running</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -638,6 +681,7 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
                       task={task}
                       users={users}
                       onOpen={setSelectedTask}
+                      onNavigate={(t) => navigate(`/firms/${firmId}/tasks/${t.id}`)}
                       onUpdateAssignees={(taskId, ids) =>
                         updateTask.mutateAsync({ id: taskId, payload: { assignee_ids: ids } }).catch(() => {})
                       }
@@ -657,6 +701,7 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
                             task={sub}
                             users={users}
                             onOpen={setSelectedTask}
+                            onNavigate={(t) => navigate(`/firms/${firmId}/tasks/${t.id}`)}
                             onUpdateAssignees={(taskId, ids) =>
                               updateTask.mutateAsync({ id: taskId, payload: { assignee_ids: ids } }).catch(() => {})
                             }

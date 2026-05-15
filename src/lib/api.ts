@@ -708,8 +708,8 @@ export const timeEntriesApi = {
     request<TimeEntry>('POST', `/tasks/${taskId}/time-entries`, payload),
   start: (taskId: string) =>
     request<TimeEntry>('POST', `/tasks/${taskId}/time-entries/start`),
-  stop: (taskId: string, entryId: string) =>
-    request<TimeEntry>('PATCH', `/tasks/${taskId}/time-entries/${entryId}/stop`),
+  stop: (taskId: string, entryId: string, description?: string) =>
+    request<TimeEntry>('PATCH', `/tasks/${taskId}/time-entries/${entryId}/stop`, description ? { description } : undefined),
   update: (taskId: string, entryId: string, payload: Partial<{ started_at: string; ended_at: string; duration_seconds: number; description: string }>) =>
     request<TimeEntry>('PATCH', `/tasks/${taskId}/time-entries/${entryId}`, payload),
   delete: (taskId: string, entryId: string) =>
@@ -730,8 +730,8 @@ export const projectTimeEntriesApi = {
     request<ProjectDirectTimeEntrySummary>('GET', `/projects/${projectId}/time-entries`),
   start:  (projectId: string) =>
     request<TimeEntry>('POST', `/projects/${projectId}/time-entries/start`),
-  stop:   (projectId: string, entryId: string) =>
-    request<TimeEntry>('PATCH', `/projects/${projectId}/time-entries/${entryId}/stop`),
+  stop:   (projectId: string, entryId: string, description?: string) =>
+    request<TimeEntry>('PATCH', `/projects/${projectId}/time-entries/${entryId}/stop`, description ? { description } : undefined),
   create: (projectId: string, payload: { started_at: string; ended_at?: string; duration_seconds?: number; description?: string }) =>
     request<TimeEntry>('POST', `/projects/${projectId}/time-entries`, payload),
   delete: (projectId: string, entryId: string) =>

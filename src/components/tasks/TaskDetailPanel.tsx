@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HelpCircle, ChevronDown, ChevronRight, Plus, X, MessageSquare01 } from '@untitled-ui/icons-react';
+import { HelpCircle, ChevronDown, ChevronRight, Plus, X, MessageSquare01, Clock } from '@untitled-ui/icons-react';
 import CountBadge from '../ui/CountBadge';
 import AvatarNameRow from '../ui/AvatarNameRow';
 import PanelFooter from '../ui/PanelFooter';
@@ -14,6 +14,10 @@ import AssigneePickerDropdown from '../ui/AssigneePickerDropdown';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
 import AttachmentsSection, { type AttachmentsSectionHandle } from './AttachmentsSection';
+import TimesheetPanel from '../timesheet/TimesheetPanel';
+import { useStartTimer, useStopTimer } from '../../hooks/useTimeEntries';
+import { useTimer } from '../../context/TimerContext';
+import { formatElapsed } from '../../lib/timeUtils';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useAssignableUsers } from '../../hooks/useAssignableUsers';
 import type { Task, User, Project } from '../../lib/api';
@@ -144,11 +148,18 @@ export default function TaskDetailPanel({
   const [showStatus,    setShowStatus]    = useState(false);
   const [transitioning, setTransitioning] = useState(false);
 
-  const priorityRef    = useRef<HTMLDivElement>(null);
-  const pickerRef      = useRef<HTMLDivElement>(null);
-  const projectRef     = useRef<HTMLDivElement>(null);
-  const statusRef      = useRef<HTMLDivElement>(null);
-  const attachmentsRef = useRef<AttachmentsSectionHandle>(null);
+  const [showTimesheet, setShowTimesheet]  = useState(false);
+  const { running, elapsed }               = useTimer();
+  const isTimerRunningHere                 = running?.taskId === task?.id;
+  const startTimer                         = useStartTimer(task?.id ?? '');
+  const stopTimer                          = useStopTimer(task?.id ?? '');
+
+  const priorityRef     = useRef<HTMLDivElement>(null);
+  const pickerRef       = useRef<HTMLDivElement>(null);
+  const projectRef      = useRef<HTMLDivElement>(null);
+  const statusRef       = useRef<HTMLDivElement>(null);
+  const attachmentsRef  = useRef<AttachmentsSectionHandle>(null);
+  const timesheetBtnRef = useRef<HTMLDivElement>(null);
   useClickOutside(priorityRef, () => setShowPriority(false));
   // pickerRef: no useClickOutside — AssigneePickerDropdown owns its own fixed backdrop
   useClickOutside(projectRef,  () => setShowProject(false));
@@ -570,6 +581,55 @@ export default function TaskDetailPanel({
         {/* Attachments — universal per project */}
         <div className="pt-2 border-t border-[#F2F4F7]">
           <AttachmentsSection ref={attachmentsRef} projectId={task.project_id ?? null} />
+        </div>
+
+        {/* Timesheet */}
+        <div className="border-t border-[#F2F4F7] px-5 py-3">
+          <p className="text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider mb-2.5">Timesheet</p>
+          <div ref={timesheetBtnRef} className="relative flex items-center gap-2">
+            {/* Clock icon — start/stop timer toggle */}
+            <button
+              type="button"
+              disabled={startTimer.isPending || stopTimer.isPending}
+              onClick={() => isTimerRunningHere
+                ? stopTimer.mutate({ entryId: running!.entryId })
+                : startTimer.mutate()
+              }
+              className={`flex items-center justify-center w-7 h-7 rounded-full border transition-colors disabled:opacity-50 ${
+                isTimerRunningHere
+                  ? 'border-[#FEE4E2] bg-[#FEF3F2] text-[#F04438] hover:bg-[#FEE4E2]'
+                  : 'border-[#E9EAEB] bg-white text-[#7F56D9] hover:border-[#D0D5DD]'
+              }`}
+              title={isTimerRunningHere ? 'Stop timer' : 'Start timer'}
+            >
+              {isTimerRunningHere
+                ? <span className="w-2.5 h-2.5 rounded-[2px] bg-[#F04438]" />
+                : <Clock width={13} height={13} />
+              }
+            </button>
+            {/* Text — opens timesheet panel for manual entry */}
+            <button
+              type="button"
+              onClick={() => setShowTimesheet((v) => !v)}
+              className="text-[13px] text-[#535862] hover:text-[#344054] transition-colors"
+            >
+              Log Time
+            </button>
+            <TimesheetPanel
+              taskId={task.id}
+              projectId={task.project_id ?? undefined}
+              open={showTimesheet}
+              onClose={() => setShowTimesheet(false)}
+              anchorRef={timesheetBtnRef as React.RefObject<HTMLElement | null>}
+            />
+          </div>
+          {isTimerRunningHere && (
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#F04438] animate-pulse shrink-0" />
+              <span className="text-[11px] font-mono font-semibold text-[#F04438]">{formatElapsed(elapsed)}</span>
+              <span className="text-[11px] text-[#A4A7AE]">running</span>
+            </div>
+          )}
         </div>
 
         {/* Chat — real-time SSE per task/sub-task */}

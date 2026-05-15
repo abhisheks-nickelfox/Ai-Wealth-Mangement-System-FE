@@ -5,22 +5,26 @@ import TaskIcon from '../icons/TaskIcon';
 import { StatusDot, formatDeadline } from './TaskRow';
 import { TaskStatusBadge, PriorityBadge } from './TaskBadges';
 import { useAssignableUsers } from '../../hooks/useAssignableUsers';
+import { useDoubleClick } from '../../hooks/useDoubleClick';
 import type { Task, User } from '../../lib/api';
 
 interface SubTaskRowProps {
   task:               Task;
   users:              User[];
   onClick:            () => void;
+  onNavigate?:        () => void;
   onUpdateAssignees?: (taskId: string, ids: string[]) => void;
 }
 
-export default function SubTaskRow({ task, users, onClick, onUpdateAssignees }: SubTaskRowProps) {
+export default function SubTaskRow({ task, users, onClick, onNavigate, onUpdateAssignees }: SubTaskRowProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const anchorRef                   = useRef<HTMLDivElement>(null);
 
   const assignees       = task.assignees ?? [];
   const assignableUsers = useAssignableUsers(task.task_type_id, users);
   const { text: dateText, overdue } = formatDeadline(task.deadline ?? null);
+
+  const handleTitleClick = useDoubleClick(onClick, () => onNavigate?.());
 
   return (
     <div
@@ -31,9 +35,13 @@ export default function SubTaskRow({ task, users, onClick, onUpdateAssignees }: 
       <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
         <StatusDot status={task.status} />
         <TaskIcon width={13} height={13} className="text-[#A4A7AE] shrink-0" />
-        <span className="flex-1 min-w-0 text-[13px] text-[#181D27] truncate group-hover:text-[#6941C6] transition-colors">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); handleTitleClick(); }}
+          className="flex-1 min-w-0 text-[13px] text-[#181D27] truncate text-left group-hover:text-[#6941C6] transition-colors"
+        >
           {task.title}
-        </span>
+        </button>
       </div>
 
       {/* Status — fixed 100 px */}

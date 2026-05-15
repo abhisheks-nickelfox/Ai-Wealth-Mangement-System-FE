@@ -25,8 +25,9 @@ import AddTaskModal from '../../components/tasks/AddTaskModal';
 import TaskIcon from '../../components/icons/TaskIcon';
 import TimesheetPanel from '../../components/timesheet/TimesheetPanel';
 import { useTaskDetail } from '../../hooks/useTaskDetail';
-import { useTimeEntries } from '../../hooks/useTimeEntries';
-import { formatSeconds } from '../../lib/timeUtils';
+import { useTimeEntries, useStartTimer, useStopTimer } from '../../hooks/useTimeEntries';
+import { formatSeconds, formatElapsed } from '../../lib/timeUtils';
+import { useTimer } from '../../context/TimerContext';
 
 // ── Metadata grid cell ────────────────────────────────────────────────────────
 
@@ -51,8 +52,12 @@ export default function TaskDetailPage() {
   const [showAddSubTask,     setShowAddSubTask]     = useState(false);
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
   const [showTimesheet,      setShowTimesheet]      = useState(false);
-  const assigneePickerRef = useRef<HTMLDivElement>(null);
-  const timesheetBtnRef   = useRef<HTMLDivElement>(null);
+  const assigneePickerRef  = useRef<HTMLDivElement>(null);
+  const timesheetBtnRef    = useRef<HTMLDivElement>(null);
+  const { running, elapsed } = useTimer();
+  const isTimerRunningHere   = running?.taskId === taskId;
+  const startTimer           = useStartTimer(taskId!);
+  const stopTimer            = useStopTimer(taskId!);
 
   const {
     firm, task, projects, users, assignableUsers, parentTask,
@@ -218,13 +223,33 @@ export default function TaskDetailPage() {
 
           <div className="flex flex-col gap-1.5 relative">
             <SectionLabel>Timesheet</SectionLabel>
-            <div ref={timesheetBtnRef} className="relative">
+            <div ref={timesheetBtnRef} className="relative flex items-center gap-2">
+              {/* Clock icon — start/stop timer toggle */}
+              <button
+                type="button"
+                disabled={startTimer.isPending || stopTimer.isPending}
+                onClick={() => isTimerRunningHere
+                  ? stopTimer.mutate({ entryId: running!.entryId })
+                  : startTimer.mutate()
+                }
+                className={`flex items-center justify-center w-6 h-6 rounded-full transition-colors disabled:opacity-50 ${
+                  isTimerRunningHere
+                    ? 'bg-[#FEF3F2] text-[#F04438] hover:bg-[#FEE4E2]'
+                    : 'bg-[#F4F3FF] text-[#7F56D9] hover:bg-[#EBE9FE]'
+                }`}
+                title={isTimerRunningHere ? 'Stop timer' : 'Start timer'}
+              >
+                {isTimerRunningHere
+                  ? <span className="w-2 h-2 rounded-[2px] bg-[#F04438]" />
+                  : <Clock width={13} height={13} />
+                }
+              </button>
+              {/* Text — opens timesheet panel for manual entry */}
               <button
                 type="button"
                 onClick={() => setShowTimesheet((v) => !v)}
-                className="flex items-center gap-1.5 text-[13px] font-semibold text-[#7F56D9] hover:text-[#6941C6] transition-colors"
+                className="text-[13px] font-semibold text-[#7F56D9] hover:text-[#6941C6] transition-colors"
               >
-                <Clock width={14} height={14} />
                 {timeEntrySummary?.total_seconds ? formatSeconds(timeEntrySummary.total_seconds) : 'Log time'}
               </button>
               <TimesheetPanel
@@ -236,6 +261,13 @@ export default function TaskDetailPage() {
                 anchorRef={timesheetBtnRef as React.RefObject<HTMLElement | null>}
               />
             </div>
+            {isTimerRunningHere && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#F04438] animate-pulse shrink-0" />
+                <span className="text-[11px] font-mono font-semibold text-[#F04438]">{formatElapsed(elapsed)}</span>
+                <span className="text-[11px] text-[#A4A7AE]">running</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -281,6 +313,7 @@ export default function TaskDetailPage() {
                     task={sub}
                     users={users}
                     onClick={() => setSelectedSubTask(sub)}
+                    onNavigate={() => navigate(`/firms/${firmId}/tasks/${sub.id}`)}
                     onUpdateAssignees={(tid, ids) =>
                       updateTask.mutateAsync({ id: tid, payload: { assignee_ids: ids } }).catch(() => {})
                     }

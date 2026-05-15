@@ -1,4 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useDoubleClick } from '../../hooks/useDoubleClick';
 import {
   ChevronRight,
   ChevronDown,
@@ -64,6 +66,12 @@ export function ProjectGroupRow({
   const [pickerOpen,  setPickerOpen]  = useState(false);
   const anchorRef  = useRef<HTMLDivElement>(null);
   const updateProject = useUpdateProject();
+  const navigate = useNavigate();
+
+  const handleProjectNameClick = useDoubleClick(
+    () => onProjectClick?.(projectId, label, groupStatus),
+    () => { if (projectId && firm?.id) navigate(`/firms/${firm.id}/projects/${projectId}`); },
+  );
 
   const label = project?.name ?? projectId ?? 'Project';
   const currentMemberIds = useMemo(() => project?.members.map((m) => m.id) ?? [], [project]);
@@ -105,7 +113,7 @@ export function ProjectGroupRow({
           <button
             type="button"
             className="text-[13px] font-semibold text-[#181D27] truncate hover:text-[#7F56D9] hover:underline"
-            onClick={(e) => { e.stopPropagation(); onProjectClick?.(projectId, label, groupStatus); }}
+            onClick={(e) => { e.stopPropagation(); handleProjectNameClick(); }}
           >
             {label}
           </button>
@@ -210,6 +218,7 @@ export function ProjectGroupRow({
               onEdit={onEditTask}
               onDelete={onDeleteTask}
               onOpenDetail={onOpenTaskDetail}
+              onNavigate={firm?.id ? (t) => navigate(`/firms/${firm.id}/tasks/${t.id}`) : undefined}
               onAssigneeChange={onAssigneeChange}
               onProjectChange={onProjectChange}
               onAddSubTask={onAddSubTask}
@@ -261,6 +270,7 @@ export function StatusSection({
 }: StatusSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [visibleCount, setVisibleCount] = useState(LOAD_MORE_PAGE_SIZE);
+  const navigate = useNavigate();
 
   const byProject = useMemo<Map<string | null, Task[]>>(() => {
     const map = new Map<string | null, Task[]>();
@@ -402,6 +412,7 @@ export function StatusSection({
                   onEdit={onEditTask}
                   onDelete={onDeleteTask}
                   onOpenDetail={onOpenTaskDetail}
+                  onNavigate={firm?.id ? (t) => navigate(`/firms/${firm.id}/tasks/${t.id}`) : undefined}
                   onAssigneeChange={onAssigneeChange}
                   onProjectChange={onProjectChange}
                   onAddSubTask={onAddSubTask}

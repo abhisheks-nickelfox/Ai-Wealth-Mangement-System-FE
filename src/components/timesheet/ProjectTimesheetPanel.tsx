@@ -80,11 +80,9 @@ export default function ProjectTimesheetPanel({
     setShowNotes(false)
     setStartedAt(todayDatetimeLocal())
     setEndedAt(todayDatetimeLocal())
-    messagesApi.create({
-      scope: 'project', scope_id: projectId,
-      body: `Logged ${formatSeconds(computedDuration)} directly on this project`,
-      is_system: true,
-    }).catch(() => {})
+    const savedNote = notes.trim()
+    const body = `Logged ${formatSeconds(computedDuration)} directly on this project${savedNote ? ` — "${savedNote}"` : ''}`
+    messagesApi.create({ scope: 'project', scope_id: projectId, body, is_system: true }).catch(() => {})
     qc.invalidateQueries({ queryKey: queryKeys.messages.byScope('project', projectId) })
   }
 
@@ -125,8 +123,29 @@ export default function ProjectTimesheetPanel({
           value={timeInput}
           onChange={setTimeInput}
           projectId={projectId}
-          onStartTimer={() => startTimer.mutate()}
-          onStopTimer={() => running && stopTimer.mutate(running.entryId)}
+          onStartTimer={() => {
+            startTimer.mutate(undefined, {
+              onSuccess: () => {
+                setShowNotes(true)
+                messagesApi.create({ scope: 'project', scope_id: projectId, body: 'Started a timer on this project', is_system: true }).catch(() => {})
+                qc.invalidateQueries({ queryKey: queryKeys.messages.byScope('project', projectId) })
+              },
+            })
+          }}
+          onStopTimer={() => {
+            if (!running) return
+            const noteText = notes.trim()
+            stopTimer.mutate({ entryId: running.entryId, description: noteText || undefined }, {
+              onSuccess: (entry) => {
+                const dur  = entry.duration_seconds ?? 0
+                const body = `Logged ${formatSeconds(dur)} on this project via timer${noteText ? ` — "${noteText}"` : ''}`
+                messagesApi.create({ scope: 'project', scope_id: projectId, body, is_system: true }).catch(() => {})
+                qc.invalidateQueries({ queryKey: queryKeys.messages.byScope('project', projectId) })
+                setNotes('')
+                setShowNotes(false)
+              },
+            })
+          }}
           disabled={startTimer.isPending || stopTimer.isPending}
         />
 
@@ -147,8 +166,9 @@ export default function ProjectTimesheetPanel({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Add a note..."
-            rows={2}
-            className="w-full border border-[#E9EAEB] rounded-lg px-3 py-2 text-[13px] text-[#344054] placeholder-[#A4A7AE] outline-none focus:border-[#7F56D9] resize-none"
+            rows={3}
+            className="w-full border border-[#E9EAEB] rounded-lg px-3 py-2 text-[13px] text-[#344054] placeholder-[#A4A7AE] outline-none focus:border-[#7F56D9] resize-none overflow-y-auto"
+            style={{ maxHeight: 96 }}
           />
         ) : (
           <button
@@ -161,8 +181,8 @@ export default function ProjectTimesheetPanel({
           </button>
         )}
 
-        {/* Billable (disabled) + Save */}
-        {!isRunningHere && (
+        {/* Billable (disabled) + Save — only shown when user has entered something */}
+        {!isRunningHere && (timeInput.trim() || notes.trim()) && (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 opacity-40 cursor-not-allowed select-none" title="Billable (coming soon)">
               <div className="w-9 h-5 bg-[#17B26A] rounded-full flex items-center px-0.5">
