@@ -650,13 +650,26 @@ function InlineReplyComposer({ parentMsg, mentionUsers, onSend, onClose }: Inlin
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiRef    = useRef<HTMLDivElement>(null);
 
-  // Pre-fill @firstName of the parent author (skip if replying to own message)
+  // Pre-fill the right @tag on mount:
+  //   - Replying to someone else's message → tag that person
+  //   - Replying to own message → extract the first @mention from the parent body
+  //     (e.g. own msg is "@abhishek hi bro" → pre-fill "@abhishek ")
+  //   - Own message with no @mention → leave empty
   useEffect(() => {
-    if (myId && parentMsg.author.id !== myId) {
-      const firstName = (parentMsg.author as unknown as { first_name?: string }).first_name
-        ?? parentMsg.author.name.split(' ')[0];
-      setDraft(`@${firstName} `);
+    let prefill = '';
+    if (myId) {
+      if (parentMsg.author.id !== myId) {
+        // Replying to someone else — tag the author
+        const firstName = (parentMsg.author as unknown as { first_name?: string }).first_name
+          ?? parentMsg.author.name.split(' ')[0];
+        prefill = `@${firstName} `;
+      } else {
+        // Replying to own message — re-use the @mention already in it
+        const match = parentMsg.body.match(/@(\w+)/);
+        if (match) prefill = `@${match[1]} `;
+      }
     }
+    if (prefill) setDraft(prefill);
     requestAnimationFrame(() => {
       const ta = textareaRef.current;
       if (!ta) return;
