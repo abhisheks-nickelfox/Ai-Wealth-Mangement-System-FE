@@ -29,7 +29,7 @@ export default function GlobalTimerBar() {
       <div className="flex items-center gap-4 shrink-0">
         <span className="text-[18px] font-bold font-mono tracking-wider">{formatElapsed(elapsed)}</span>
         <button
-          onClick={() => stopTimer.mutate(running.entryId)}
+          onClick={() => stopTimer.mutate({ entryId: running.entryId })}
           disabled={stopTimer.isPending}
           className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-white text-[#7F56D9] text-[13px] font-bold hover:bg-[#F4F3FF] transition-colors disabled:opacity-50"
         >
