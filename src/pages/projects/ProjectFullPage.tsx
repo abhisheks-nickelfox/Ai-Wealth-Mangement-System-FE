@@ -380,7 +380,7 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
   }
 
   const priorityMap: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
-    Low: 'low', Medium: 'normal', High: 'high', Urgent: 'urgent',
+    Low: 'low', Normal: 'normal', High: 'high', Urgent: 'urgent',
   };
 
   async function handleCreateSubTask(data: TaskFormData) {

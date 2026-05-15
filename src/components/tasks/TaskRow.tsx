@@ -59,7 +59,7 @@ export const PRIORITY_BADGE: Record<string, string> = {
 export const PRIORITY_LABEL: Record<string, string> = {
   urgent: 'Urgent',
   high:   'High',
-  normal: 'Medium',
+  normal: 'Normal',
   low:    'Low',
 };
 

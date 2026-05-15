@@ -13,11 +13,21 @@ import { useMessageStream } from '../../hooks/useMessageStream';
 import { useAuth } from '../../context/AuthContext';
 import { useMentionableUsers } from '../../hooks/useMentionableUsers';
 import type { Message, MessageReaction, MentionUser } from '../../lib/api';
-import { ActivityEntry } from './ActivityEntry';
-import { formatDateLabel } from '../../lib/dateUtils';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDateLabel(iso: string): string {
+  const d         = new Date(iso);
+  const today     = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString())     return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function groupByDate(messages: Message[]) {
@@ -441,21 +451,17 @@ export function ChatTab({ scope, scopeId }: { scope: string; scopeId: string }) 
           <div key={group.label}>
             <DateDivider label={group.label} />
             <div className="flex flex-col gap-3">
-              {group.messages.map((msg) =>
-                msg.is_system ? (
-                  <ActivityEntry key={msg.id} message={msg} />
-                ) : (
-                  <MessageBubble
-                    key={msg.id}
-                    message={msg}
-                    isSelf={msg.user_id === myId}
-                    myId={myId}
-                    scope={scope}
-                    scopeId={scopeId}
-                    onDelete={handleDelete}
-                  />
-                ),
-              )}
+              {group.messages.map((msg) => (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  isSelf={msg.user_id === myId}
+                  myId={myId}
+                  scope={scope}
+                  scopeId={scopeId}
+                  onDelete={handleDelete}
+                />
+              ))}
             </div>
           </div>
         ))}

@@ -11,7 +11,7 @@ import type { TaskDetailData } from '../components/tasks/TaskDetailPanel';
 import type { TaskFormData } from '../components/tasks/AddTaskModal';
 
 const PRIORITY_MAP: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
-  Low: 'low', Medium: 'normal', High: 'high', Urgent: 'urgent',
+  Low: 'low', Normal: 'normal', High: 'high', Urgent: 'urgent',
 };
 
 export function useTaskDetail(firmId: string | undefined, taskId: string | undefined) {
@@ -79,7 +79,9 @@ export function useTaskDetail(firmId: string | undefined, taskId: string | undef
       title:          data.title,
       description:    data.description || undefined,
       type:           'task',
+      task_type_id:   data.task_type_id || undefined,
       priority:       PRIORITY_MAP[data.priority] ?? 'normal',
+      start_date:     data.startDate || undefined,
       deadline:       data.endDate || undefined,
       assignee_ids:   data.assigneeIds,
     });

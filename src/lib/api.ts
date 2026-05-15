@@ -606,6 +606,8 @@ export interface AppNotification {
   scope:      string;
   scope_id:   string | null;
   actor_id:   string | null;
+  message_id: string | null;
+  type:       string;
   title:      string;
   message:    string;
   read:       boolean;
@@ -886,4 +888,7 @@ export const messagesApi = {
 
   delete: (messageId: string) =>
     request<void>('DELETE', `/messages/${messageId}`),
+
+  sendTyping: (scope: string, scopeId: string) =>
+    request<void>('POST', '/messages/typing', { scope, scope_id: scopeId }),
 };

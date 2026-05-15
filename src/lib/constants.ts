@@ -61,13 +61,13 @@ export const TASK_STATUS_BADGE: Record<string, { label: string; className: strin
 export const PRIORITY_BADGE: Record<string, { label: string; className: string }> = {
   urgent: { label: 'Urgent', className: 'bg-red-50 text-red-600' },
   high:   { label: 'High',   className: 'bg-orange-50 text-orange-600' },
-  normal: { label: 'Medium', className: 'bg-yellow-50 text-yellow-700' },
+  normal: { label: 'Normal', className: 'bg-yellow-50 text-yellow-700' },
   low:    { label: 'Low',    className: 'bg-green-50 text-green-600' },
 };
 
 export const PRIORITY_COLORS: Record<string, { label: string; bg: string; text: string }> = {
   low:    { label: 'Low',    bg: '#F2F4F7', text: '#344054' },
-  normal: { label: 'Medium', bg: '#EFF8FF', text: '#1570EF' },
+  normal: { label: 'Normal', bg: '#EFF8FF', text: '#1570EF' },
   high:   { label: 'High',   bg: '#FEF0C7', text: '#B54708' },
   urgent: { label: 'Urgent', bg: '#FEF3F2', text: '#B42318' },
 };

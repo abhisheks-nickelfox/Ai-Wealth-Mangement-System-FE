@@ -81,7 +81,7 @@ function ChatSection({ taskId }: { taskId: string }) {
 const PRIORITY_OPTIONS: { value: 'low' | 'normal' | 'high' | 'urgent'; label: string; dot: string }[] = [
   { value: 'urgent', label: 'Urgent', dot: 'bg-red-500'    },
   { value: 'high',   label: 'High',   dot: 'bg-orange-400' },
-  { value: 'normal', label: 'Medium', dot: 'bg-yellow-400' },
+  { value: 'normal', label: 'Normal', dot: 'bg-yellow-400' },
   { value: 'low',    label: 'Low',    dot: 'bg-green-500'  },
 ];
 
@@ -567,7 +567,7 @@ export default function TaskDetailPanel({
                       : sub.priority === 'normal' ? 'bg-yellow-100 text-yellow-600'
                       : 'bg-green-100 text-green-600'
                     }`}>
-                      {sub.priority === 'normal' ? 'Medium' : sub.priority ? sub.priority.charAt(0).toUpperCase() + sub.priority.slice(1) : ''}
+                      {sub.priority === 'normal' ? 'Normal' : sub.priority ? sub.priority.charAt(0).toUpperCase() + sub.priority.slice(1) : ''}
                     </span>
                   </div>
                 ))}

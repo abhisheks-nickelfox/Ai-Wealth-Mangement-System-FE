@@ -1,6 +1,6 @@
 import * as Yup from 'yup';
 
-export const TASK_PRIORITIES = ['Urgent', 'High', 'Medium', 'Low'] as const;
+export const TASK_PRIORITIES = ['Urgent', 'High', 'Normal', 'Low'] as const;
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
 /**

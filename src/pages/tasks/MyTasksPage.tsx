@@ -451,7 +451,7 @@ export default function MyTasksPage() {
   }
 
   const priorityMap: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
-    Low: 'low', Medium: 'normal', High: 'high', Urgent: 'urgent',
+    Low: 'low', Normal: 'normal', High: 'high', Urgent: 'urgent',
   };
 
   async function handleCreateTask(data: TaskFormData) {
