@@ -2,8 +2,13 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import ErrorBoundary from '../ui/ErrorBoundary';
+import { useNotificationStream } from '../../hooks/useNotificationStream';
 
 export default function AppLayout() {
+  // Keep a persistent SSE connection so any inbox write (mention, reply,
+  // assignment, etc.) triggers an instant cache invalidation — no polling lag.
+  useNotificationStream();
+
   return (
     <div className="flex h-screen overflow-hidden bg-white font-sans">
       <Sidebar />

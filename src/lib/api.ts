@@ -600,19 +600,24 @@ export interface NotificationActor {
 }
 
 export interface AppNotification {
-  id:         string;
-  user_id:    string;
-  ticket_id:  string | null;
-  scope:      string;
-  scope_id:   string | null;
-  actor_id:   string | null;
-  message_id: string | null;
-  type:       string;
-  title:      string;
-  message:    string;
-  read:       boolean;
-  created_at: string;
-  actor:      NotificationActor | null;
+  id:                 string;
+  user_id:            string;
+  ticket_id:          string | null;
+  scope:              string;
+  scope_id:           string | null;
+  actor_id:           string | null;
+  message_id:         string | null;
+  type:               string;
+  title:              string;
+  message:            string;
+  read:               boolean;
+  created_at:         string;
+  updated_at:         string | null;
+  actor:              NotificationActor | null;
+  is_sub_task:        boolean;
+  parent_task_title:  string | null;
+  project_name:       string | null;
+  firm_name:          string | null;
 }
 
 export const notificationsApi = {
@@ -624,6 +629,10 @@ export const notificationsApi = {
     request<void>('PATCH', '/notifications/read-all'),
   unreadCount: () =>
     request<{ data: { count: number } }>('GET', '/notifications/unread-count').then((r) => r.data.count),
+  clearOne: (id: string) =>
+    request<void>('DELETE', `/notifications/${id}`),
+  clearAll: () =>
+    request<void>('DELETE', '/notifications'),
 };
 
 // ── Time Logs API (legacy — kept for InboxPage activity feed) ────────────────
