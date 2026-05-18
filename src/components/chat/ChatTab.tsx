@@ -12,6 +12,7 @@ import {
 import { useMessageStream } from '../../hooks/useMessageStream';
 import { useAuth } from '../../context/AuthContext';
 import { useMentionableUsers } from '../../hooks/useMentionableUsers';
+import { messagesApi } from '../../lib/api';
 import type { Message, MessageReaction, MentionUser } from '../../lib/api';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -200,6 +201,20 @@ function MentionPicker({
   );
 }
 
+// ── SystemMessage ─────────────────────────────────────────────────────────────
+
+function SystemMessage({ message }: { message: Message }) {
+  return (
+    <div className="flex items-center gap-3 my-2">
+      <div className="flex-1 h-px bg-[#E5E7EB]" />
+      <span className="text-[11px] text-[#9CA3AF] font-medium text-center shrink-0 max-w-[70%]">
+        {message.body}
+      </span>
+      <div className="flex-1 h-px bg-[#E5E7EB]" />
+    </div>
+  );
+}
+
 // ── MessageBubble ─────────────────────────────────────────────────────────────
 
 interface BubbleProps {
@@ -321,9 +336,10 @@ export function ChatTab({ scope, scopeId }: { scope: string; scopeId: string }) 
   const bottomRef    = useRef<HTMLDivElement>(null);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const composerRef  = useRef<HTMLDivElement>(null);
+  const typingTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: messages = [], isLoading } = useMessages(scope, scopeId);
-  useMessageStream(scope, scopeId);
+  const { typingUsers } = useMessageStream(scope, scopeId, user?.id);
 
   const { data: mentionableUsers = [] } = useMentionableUsers();
 
@@ -369,6 +385,12 @@ export function ChatTab({ scope, scopeId }: { scope: string; scopeId: string }) 
     const before = value.slice(0, cursor);
     const match  = before.match(/@(\w*)$/);
     setMentionQuery(match ? match[1] : null);
+    // Send typing signal — debounced so we don't spam on every keystroke
+    if (value.trim()) {
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      messagesApi.sendTyping(scope, scopeId).catch(() => { /* silent */ });
+      typingTimer.current = setTimeout(() => { typingTimer.current = null; }, 3000);
+    }
   }
 
   function handleSelectMention(u: MentionUser) {
@@ -451,20 +473,41 @@ export function ChatTab({ scope, scopeId }: { scope: string; scopeId: string }) 
           <div key={group.label}>
             <DateDivider label={group.label} />
             <div className="flex flex-col gap-3">
-              {group.messages.map((msg) => (
-                <MessageBubble
-                  key={msg.id}
-                  message={msg}
-                  isSelf={msg.user_id === myId}
-                  myId={myId}
-                  scope={scope}
-                  scopeId={scopeId}
-                  onDelete={handleDelete}
-                />
-              ))}
+              {group.messages.map((msg) =>
+                msg.is_system ? (
+                  <SystemMessage key={msg.id} message={msg} />
+                ) : (
+                  <MessageBubble
+                    key={msg.id}
+                    message={msg}
+                    isSelf={msg.user_id === myId}
+                    myId={myId}
+                    scope={scope}
+                    scopeId={scopeId}
+                    onDelete={handleDelete}
+                  />
+                )
+              )}
             </div>
           </div>
         ))}
+
+        {/* Typing indicator */}
+        {typingUsers.length > 0 && (
+          <div className="flex items-center gap-2 mt-2 px-1">
+            <div className="flex gap-0.5 items-end">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#9CA3AF] animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-[#9CA3AF] animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-[#9CA3AF] animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span className="text-[11px] text-[#9CA3AF]">
+              {typingUsers.length === 1
+                ? `${typingUsers[0].name} is typing…`
+                : `${typingUsers.map((u) => u.name).join(', ')} are typing…`}
+            </span>
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </div>
 

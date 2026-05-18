@@ -7,7 +7,6 @@ import {
   Trash01,
   FileCheck01,
   Plus,
-  Clock,
 } from '@untitled-ui/icons-react';
 import AvatarStack from '../../components/ui/AvatarStack';
 import AssigneePickerDropdown from '../../components/ui/AssigneePickerDropdown';
@@ -18,16 +17,13 @@ import CountBadge from '../../components/ui/CountBadge';
 import SectionLabel from '../../components/ui/SectionLabel';
 import AttachmentsSection from '../../components/tasks/AttachmentsSection';
 import SubTaskRow from '../../components/tasks/SubTaskRow';
-import TaskActivityPanel from '../../components/tasks/TaskActivityPanel';
+import ActivityPanel from '../../components/activity';
 import { TaskStatusBadge, PriorityBadge, TypeBadge } from '../../components/tasks/TaskBadges';
 import TaskDetailPanel from '../../components/tasks/TaskDetailPanel';
 import AddTaskModal from '../../components/tasks/AddTaskModal';
 import TaskIcon from '../../components/icons/TaskIcon';
-import TimesheetPanel from '../../components/timesheet/TimesheetPanel';
+import TaskTimerRow from '../../components/tasks/TaskTimerRow';
 import { useTaskDetail } from '../../hooks/useTaskDetail';
-import { useTimeEntries, useStartTimer, useStopTimer } from '../../hooks/useTimeEntries';
-import { formatSeconds, formatElapsed } from '../../lib/timeUtils';
-import { useTimer } from '../../context/TimerContext';
 
 // ── Metadata grid cell ────────────────────────────────────────────────────────
 
@@ -51,21 +47,14 @@ export default function TaskDetailPage() {
   const [selectedSubTask,    setSelectedSubTask]    = useState<import('../../lib/api').Task | null>(null);
   const [showAddSubTask,     setShowAddSubTask]     = useState(false);
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
-  const [showTimesheet,      setShowTimesheet]      = useState(false);
-  const assigneePickerRef  = useRef<HTMLDivElement>(null);
-  const timesheetBtnRef    = useRef<HTMLDivElement>(null);
-  const { running, elapsed } = useTimer();
-  const isTimerRunningHere   = running?.taskId === taskId;
-  const startTimer           = useStartTimer(taskId!);
-  const stopTimer            = useStopTimer(taskId!);
+  const [showActivity,       setShowActivity]       = useState(true);
+  const assigneePickerRef = useRef<HTMLDivElement>(null);
 
   const {
     firm, task, projects, users, assignableUsers, parentTask,
     isSubTask, taskProject, loading, deadline, assignees, subTasks,
     updateTask, handleSaveTask, toggleTaskAssignee, handleCreateSubTask,
   } = useTaskDetail(firmId, taskId);
-
-  const { data: timeEntrySummary } = useTimeEntries(taskId);
 
   // ── Render: loading ───────────────────────────────────────────────────────
 
@@ -140,27 +129,38 @@ export default function TaskDetailPage() {
           {/* Title + Actions */}
           <div className="flex items-start justify-between gap-4 mb-1">
             <h1 className="text-xl font-semibold text-[#181D27] leading-snug">{task.title}</h1>
-            <div className="relative shrink-0 mt-0.5">
-              <button
-                type="button"
-                onClick={() => setActionsOpen((v) => !v)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#E9EAEB] text-[13px] font-medium text-[#414651] hover:bg-[#F9FAFB] transition-colors"
-                aria-haspopup="true"
-                aria-expanded={actionsOpen}
-              >
-                Actions
-                <DotsVertical width={14} height={14} className="text-[#717680]" aria-hidden="true" />
-              </button>
-              <DropdownMenu
-                open={actionsOpen}
-                onClose={() => setActionsOpen(false)}
-                align="right"
-                items={[
-                  { label: 'Edit', icon: <Edit01 width={14} height={14} className="text-[#717680]" />, onClick: () => { setActionsOpen(false); setShowEditTask(true); } },
-                  { label: 'Convert to Template', icon: <FileCheck01 width={14} height={14} className="text-[#717680]" />, onClick: () => setActionsOpen(false) },
-                  { label: 'Delete', icon: <Trash01 width={14} height={14} />, onClick: () => setActionsOpen(false), variant: 'danger' },
-                ]}
-              />
+            <div className="flex items-center gap-2 shrink-0 mt-0.5">
+              {!showActivity && (
+                <button
+                  type="button"
+                  onClick={() => setShowActivity(true)}
+                  className="inline-flex items-center px-3 py-1.5 rounded-md border border-[#E9EAEB] text-[13px] font-medium text-[#414651] hover:bg-[#F9FAFB] transition-colors"
+                >
+                  Activity
+                </button>
+              )}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setActionsOpen((v) => !v)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#E9EAEB] text-[13px] font-medium text-[#414651] hover:bg-[#F9FAFB] transition-colors"
+                  aria-haspopup="true"
+                  aria-expanded={actionsOpen}
+                >
+                  Actions
+                  <DotsVertical width={14} height={14} className="text-[#717680]" aria-hidden="true" />
+                </button>
+                <DropdownMenu
+                  open={actionsOpen}
+                  onClose={() => setActionsOpen(false)}
+                  align="right"
+                  items={[
+                    { label: 'Edit', icon: <Edit01 width={14} height={14} className="text-[#717680]" />, onClick: () => { setActionsOpen(false); setShowEditTask(true); } },
+                    { label: 'Convert to Template', icon: <FileCheck01 width={14} height={14} className="text-[#717680]" />, onClick: () => setActionsOpen(false) },
+                    { label: 'Delete', icon: <Trash01 width={14} height={14} />, onClick: () => setActionsOpen(false), variant: 'danger' },
+                  ]}
+                />
+              </div>
             </div>
           </div>
 
@@ -221,54 +221,9 @@ export default function TaskDetailPage() {
 
           <MetaCell label="Task Type"><TypeBadge type={task.type} /></MetaCell>
 
-          <div className="flex flex-col gap-1.5 relative">
-            <SectionLabel>Timesheet</SectionLabel>
-            <div ref={timesheetBtnRef} className="relative flex items-center gap-2">
-              {/* Clock icon — start/stop timer toggle */}
-              <button
-                type="button"
-                disabled={startTimer.isPending || stopTimer.isPending}
-                onClick={() => isTimerRunningHere
-                  ? stopTimer.mutate({ entryId: running!.entryId })
-                  : startTimer.mutate()
-                }
-                className={`flex items-center justify-center w-6 h-6 rounded-full transition-colors disabled:opacity-50 ${
-                  isTimerRunningHere
-                    ? 'bg-[#FEF3F2] text-[#F04438] hover:bg-[#FEE4E2]'
-                    : 'bg-[#F4F3FF] text-[#7F56D9] hover:bg-[#EBE9FE]'
-                }`}
-                title={isTimerRunningHere ? 'Stop timer' : 'Start timer'}
-              >
-                {isTimerRunningHere
-                  ? <span className="w-2 h-2 rounded-[2px] bg-[#F04438]" />
-                  : <Clock width={13} height={13} />
-                }
-              </button>
-              {/* Text — opens timesheet panel for manual entry */}
-              <button
-                type="button"
-                onClick={() => setShowTimesheet((v) => !v)}
-                className="text-[13px] font-semibold text-[#7F56D9] hover:text-[#6941C6] transition-colors"
-              >
-                {timeEntrySummary?.total_seconds ? formatSeconds(timeEntrySummary.total_seconds) : 'Log time'}
-              </button>
-              <TimesheetPanel
-                taskId={taskId!}
-                taskTitle={task?.title}
-                projectId={task?.project_id ?? undefined}
-                open={showTimesheet}
-                onClose={() => setShowTimesheet(false)}
-                anchorRef={timesheetBtnRef as React.RefObject<HTMLElement | null>}
-              />
-            </div>
-            {isTimerRunningHere && (
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#F04438] animate-pulse shrink-0" />
-                <span className="text-[11px] font-mono font-semibold text-[#F04438]">{formatElapsed(elapsed)}</span>
-                <span className="text-[11px] text-[#A4A7AE]">running</span>
-              </div>
-            )}
-          </div>
+          <MetaCell label="Timesheet">
+            <TaskTimerRow taskId={taskId!} projectId={task?.project_id ?? undefined} size="sm" />
+          </MetaCell>
         </div>
 
         {/* Description */}
@@ -339,7 +294,16 @@ export default function TaskDetailPage() {
       </div>
 
       {/* ── Right column: activity ── */}
-      <TaskActivityPanel taskId={taskId!} />
+      {showActivity && (
+        <ActivityPanel
+          variant="aside"
+          scope="task"
+          scopeId={taskId!}
+          projectId={task?.project_id ?? null}
+          title="Activity"
+          onClose={() => setShowActivity(false)}
+        />
+      )}
     </div>
 
     {/* Edit task slide-over */}

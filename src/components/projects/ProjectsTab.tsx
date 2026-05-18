@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, FilterLines } from '@untitled-ui/icons-react';
+import { Plus } from '@untitled-ui/icons-react';
 import Toast from '../ui/Toast';
 import ConfirmDeleteModal from '../ui/ConfirmDeleteModal';
 import SearchInput from '../ui/SearchInput';
+import FilterTriggerButton from '../ui/FilterTriggerButton';
+import TabToggle from '../ui/TabToggle';
 import { useCreateProject, useUpdateProject, useDeleteProject, useProjects } from '../../hooks/useFirms';
 import { useDeleteTask, useCreateTask, useUpdateTask } from '../../hooks/useTasks';
 import { useToast } from '../../hooks/useToast';
@@ -14,11 +16,13 @@ import { FilterPanel } from '../tasks/TaskFilterPanel';
 import type { DateRangeOption } from '../tasks/TaskFilterPanel';
 import AddProjectModal from './AddProjectModal';
 import AddTaskModal, { type TaskFormData } from '../tasks/AddTaskModal';
+import { resolveInitialStatus } from '../../lib/taskUtils';
 import ProjectDetailPanel, { type ProjectDetail } from './ProjectDetailPanel';
 import TaskDetailPanel from '../tasks/TaskDetailPanel';
 import type { TaskDetailData } from '../tasks/TaskDetailPanel';
 import DeleteProjectModal from './DeleteProjectModal';
 import { queryKeys } from '../../lib/queryKeys';
+import { useDeadlineConflict } from '../../hooks/useDeadlineConflict';
 import type { Firm, Task, TaskAssignee, User, Project } from '../../lib/api';
 
 // ── Status group definitions ──────────────────────────────────────────────────
@@ -77,6 +81,10 @@ const WORKFLOW_TO_GROUP: Record<string, string> = {
   completed:   'completed',
 };
 
+const PRIORITY_MAP: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
+  Low: 'low', Normal: 'normal', High: 'high', Urgent: 'urgent',
+};
+
 interface ProjectsTabProps {
   firm: Firm | null;
   tasks: Task[];
@@ -105,17 +113,15 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
   // Fetch real projects for this firm
   const { data: projects = [] } = useProjects(firm?.id);
 
-  // ── Date conflict state (move-to-project) ─────────────────────────────────
-  interface ConflictInfo {
-    taskId: string;
-    taskTitle: string;
-    taskDeadline: string;       // task's current deadline (YYYY-MM-DD)
-    targetProject: Project;     // project being moved into
-    newTaskDate: string;        // editable in the modal
-    newProjectDate: string;     // editable in the modal
-  }
-  const [dateConflict, setDateConflict] = useState<ConflictInfo | null>(null);
-  const [conflictSaving, setConflictSaving] = useState(false);
+  // ── Date conflict (move-to-project) via hook ──────────────────────────────
+  const {
+    conflict:        dateConflict,
+    conflictSaving,
+    setConflict:     setDateConflict,
+    checkAndMove:    handleProjectChange,
+    confirmConflict: handleConflictConfirm,
+    dismissConflict,
+  } = useDeadlineConflict(tasks, projects, notifyTab);
 
   // ── Delete task state ──────────────────────────────────────────────────────
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
@@ -155,10 +161,6 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
     setTaskToDelete(null);
   };
 
-  const PRIORITY_MAP: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
-    Low: 'low', Normal: 'normal', High: 'high', Urgent: 'urgent',
-  };
-
   const handleCreateTask = async (data: TaskFormData) => {
     if (!firm?.id) return;
     try {
@@ -172,9 +174,10 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         project_id:      data.projectId          || undefined,
         assignee_ids:    data.assigneeIds.length > 0 ? data.assigneeIds : undefined,
         deadline:        data.endDate            || undefined,
-        initial_status:  data.initialStatus
-          ? (GROUP_ID_TO_STATUS[data.initialStatus] ?? data.initialStatus)
-          : undefined,
+        initial_status: resolveInitialStatus(
+          data.initialStatus ? (GROUP_ID_TO_STATUS[data.initialStatus] ?? data.initialStatus) : undefined,
+          data.assigneeIds,
+        ),
         parent_task_id:  data.parentTaskId       || undefined,
       });
       setShowAddTask(false);
@@ -197,7 +200,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
   };
 
   /** Opens AddTaskModal pre-filled as a sub-task under the given parent. */
-  const openAddSubTask = (parentTask: import('../../lib/api').Task) => {
+  const openAddSubTask = (parentTask: Task) => {
     setAddTaskDefaultProjectId(parentTask.project_id ?? '');
     setAddTaskDefaultStatus(undefined);
     setAddTaskParentId(parentTask.id);
@@ -205,82 +208,6 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
     setShowAddTask(true);
   };
 
-
-  /**
-   * Toggles a single assignee on a task row inline picker.
-   * Reads current assignees from the task object (assignees[] or assignee_id fallback),
-   * adds if not present, removes if already present.
-   */
-  const handleProjectChange = async (taskId: string, projectId: string | null) => {
-    const targetProject = projects.find((p) => p.id === projectId);
-    const task = tasks.find((t) => t.id === taskId);
-
-    if (!targetProject?.end_date) {
-      try {
-        await updateTask.mutateAsync({ id: taskId, payload: { project_id: projectId } });
-      } catch (err) {
-        notifyTab(err instanceof Error ? err.message : 'Failed to update project');
-      }
-      return;
-    }
-
-    // Check if task deadline OR any sub-task deadline exceeds the target project end_date
-    const taskConflicts = task?.deadline && targetProject.end_date && task.deadline > targetProject.end_date;
-    const subConflicts = targetProject.end_date != null && (task?.subtasks ?? []).some(
-      (s) => s.deadline && s.deadline > targetProject.end_date!,
-    );
-
-    if (taskConflicts || subConflicts) {
-      setDateConflict({
-        taskId,
-        taskTitle: task!.title,
-        taskDeadline: task?.deadline ?? targetProject.end_date,
-        targetProject,
-        newTaskDate: task?.deadline && task.deadline > targetProject.end_date!
-          ? task.deadline
-          : targetProject.end_date!,
-        newProjectDate: targetProject.end_date!,
-      });
-      return;
-    }
-
-    try {
-      await updateTask.mutateAsync({ id: taskId, payload: { project_id: projectId } });
-    } catch (err) {
-      notifyTab(err instanceof Error ? err.message : 'Failed to update project');
-    }
-  };
-
-  const handleConflictConfirm = async () => {
-    if (!dateConflict) return;
-    setConflictSaving(true);
-    try {
-      const { taskId, targetProject, newTaskDate, newProjectDate } = dateConflict;
-
-      // Update task: assign to project + clamp deadline
-      await updateTask.mutateAsync({ id: taskId, payload: {
-        project_id: targetProject.id,
-        deadline: newTaskDate,
-      }});
-
-      // Clamp any sub-task deadlines that exceed newTaskDate
-      const task = tasks.find((t) => t.id === taskId);
-      const subUpdates = (task?.subtasks ?? [])
-        .filter((s) => s.deadline && s.deadline > newTaskDate)
-        .map((s) => updateTask.mutateAsync({ id: s.id, payload: { deadline: newTaskDate } }));
-      await Promise.all(subUpdates);
-
-      // Update project end_date if user changed it
-      if (newProjectDate !== targetProject.end_date) {
-        await updateProject.mutateAsync({ id: targetProject.id, payload: { end_date: newProjectDate } });
-      }
-      setDateConflict(null);
-    } catch (err) {
-      notifyTab(err instanceof Error ? err.message : 'Failed to resolve conflict');
-    } finally {
-      setConflictSaving(false);
-    }
-  };
 
   const handleAssigneeChange = async (taskId: string, userId: string | null) => {
     if (!userId) return;
@@ -411,7 +338,10 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
     (filterStatuses.length > 0 ? 1 : 0) +
     (filterAssigneeIds.length > 0 ? 1 : 0);
 
-  const usersMap = new Map<string, User>(users.map((u) => [u.id, u]));
+  const usersMap = useMemo(
+    () => new Map<string, User>(users.map((u) => [u.id, u])),
+    [users],
+  );
 
   // Filter tasks: search query first, then active filters
   const filteredTasks = useMemo(() => {
@@ -513,31 +443,15 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
           className="w-56 py-1.5 border-[#E9EAEB]"
         />
 
-        {/* Project View / Task View toggle — selected option gets its own border box */}
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={() => setViewMode('project')}
-            className={`px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-colors ${
-              viewMode === 'project'
-                ? 'border border-[#D0D5DD] bg-white text-[#181D27] shadow-sm'
-                : 'text-[#717680] hover:text-[#414651]'
-            }`}
-          >
-            Project View
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('task')}
-            className={`px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-colors ${
-              viewMode === 'task'
-                ? 'border border-[#D0D5DD] bg-white text-[#181D27] shadow-sm'
-                : 'text-[#717680] hover:text-[#414651]'
-            }`}
-          >
-            Task View
-          </button>
-        </div>
+        {/* Project View / Task View toggle */}
+        <TabToggle
+          options={[
+            { value: 'project' as const, label: 'Project View' },
+            { value: 'task' as const, label: 'Task View' },
+          ]}
+          value={viewMode}
+          onChange={(v) => setViewMode(v)}
+        />
 
         <div className="flex items-center gap-2 ml-auto">
           {/* Add Project */}
@@ -560,25 +474,11 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
             Add Task
           </button>
 
-          {/* Filter — opens the filter panel */}
-          <button
+          <FilterTriggerButton
+            activeCount={activeFilterCount}
             onClick={openFilter}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[13px] font-semibold transition-colors ${
-              activeFilterCount > 0
-                ? 'border-[#7F56D9] bg-[#F4F3FF] text-[#7F56D9]'
-                : 'border-[#D0D5DD] bg-white text-[#344054] hover:bg-[#F9FAFB]'
-            }`}
-            aria-label="Filter tasks"
-            aria-expanded={filterOpen}
-          >
-            <FilterLines width={14} height={14} aria-hidden="true" />
-            Filter
-            {activeFilterCount > 0 && (
-              <span className="flex items-center justify-center w-4 h-4 rounded-full bg-[#7F56D9] text-white text-[10px] font-bold leading-none">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+            ariaExpanded={filterOpen}
+          />
         </div>
       </div>
 
@@ -887,7 +787,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setDateConflict(null)}
+                onClick={dismissConflict}
                 className="px-4 py-2.5 rounded-lg border border-[#D5D7DA] bg-white text-sm font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
               >
                 Cancel

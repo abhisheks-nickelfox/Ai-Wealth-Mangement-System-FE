@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { tasksApi } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
-import { formatDeadline } from '../components/tasks/TaskRow';
+import { formatDeadline } from '../lib/timeUtils';
 import { useFirmDetail, useProjects } from './useFirms';
 import { useActiveUsers } from './useUsers';
 import { useAssignableUsers } from './useAssignableUsers';

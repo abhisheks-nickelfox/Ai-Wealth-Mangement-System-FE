@@ -56,6 +56,20 @@ export function formatEntryDateRange(startedAt: string, endedAt: string | null):
   return `${dateStr}, ${startT} – ${endT} ${tz} (${tzOff})`
 }
 
+export function formatDeadline(deadline: string | null): { text: string; overdue: boolean } {
+  if (!deadline) return { text: '—', overdue: false };
+  const d = new Date(deadline + 'T00:00:00');
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (diff < 0)  return { text: `${Math.abs(diff)}d overdue`, overdue: true };
+  if (diff === 0) return { text: 'Today',    overdue: true };
+  if (diff === 1) return { text: 'Tomorrow', overdue: false };
+  return {
+    text: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    overdue: false,
+  };
+}
+
 export function nowISO(): string { return new Date().toISOString() }
 
 export function todayDatetimeLocal(): string {

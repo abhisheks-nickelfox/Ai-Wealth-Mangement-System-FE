@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Avatar from './Avatar';
+import { useAnchoredPanel } from '../../hooks/useAnchoredPanel';
 
 interface PickerUser {
   id:          string;
@@ -26,37 +27,13 @@ export default function AssigneePickerDropdown({
   onToggle, multiSelect = true, width = 240,
 }: AssigneePickerDropdownProps) {
   const [search, setSearch] = useState('');
-  const [pos,    setPos]    = useState<{ top: number; left: number; maxListH: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const pos = useAnchoredPanel(open, anchorRef, { width });
   useEffect(() => {
-    if (!open) { setSearch(''); return; }
-    const el = anchorRef.current;
-    if (!el) return;
-    const rect   = el.getBoundingClientRect();
-    const MARGIN = 8;
-    const GAP    = 4;
-    const SEARCH_H = 53; // search bar + border
-
-    // ── Horizontal: right-align to anchor, clamp inside viewport ──────────
-    const left = Math.max(
-      MARGIN,
-      Math.min(rect.right - width, window.innerWidth - width - MARGIN),
-    );
-
-    // ── Vertical: measure real available space, pick best direction ────────
-    const spaceBelow = window.innerHeight - rect.bottom - GAP - MARGIN;
-    const spaceAbove = rect.top - GAP - MARGIN;
-    const goAbove    = spaceBelow < 140 && spaceAbove > spaceBelow;
-
-    // Cap total dropdown height to available space in chosen direction
-    const maxTotalH  = Math.min(320, goAbove ? spaceAbove : spaceBelow);
-    const maxListH   = Math.max(60, maxTotalH - SEARCH_H);
-    const top        = goAbove ? rect.top - GAP - maxTotalH : rect.bottom + GAP;
-
-    setPos({ top, left, maxListH });
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, [open, users.length, width]);
+    if (open) requestAnimationFrame(() => inputRef.current?.focus());
+    else setSearch('');
+  }, [open]);
 
   if (!open || !pos) return null;
   const { top, left, maxListH } = pos;

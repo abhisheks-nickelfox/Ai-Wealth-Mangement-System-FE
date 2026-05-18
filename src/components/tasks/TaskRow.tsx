@@ -15,6 +15,8 @@ import { useClickOutside } from '../../hooks/useClickOutside';
 import ProjectIcon from '../icons/ProjectIcon';
 import TaskIcon from '../icons/TaskIcon';
 import { useAssignableUsers } from '../../hooks/useAssignableUsers';
+import { PRIORITY_BADGE, PRIORITY_LABEL, TASK_STATUS_BADGE } from '../../lib/constants';
+import { formatDeadline } from '../../lib/timeUtils';
 import type { Task, User, Project } from '../../lib/api';
 
 // ── Shared column widths (imported by ProjectGroupRow) ────────────────────────
@@ -45,52 +47,6 @@ export function StatusDot({ status }: { status: string }) {
       <circle cx="8" cy="8" r="3" fill={color} />
     </svg>
   );
-}
-
-// ── Badge helpers ─────────────────────────────────────────────────────────────
-
-export const PRIORITY_BADGE: Record<string, string> = {
-  urgent: 'bg-red-50 text-red-600',
-  high:   'bg-orange-50 text-orange-600',
-  normal: 'bg-yellow-50 text-yellow-700',
-  low:    'bg-green-50 text-green-600',
-};
-
-export const PRIORITY_LABEL: Record<string, string> = {
-  urgent: 'Urgent',
-  high:   'High',
-  normal: 'Normal',
-  low:    'Low',
-};
-
-export const TASK_STATUS_BADGE: Record<string, { label: string; style: string }> = {
-  draft:             { label: 'Draft',       style: 'bg-gray-100 text-gray-500' },
-  to_do:             { label: 'To Do',       style: 'bg-gray-100 text-gray-500' },
-  assigned:          { label: 'Assigned',    style: 'bg-blue-50 text-blue-600' },
-  in_progress:       { label: 'In Progress', style: 'bg-purple-50 text-purple-600' },
-  revisions:         { label: 'Revisions',   style: 'bg-orange-50 text-orange-600' },
-  internal_review:   { label: 'In Review',   style: 'bg-yellow-50 text-yellow-700' },
-  client_review:     { label: 'Client Rev',  style: 'bg-indigo-50 text-indigo-600' },
-  compliance_review: { label: 'Compliance',  style: 'bg-amber-50 text-amber-700' },
-  approved:          { label: 'Approved',    style: 'bg-green-50 text-green-700' },
-  closed:            { label: 'Closed',      style: 'bg-gray-200 text-gray-600' },
-  completed:         { label: 'Completed',   style: 'bg-green-50 text-green-600' },
-  blocked:           { label: 'Blocked',     style: 'bg-red-50 text-red-600' },
-  discarded:         { label: 'Discarded',   style: 'bg-red-50 text-red-600' },
-};
-
-export function formatDeadline(deadline: string | null): { text: string; overdue: boolean } {
-  if (!deadline) return { text: '—', overdue: false };
-  const d = new Date(deadline + 'T00:00:00');
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
-  if (diff < 0)  return { text: `${Math.abs(diff)}d overdue`, overdue: true };
-  if (diff === 0) return { text: 'Today',    overdue: true };
-  if (diff === 1) return { text: 'Tomorrow', overdue: false };
-  return {
-    text: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    overdue: false,
-  };
 }
 
 // ── TaskRow ───────────────────────────────────────────────────────────────────
@@ -340,6 +296,7 @@ export function TaskRow({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onOpenDetail={onOpenDetail}
+                onNavigate={onNavigate}
                 onAssigneeChange={onAssigneeChange}
               />
             </div>

@@ -2,11 +2,11 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import type { ReactNode } from 'react'
 
 interface TimerState {
-  entryId:   string
-  taskId:    string
+  entryId:    string
+  taskId?:    string
   projectId?: string
-  taskTitle: string
-  startedAt: string
+  taskTitle?: string
+  startedAt:  string
 }
 
 interface TimerContextValue {

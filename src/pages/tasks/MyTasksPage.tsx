@@ -2,15 +2,17 @@ import { useState, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
+  ChevronDown,
   Plus,
-  FilterLines,
-  X,
 } from '@untitled-ui/icons-react';
+import { usePendingFilter } from '../../hooks/usePendingFilter';
+import FilterTriggerButton from '../../components/ui/FilterTriggerButton';
+import SlideOver from '../../components/ui/SlideOver';
 
 import { useAuth } from '../../context/AuthContext';
 import { useMyTasks, useUpdateTask, useDeleteTask } from '../../hooks/useTasks';
 import { useActiveUsers } from '../../hooks/useUsers';
-import { useFirms } from '../../hooks/useFirms';
+import { useFirms, useProjects } from '../../hooks/useFirms';
 import {
   TaskRow,
   COL_ASSIGNEE,
@@ -29,8 +31,8 @@ import {
 import SearchInput from '../../components/ui/SearchInput';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import EmptyState from '../../components/ui/EmptyState';
-import CollapsibleSection from '../../components/ui/CollapsibleSection';
 import { useCreateTask } from '../../hooks/useTasks';
+import { STATUS_GROUP_LABEL, STATUS_GROUP_ORDER, PRIORITY_MAP } from '../../lib/projectConstants';
 import type { Task, Firm } from '../../lib/api';
 import type { TaskDetailData } from '../../components/tasks/TaskDetailPanel';
 import type { TaskFormData } from '../../components/tasks/AddTaskModal';
@@ -60,59 +62,34 @@ function applySubFilter(tasks: Task[], filterId: string): Task[] {
   }
 }
 
-// ── Status groups order ───────────────────────────────────────────────────────
-
-const STATUS_GROUP_ORDER: Task['status'][] = [
-  'to_do',
-  'assigned',
-  'in_progress',
-  'revisions',
-  'internal_review',
-  'client_review',
-  'completed',
-  'blocked',
-];
-
-const STATUS_GROUP_LABEL: Record<string, string> = {
-  to_do:           'To Do',
-  assigned:        'Assigned',
-  in_progress:     'In Progress',
-  revisions:       'Revisions',
-  internal_review: 'Internal Review',
-  client_review:   'Client Review',
-  completed:       'Completed',
-  blocked:         'Blocked',
-  closed:          'Closed',
-};
 
 // ── Column header row ─────────────────────────────────────────────────────────
 
 function ColumnHeaders() {
   return (
-    <div className="flex items-center gap-2 px-4 py-2 bg-[#F9FAFB] border-b border-[#E9EAEB]">
+    <div className="flex items-center gap-2 pl-4 pr-2 py-1.5 border-b border-[#E9EAEB] bg-white">
       {/* Expand chevron + status dot + task icon space */}
       <div className="flex items-center gap-2 shrink-0" style={{ width: 13 + 8 + 16 + 8 + 14 }}>
         <span className="w-[13px] shrink-0" />
         <span className="w-4 shrink-0" />
         <span className="w-[14px] shrink-0" />
       </div>
-      {/* Task title column */}
-      <span className="flex-1 min-w-0 text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE]">
+      <span className="flex-1 min-w-0 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
         Tasks
       </span>
-      <span className={`${COL_ASSIGNEE} text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE] text-center`}>
+      <span className={`${COL_ASSIGNEE} text-[11px] font-bold uppercase tracking-wider text-[#6B7280] text-center shrink-0`}>
         Assignee
       </span>
-      <span className={`${COL_DATE} text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE]`}>
+      <span className={`${COL_DATE} text-[11px] font-bold uppercase tracking-wider text-[#6B7280] shrink-0`}>
         Due date
       </span>
-      <span className={`${COL_PRIORITY} text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE]`}>
+      <span className={`${COL_PRIORITY} text-[11px] font-bold uppercase tracking-wider text-[#6B7280] shrink-0`}>
         Priority
       </span>
-      <span className={`${COL_STATUS} text-[10px] font-semibold uppercase tracking-wider text-[#A4A7AE]`}>
+      <span className={`${COL_STATUS} text-[11px] font-bold uppercase tracking-wider text-[#6B7280] shrink-0`}>
         Status
       </span>
-      <span className={COL_MENU} />
+      <span className={`${COL_MENU} shrink-0`} />
     </div>
   );
 }
@@ -128,6 +105,7 @@ interface StatusGroupProps {
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   onAssigneeChange: (taskId: string, assigneeId: string | null) => void;
+  onAddSubTask: (parentTask: Task) => void;
 }
 
 function StatusGroup({
@@ -139,32 +117,51 @@ function StatusGroup({
   onEdit,
   onDelete,
   onAssigneeChange,
+  onAddSubTask,
 }: StatusGroupProps) {
+  const [collapsed, setCollapsed] = useState(false);
   const label = STATUS_GROUP_LABEL[status] ?? status;
 
   return (
-    <CollapsibleSection
-      label={label}
-      count={tasks.length}
-      defaultExpanded
-      className="bg-[#F9FAFB] border-b border-[#E9EAEB]"
-    >
-      <div className="px-4 py-0">
-        <ColumnHeaders />
-        {tasks.map((task) => (
-          <TaskRow
-            key={task.id}
-            task={task}
-            firm={firmsMap.get(task.firm_id) ?? null}
-            usersMap={usersMap}
-            onOpenDetail={onOpenDetail}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onAssigneeChange={onAssigneeChange}
-          />
-        ))}
+    <section aria-label={label}>
+      {/* Section header */}
+      <div className="flex items-center gap-2 pl-4 pr-2 py-2.5 bg-white border-b border-[#E9EAEB]">
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="flex items-center gap-2 flex-1 text-left"
+          aria-expanded={!collapsed}
+        >
+          {collapsed
+            ? <ChevronRight width={14} height={14} className="shrink-0 text-[#717680]" aria-hidden="true" />
+            : <ChevronDown  width={14} height={14} className="shrink-0 text-[#717680]" aria-hidden="true" />}
+          <span className="text-[13px] font-semibold text-[#181D27]">{label}</span>
+          {tasks.length > 0 && (
+            <span className="text-[12px] text-[#717680]">{tasks.length}</span>
+          )}
+        </button>
       </div>
-    </CollapsibleSection>
+
+      {/* Column headers + task rows */}
+      {!collapsed && tasks.length > 0 && (
+        <>
+          <ColumnHeaders />
+          {tasks.map((task) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              firm={firmsMap.get(task.firm_id) ?? null}
+              usersMap={usersMap}
+              onOpenDetail={onOpenDetail}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onAssigneeChange={onAssigneeChange}
+              onAddSubTask={onAddSubTask}
+            />
+          ))}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -202,107 +199,65 @@ function MyTasksFilterPanel({
   }, [firms, firmSearch]);
 
   return (
-    <>
-      <div
-        className={`fixed inset-0 z-40 transition-opacity duration-200 ${
-          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
-        aria-hidden="true"
-        onClick={onClose}
-      />
-      <aside
-        className={`fixed inset-y-0 right-0 z-50 w-[380px] bg-white border-l border-[#E9EAEB] shadow-xl flex flex-col transition-transform duration-300 ease-in-out ${
-          open ? 'translate-x-0' : 'translate-x-full'
-        }`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Filter my tasks"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[#E9EAEB] shrink-0">
-          <h2 className="text-base font-semibold text-[#181D27]">Filter</h2>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-[#717680] hover:bg-[#F2F4F7] transition-colors"
-            aria-label="Close filter panel"
-          >
-            <X width={16} height={16} aria-hidden="true" />
-          </button>
-        </div>
-
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 pb-6">
-
-          {/* Status section */}
-          <p className="text-sm font-semibold text-[#181D27] pt-5 pb-2">Status</p>
-          <ul className="flex flex-col" role="group" aria-label="Filter by status">
-            {FILTER_STATUS_OPTIONS.map((opt) => (
-              <li key={opt.value}>
-                <label className="flex items-center gap-3 py-2 cursor-pointer">
-                  <FilterCheckbox
-                    checked={pendingStatuses.includes(opt.value)}
-                    onChange={() => onToggleStatus(opt.value)}
-                    id={`my-filter-status-${opt.value}`}
-                  />
-                  <FilterStatusBadge value={opt.value} label={opt.label} />
-                </label>
-              </li>
-            ))}
-          </ul>
-
-          {/* Firm section */}
-          <p className="text-sm font-semibold text-[#181D27] pt-5 pb-2">Firm</p>
-          <SearchInput
-            value={firmSearch}
-            onChange={setFirmSearch}
-            placeholder="Search firms"
-            className="mb-1"
-          />
-          <ul className="flex flex-col" role="group" aria-label="Filter by firm">
-            {filteredFirms.map((firm) => (
-              <li key={firm.id}>
-                <label className="flex items-center gap-3 py-2 cursor-pointer">
-                  <FilterCheckbox
-                    checked={pendingFirmIds.includes(firm.id)}
-                    onChange={() => onToggleFirm(firm.id)}
-                    id={`my-filter-firm-${firm.id}`}
-                  />
-                  <span className="text-[13px] text-[#414651] truncate">{firm.name}</span>
-                </label>
-              </li>
-            ))}
-            {filteredFirms.length === 0 && (
-              <li className="py-2 text-[13px] text-[#A4A7AE]">No firms found</li>
-            )}
-          </ul>
-        </div>
-
-        {/* Footer */}
-        <div className="shrink-0 border-t border-[#E9EAEB] px-5 py-4 flex items-center gap-3 bg-white">
-          <button
-            type="button"
-            onClick={onApply}
-            className="text-[13px] font-semibold text-[#7F56D9] hover:underline mr-auto"
-          >
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      title="Filter"
+      width="max-w-[380px]"
+      footer={
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={onApply}
+            className="text-[13px] font-semibold text-[#7F56D9] hover:underline mr-auto">
             Save filter
           </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 rounded-lg border border-[#D0D5DD] bg-white text-[13px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
-          >
+          <button type="button" onClick={onCancel}
+            className="px-4 py-2 rounded-lg border border-[#D0D5DD] bg-white text-[13px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors">
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={onApply}
-            className="px-4 py-2 rounded-lg bg-[#7F56D9] text-[13px] font-semibold text-white hover:bg-[#6941C6] transition-colors"
-          >
+          <button type="button" onClick={onApply}
+            className="px-4 py-2 rounded-lg bg-[#7F56D9] text-[13px] font-semibold text-white hover:bg-[#6941C6] transition-colors">
             Apply
           </button>
         </div>
-      </aside>
-    </>
+      }
+    >
+      <div>
+        <p className="text-sm font-semibold text-[#181D27] pb-2">Status</p>
+        <ul className="flex flex-col" role="group" aria-label="Filter by status">
+          {FILTER_STATUS_OPTIONS.map((opt) => (
+            <li key={opt.value}>
+              <label className="flex items-center gap-3 py-2 cursor-pointer">
+                <FilterCheckbox
+                  checked={pendingStatuses.includes(opt.value)}
+                  onChange={() => onToggleStatus(opt.value)}
+                  id={`my-filter-status-${opt.value}`}
+                />
+                <FilterStatusBadge value={opt.value} label={opt.label} />
+              </label>
+            </li>
+          ))}
+        </ul>
+        <p className="text-sm font-semibold text-[#181D27] pt-5 pb-2">Firm</p>
+        <SearchInput value={firmSearch} onChange={setFirmSearch} placeholder="Search firms" className="mb-1" />
+        <ul className="flex flex-col" role="group" aria-label="Filter by firm">
+          {filteredFirms.map((firm) => (
+            <li key={firm.id}>
+              <label className="flex items-center gap-3 py-2 cursor-pointer">
+                <FilterCheckbox
+                  checked={pendingFirmIds.includes(firm.id)}
+                  onChange={() => onToggleFirm(firm.id)}
+                  id={`my-filter-firm-${firm.id}`}
+                />
+                <span className="text-[13px] text-[#414651] truncate">{firm.name}</span>
+              </label>
+            </li>
+          ))}
+          {filteredFirms.length === 0 && (
+            <li className="py-2 text-[13px] text-[#A4A7AE]">No firms found</li>
+          )}
+        </ul>
+      </div>
+    </SlideOver>
   );
 }
 
@@ -314,24 +269,32 @@ export default function MyTasksPage() {
   const navigate       = useNavigate();
   const subFilter      = searchParams.get('filter') ?? 'assigned-me';
 
-  const { data: allTasks = [], isLoading } = useMyTasks(user?.id);
-  const { data: users    = [] }            = useActiveUsers();
-  const { data: firms    = [] }            = useFirms();
+  const { data: allTasks    = [], isLoading } = useMyTasks(user?.id);
+  const { data: users       = [] }            = useActiveUsers();
+  const { data: firms       = [] }            = useFirms();
+  const { data: allProjects = [] }            = useProjects();
   const updateTask                         = useUpdateTask();
   const deleteTask                         = useDeleteTask();
   const createTask                         = useCreateTask();
 
-  // ── Filter panel state ────────────────────────────────────────────────────
-  const [filterOpen,      setFilterOpen]      = useState(false);
-  const [activeStatuses,  setActiveStatuses]  = useState<string[]>([]);
-  const [activeFirmIds,   setActiveFirmIds]   = useState<string[]>([]);
-  const [pendingStatuses, setPendingStatuses] = useState<string[]>([]);
-  const [pendingFirmIds,  setPendingFirmIds]  = useState<string[]>([]);
+  // ── Filter panel state (via shared hook) ─────────────────────────────────
+  const {
+    applied:    appliedFilter,
+    pending:    pendingFilter,
+    open:       filterOpen,
+    openFilter,
+    applyFilter,
+    cancelFilter,
+    clearFilter,
+    setPending: setPendingFilter,
+  } = usePendingFilter({ statuses: [] as string[], firmIds: [] as string[] });
 
   // ── Panel / modal state ───────────────────────────────────────────────────
-  const [selectedTask,   setSelectedTask]   = useState<Task | null>(null);
-  const [showAddTask,    setShowAddTask]    = useState(false);
-  const [searchQuery,    setSearchQuery]    = useState('');
+  const [selectedTask,         setSelectedTask]         = useState<Task | null>(null);
+  const [showAddTask,          setShowAddTask]          = useState(false);
+  const [addTaskParentId,      setAddTaskParentId]      = useState<string | undefined>();
+  const [addTaskParentDeadline, setAddTaskParentDeadline] = useState<string | undefined>();
+  const [searchQuery,          setSearchQuery]          = useState('');
 
   // ── Derived lookups ───────────────────────────────────────────────────────
   const usersMap = useMemo(
@@ -360,11 +323,11 @@ export default function MyTasksPage() {
   const filteredTasks = useMemo(() => {
     let tasks = subFilteredTasks;
 
-    if (activeStatuses.length > 0) {
-      tasks = tasks.filter((t) => activeStatuses.includes(t.status));
+    if (appliedFilter.statuses.length > 0) {
+      tasks = tasks.filter((t) => appliedFilter.statuses.includes(t.status));
     }
-    if (activeFirmIds.length > 0) {
-      tasks = tasks.filter((t) => activeFirmIds.includes(t.firm_id));
+    if (appliedFilter.firmIds.length > 0) {
+      tasks = tasks.filter((t) => appliedFilter.firmIds.includes(t.firm_id));
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -372,7 +335,7 @@ export default function MyTasksPage() {
     }
 
     return tasks;
-  }, [subFilteredTasks, activeStatuses, activeFirmIds, searchQuery]);
+  }, [subFilteredTasks, appliedFilter.statuses, appliedFilter.firmIds, searchQuery]);
 
   // ── Group by status ───────────────────────────────────────────────────────
   const groups = useMemo(() => {
@@ -398,37 +361,21 @@ export default function MyTasksPage() {
   }, [filteredTasks]);
 
   // ── Active filter count badge ─────────────────────────────────────────────
-  const activeFilterCount = activeStatuses.length + activeFirmIds.length;
+  const activeFilterCount = appliedFilter.statuses.length + appliedFilter.firmIds.length;
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
-  function openFilter() {
-    setPendingStatuses([...activeStatuses]);
-    setPendingFirmIds([...activeFirmIds]);
-    setFilterOpen(true);
+  // ── Toggle helpers ────────────────────────────────────────────────────────
+  function toggleStatus(v: string) {
+    setPendingFilter((prev) => ({
+      ...prev,
+      statuses: prev.statuses.includes(v) ? prev.statuses.filter((s) => s !== v) : [...prev.statuses, v],
+    }));
   }
 
-  function applyFilter() {
-    setActiveStatuses([...pendingStatuses]);
-    setActiveFirmIds([...pendingFirmIds]);
-    setFilterOpen(false);
-  }
-
-  function cancelFilter() {
-    setPendingStatuses([...activeStatuses]);
-    setPendingFirmIds([...activeFirmIds]);
-    setFilterOpen(false);
-  }
-
-  function togglePendingStatus(v: string) {
-    setPendingStatuses((prev) =>
-      prev.includes(v) ? prev.filter((s) => s !== v) : [...prev, v],
-    );
-  }
-
-  function togglePendingFirm(v: string) {
-    setPendingFirmIds((prev) =>
-      prev.includes(v) ? prev.filter((id) => id !== v) : [...prev, v],
-    );
+  function toggleFirm(v: string) {
+    setPendingFilter((prev) => ({
+      ...prev,
+      firmIds: prev.firmIds.includes(v) ? prev.firmIds.filter((id) => id !== v) : [...prev.firmIds, v],
+    }));
   }
 
   async function handleSaveTask(taskId: string, data: TaskDetailData) {
@@ -450,30 +397,35 @@ export default function MyTasksPage() {
     await deleteTask.mutateAsync(task.id).catch(() => {});
   }
 
-  const priorityMap: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
-    Low: 'low', Normal: 'normal', High: 'high', Urgent: 'urgent',
-  };
+  function openAddSubTask(parentTask: Task) {
+    setAddTaskParentId(parentTask.id);
+    setAddTaskParentDeadline(parentTask.deadline ?? undefined);
+    setShowAddTask(true);
+  }
 
   async function handleCreateTask(data: TaskFormData) {
     if (!addTaskFirmId) return;
     await createTask.mutateAsync({
-      firm_id:      addTaskFirmId,
-      project_id:   data.projectId || undefined,
-      title:        data.title,
-      description:  data.description || undefined,
-      type:         'task',
-      priority:     priorityMap[data.priority] ?? 'normal',
-      deadline:     data.endDate || undefined,
-      assignee_ids: data.assigneeIds,
+      firm_id:        addTaskFirmId,
+      project_id:     data.projectId || undefined,
+      title:          data.title,
+      description:    data.description || undefined,
+      type:           'task',
+      priority:       PRIORITY_MAP[data.priority] ?? 'normal',
+      deadline:       data.endDate || undefined,
+      assignee_ids:   data.assigneeIds,
+      parent_task_id: addTaskParentId || undefined,
     });
     setShowAddTask(false);
+    setAddTaskParentId(undefined);
+    setAddTaskParentDeadline(undefined);
   }
 
   // ── Firm picker for "Add task" ────────────────────────────────────────────
   // The AddTaskModal doesn't carry firm_id in its output — we resolve it here
   // by pre-selecting from the active firm filter (if exactly one is active) or
   // defaulting to the first firm in the list.
-  const addTaskFirmId   = activeFirmIds.length === 1 ? activeFirmIds[0] : (firms[0]?.id ?? '');
+  const addTaskFirmId   = appliedFilter.firmIds.length === 1 ? appliedFilter.firmIds[0] : (firms[0]?.id ?? '');
   const addTaskFirmName = firmsMap.get(addTaskFirmId)?.name ?? '';
 
   // ── Page title from sub-filter ────────────────────────────────────────────
@@ -520,24 +472,11 @@ export default function MyTasksPage() {
             Add Task
           </button>
 
-          <button
-            type="button"
+          <FilterTriggerButton
+            activeCount={activeFilterCount}
             onClick={openFilter}
-            className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[13px] font-semibold transition-colors ${
-              activeFilterCount > 0
-                ? 'border-[#7F56D9] bg-[#F4F3FF] text-[#6941C6]'
-                : 'border-[#D0D5DD] bg-white text-[#344054] hover:bg-[#F9FAFB]'
-            }`}
-            aria-label="Open filters"
-          >
-            <FilterLines width={14} height={14} aria-hidden="true" />
-            Filter
-            {activeFilterCount > 0 && (
-              <span className="ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#7F56D9] text-[10px] font-bold text-white">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+            className="px-3.5 py-2"
+          />
 
           {/* Right: search */}
           <div className="ml-auto w-[260px]">
@@ -579,7 +518,7 @@ export default function MyTasksPage() {
             }
             title="No tasks found"
             description={activeFilterCount > 0 ? 'Try adjusting your filters to see more tasks.' : 'You have no tasks assigned matching this view.'}
-            action={activeFilterCount > 0 ? { label: 'Clear filters', onClick: () => { setActiveStatuses([]); setActiveFirmIds([]); } } : undefined}
+            action={activeFilterCount > 0 ? { label: 'Clear filters', onClick: clearFilter } : undefined}
             className="py-24"
           />
         ) : (
@@ -597,9 +536,10 @@ export default function MyTasksPage() {
                 onAssigneeChange={(taskId, assigneeId) =>
                   updateTask.mutateAsync({
                     id: taskId,
-                    payload: { assignee_id: assigneeId },
+                    payload: { assignee_ids: assigneeId ? [assigneeId] : [] },
                   }).catch(() => {})
                 }
+                onAddSubTask={openAddSubTask}
               />
             ))}
           </div>
@@ -629,21 +569,24 @@ export default function MyTasksPage() {
       {/* ── Add task modal ───────────────────────────────────────────────── */}
       <AddTaskModal
         open={showAddTask}
-        onClose={() => setShowAddTask(false)}
+        onClose={() => { setShowAddTask(false); setAddTaskParentId(undefined); setAddTaskParentDeadline(undefined); }}
         firmName={addTaskFirmName}
         users={users}
+        projects={allProjects.filter((p) => p.firm_id === addTaskFirmId)}
+        parentTaskId={addTaskParentId}
+        parentTaskDeadline={addTaskParentDeadline}
         onCreate={handleCreateTask}
       />
 
       {/* ── Filter panel ─────────────────────────────────────────────────── */}
       <MyTasksFilterPanel
         open={filterOpen}
-        onClose={() => setFilterOpen(false)}
+        onClose={cancelFilter}
         firms={firms}
-        pendingStatuses={pendingStatuses}
-        pendingFirmIds={pendingFirmIds}
-        onToggleStatus={togglePendingStatus}
-        onToggleFirm={togglePendingFirm}
+        pendingStatuses={pendingFilter.statuses}
+        pendingFirmIds={pendingFilter.firmIds}
+        onToggleStatus={toggleStatus}
+        onToggleFirm={toggleFirm}
         onApply={applyFilter}
         onCancel={cancelFilter}
       />

@@ -14,8 +14,11 @@ import AvatarStack from '../ui/AvatarStack';
 import AssigneePickerDropdown from '../ui/AssigneePickerDropdown';
 import { useUpdateProject } from '../../hooks/useFirms';
 import ProjectIcon from '../icons/ProjectIcon';
-import { TaskRow, StatusDot, COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU, PRIORITY_BADGE, PRIORITY_LABEL, formatDeadline } from '../tasks/TaskRow';
+import { TaskRow, StatusDot, COL_ASSIGNEE, COL_DATE, COL_PRIORITY, COL_STATUS, COL_MENU } from '../tasks/TaskRow';
+import { PRIORITY_BADGE, PRIORITY_LABEL } from '../../lib/constants';
+import { formatDeadline } from '../../lib/timeUtils';
 import type { Task, User, Project, Firm } from '../../lib/api';
+import { WORKFLOW_BADGE } from '../../lib/projectConstants';
 
 // ── Status group definition (shared with ProjectsTab) ────────────────────────
 
@@ -24,16 +27,6 @@ export interface StatusGroup {
   label: string;
   statuses: string[];
 }
-
-// ── Workflow status badge ─────────────────────────────────────────────────────
-
-const WORKFLOW_BADGE: Record<string, { label: string; style: string }> = {
-  todo:        { label: 'To Do',       style: 'bg-gray-100 text-gray-500' },
-  in_progress: { label: 'In Progress', style: 'bg-purple-50 text-purple-600' },
-  in_review:   { label: 'In Review',   style: 'bg-yellow-50 text-yellow-700' },
-  approved:    { label: 'Approved',    style: 'bg-green-50 text-green-700' },
-  completed:   { label: 'Completed',   style: 'bg-gray-100 text-gray-600' },
-};
 
 // ── ProjectGroupRow ───────────────────────────────────────────────────────────
 
@@ -83,8 +76,6 @@ export function ProjectGroupRow({
       : [...currentMemberIds, userId];
     await updateProject.mutateAsync({ id: projectId, payload: { member_ids: next } }).catch(() => {});
   }
-
-  console.log('[ProjectGroupRow]', project?.name, { end_date: project?.end_date, start_date: project?.start_date, priority: project?.priority });
 
   const memberAvatars = (project?.members ?? []).map((m) => ({ name: m.name, src: m.avatar_url ?? undefined }));
   const workflowBadge = project ? (WORKFLOW_BADGE[project.workflow_status] ?? { label: project.workflow_status, style: 'bg-gray-100 text-gray-500' }) : null;

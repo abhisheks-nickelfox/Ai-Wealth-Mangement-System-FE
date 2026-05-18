@@ -1,9 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { useDoubleClick } from '../../hooks/useDoubleClick';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAssignableUsers } from '../../hooks/useAssignableUsers';
-import AssigneePickerDropdown from '../../components/ui/AssigneePickerDropdown';
 import {
   ChevronRight,
   ChevronDown,
@@ -12,14 +9,14 @@ import {
   Plus,
   Clock,
 } from '@untitled-ui/icons-react';
-import AvatarStack from '../../components/ui/AvatarStack';
 import CountBadge from '../../components/ui/CountBadge';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import SectionLabel from '../../components/ui/SectionLabel';
+import InlineAssigneePicker from '../../components/ui/InlineAssigneePicker';
 import AttachmentsSection from '../../components/tasks/AttachmentsSection';
-import { TaskStatusBadge, PriorityBadge } from '../../components/tasks/TaskBadges';
-import { ChatTab } from '../../components/chat/ChatTab';
+import SubTaskRow from '../../components/tasks/SubTaskRow';
+import ActivityPanel from '../../components/activity';
 import { useFirmDetail, useProjects, useUpdateProject } from '../../hooks/useFirms';
 import { useTasksByFirm, useCreateTask, useUpdateTask } from '../../hooks/useTasks';
 import { useActiveUsers } from '../../hooks/useUsers';
@@ -29,257 +26,18 @@ import ProjectDetailPanel from '../../components/projects/ProjectDetailPanel';
 import type { ProjectDetail } from '../../components/projects/ProjectDetailPanel';
 import type { TaskFormData } from '../../components/tasks/AddTaskModal';
 import type { TaskDetailData } from '../../components/tasks/TaskDetailPanel';
-import { StatusDot, formatDeadline } from '../../components/tasks/TaskRow';
-import { PRIORITY_BADGE } from '../../lib/constants';
+import { PRIORITY_BADGE, PRIORITY_LABEL } from '../../lib/constants';
+import { WORKFLOW_LABEL, WORKFLOW_TO_KEY, PRIORITY_MAP } from '../../lib/projectConstants';
+import { resolveInitialStatus } from '../../lib/taskUtils';
+import { useDropdown } from '../../hooks/useDropdown';
 import { projectsApi, messagesApi } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
-import TaskIcon from '../../components/icons/TaskIcon';
 import ProjectIcon from '../../components/icons/ProjectIcon';
 import ProjectTimesheetPanel from '../../components/timesheet/ProjectTimesheetPanel';
 import { useProjectTimeEntries, useStartProjectTimer, useStopProjectTimer } from '../../hooks/useTimeEntries';
 import { useTimer } from '../../context/TimerContext';
 import { formatSeconds, formatElapsed } from '../../lib/timeUtils';
-import type { Task, Project, User } from '../../lib/api';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const WORKFLOW_LABEL: Record<Project['workflow_status'], string> = {
-  todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review', approved: 'Approved', completed: 'Completed',
-};
-
-// Inverse map used when saving project workflow status from display label
-const WORKFLOW_TO_KEY: Record<string, Project['workflow_status']> = {
-  'To Do': 'todo', 'In progress': 'in_progress', 'In Review': 'in_review',
-  'Approved': 'approved', 'Completed': 'completed',
-};
-
-// ── Activity panel ─────────────────────────────────────────────────────────────
-
-type ActivityTab = 'recent' | 'files' | 'notes';
-const TABS: { id: ActivityTab; label: string }[] = [
-  { id: 'recent', label: 'Recent' },
-  { id: 'files',  label: 'Files & Links' },
-  { id: 'notes',  label: 'Notes' },
-];
-
-function ActivityPanel({ projectId, onClose }: { projectId: string; onClose?: () => void }) {
-  const [activeTab, setActiveTab] = useState<ActivityTab>('recent');
-
-  return (
-    <aside className="w-[380px] shrink-0 flex flex-col border-l border-[#E9EAEB] bg-white h-full isolate">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
-        <h2 className="text-[16px] font-semibold text-[#181D27]">Activity</h2>
-        <button onClick={onClose} className="w-7 h-7 rounded-md flex items-center justify-center text-[#717680] hover:bg-[#F9FAFB] transition-colors">
-          <X width={16} height={16} />
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="px-4 pb-3 shrink-0">
-        <div className="flex items-center rounded-lg border border-[#D5D7DA] overflow-hidden">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 py-2 text-[12px] font-semibold transition-all border-r last:border-r-0 border-[#D5D7DA] ${
-                activeTab === tab.id
-                  ? 'bg-white text-[#181D27]'
-                  : 'bg-white text-[#717680] hover:text-[#414651] hover:bg-[#F9FAFB]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="h-px bg-[#E9EAEB] shrink-0" />
-
-      {activeTab === 'recent' ? (
-        <ChatTab scope="project" scopeId={projectId} />
-      ) : (
-        <div className="flex-1 flex items-center justify-center">
-          <EmptyState
-            title={activeTab === 'files' ? 'No files yet' : 'No notes yet'}
-            description={activeTab === 'files' ? 'No files or links attached yet.' : 'No notes added yet.'}
-          />
-        </div>
-      )}
-    </aside>
-  );
-}
-
-// ── Nested (indented) sub-task row ────────────────────────────────────────────
-
-function NestedSubTaskRow({
-  task,
-  users,
-  onOpen,
-  onUpdateAssignees,
-  onNavigate,
-}: {
-  task: Task;
-  users: User[];
-  onOpen: (t: Task) => void;
-  onUpdateAssignees?: (taskId: string, ids: string[]) => void;
-  onNavigate?: (t: Task) => void;
-}) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const pickerRef                   = useRef<HTMLDivElement>(null);
-
-  const assignableUsers = useAssignableUsers(task.task_type_id, users);
-  const assignees = task.assignees ?? [];
-  const { text: dt, overdue: subOverdue } = formatDeadline(task.deadline ?? null);
-
-  const handleRowClick = useDoubleClick(() => onOpen(task), () => onNavigate?.(task));
-
-  return (
-    <div
-      className="flex items-center px-4 py-2 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group bg-[#FAFAFA]"
-      onClick={handleRowClick}
-    >
-      {/* Left — indented */}
-      <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
-        <div className="w-4 shrink-0" />
-        <div className="w-px h-4 bg-[#E4E7EC] shrink-0" />
-        <StatusDot status={task.status} />
-        <TaskIcon width={12} height={12} className="text-[#C8CDD6] shrink-0" />
-        <span className="flex-1 min-w-0 text-[12px] text-[#535862] truncate group-hover:text-[#6941C6] transition-colors">
-          {task.title}
-        </span>
-      </div>
-      {/* Status */}
-      <div className="w-[100px] flex justify-center shrink-0">
-        <TaskStatusBadge status={task.status} />
-      </div>
-      {/* Assignee — inline picker */}
-      <div
-        ref={pickerRef}
-        className="w-[120px] flex justify-center items-center shrink-0 relative px-3"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <AvatarStack
-          avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
-          max={4}
-          showAddButton={true}
-          onAdd={() => setPickerOpen(true)}
-        />
-        <AssigneePickerDropdown
-          open={pickerOpen}
-          onClose={() => setPickerOpen(false)}
-          anchorRef={pickerRef as React.RefObject<HTMLElement | null>}
-          users={assignableUsers}
-          selected={assignees.map((a) => a.id)}
-          onToggle={(uid) => {
-            const current = assignees.map((a) => a.id);
-            const next = current.includes(uid) ? current.filter((id) => id !== uid) : [...current, uid];
-            onUpdateAssignees?.(task.id, next);
-          }}
-        />
-      </div>
-      {/* Due Date */}
-      <span className={`w-[80px] text-[11px] text-center shrink-0 ${subOverdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
-        {dt}
-      </span>
-      {/* Priority */}
-      <div className="w-[64px] flex justify-center shrink-0">
-        <PriorityBadge priority={task.priority} />
-      </div>
-    </div>
-  );
-}
-
-// ── Parent task row ────────────────────────────────────────────────────────────
-
-function SubTaskRow({
-  task,
-  users,
-  onOpen,
-  onUpdateAssignees,
-  onAddSubTask,
-  onNavigate,
-}: {
-  task: Task;
-  users: User[];
-  onOpen: (t: Task) => void;
-  onUpdateAssignees?: (taskId: string, ids: string[]) => void;
-  onAddSubTask?: (parentId: string, parentDeadline?: string) => void;
-  onNavigate?: (t: Task) => void;
-}) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const pickerRef                   = useRef<HTMLDivElement>(null);
-
-  const assignableUsers = useAssignableUsers(task.task_type_id, users);
-  const assignees     = task.assignees ?? [];
-  const { text: dateText, overdue } = formatDeadline(task.deadline ?? null);
-
-  const handleRowClick = useDoubleClick(() => onOpen(task), () => onNavigate?.(task));
-
-  return (
-    <div
-      className="flex items-center px-4 py-2.5 border-b border-[#F2F4F7] last:border-0 hover:bg-[#F9FAFB] cursor-pointer transition-colors group"
-      onClick={handleRowClick}
-    >
-      {/* Left: dot + icon + title + hover sub-task button */}
-      <div className="flex items-center gap-2 flex-1 min-w-0 pr-4">
-        <StatusDot status={task.status} />
-        <TaskIcon width={13} height={13} className="text-[#A4A7AE] shrink-0" />
-        <span className="flex-1 min-w-0 text-[13px] text-[#344054] truncate group-hover:text-[#6941C6] transition-colors">
-          {task.title}
-        </span>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onAddSubTask?.(task.id, task.deadline ?? undefined); }}
-          className="opacity-0 group-hover:opacity-100 shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-[#A4A7AE] hover:text-[#6941C6] hover:bg-[#F4F3FF] transition-all"
-        >
-          <Plus width={10} height={10} />
-          Sub-task
-        </button>
-      </div>
-
-      {/* Status — fixed 100 px */}
-      <div className="w-[100px] flex justify-center shrink-0">
-        <TaskStatusBadge status={task.status} />
-      </div>
-
-      {/* Assignee — fixed 120 px, inline picker */}
-      <div
-        ref={pickerRef}
-        className="w-[120px] flex justify-center items-center shrink-0 relative px-3"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <AvatarStack
-          avatars={assignees.map((a) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
-          max={4}
-          showAddButton={true}
-          onAdd={() => setPickerOpen(true)}
-        />
-        <AssigneePickerDropdown
-          open={pickerOpen}
-          onClose={() => setPickerOpen(false)}
-          anchorRef={pickerRef as React.RefObject<HTMLElement | null>}
-          users={assignableUsers}
-          selected={assignees.map((a) => a.id)}
-          onToggle={(uid) => {
-            const current = assignees.map((a) => a.id);
-            const next = current.includes(uid) ? current.filter((id) => id !== uid) : [...current, uid];
-            onUpdateAssignees?.(task.id, next);
-          }}
-        />
-      </div>
-
-      {/* Due Date — fixed 80 px */}
-      <span className={`w-[80px] text-[12px] text-center shrink-0 ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
-        {dateText}
-      </span>
-
-      {/* Priority — fixed 64 px */}
-      <div className="w-[64px] flex justify-center shrink-0">
-        <PriorityBadge priority={task.priority} />
-      </div>
-    </div>
-  );
-}
+import type { Task } from '../../lib/api';
 
 // ── ProjectFullContent (shared between page and panel) ────────────────────────
 
@@ -296,10 +54,8 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
   const navigate              = useNavigate();
   const [searchParams]        = useSearchParams();
   const statusOverride        = searchParams.get('status') ?? '';
-  const [actionsOpen,        setActionsOpen]        = useState(false);
-  const [showEditProject,    setShowEditProject]    = useState(false);
-  const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
-  const assigneePickerRef = useRef<HTMLDivElement>(null);
+  const { open: actionsOpen, ref: actionsRef, toggle: toggleActions, close: closeActions } = useDropdown();
+  const [showEditProject, setShowEditProject] = useState(false);
   const updateProject = useUpdateProject();
   const [showAddSubTask,       setShowAddSubTask]       = useState(false);
   const [subTaskParentId,      setSubTaskParentId]      = useState<string | undefined>();
@@ -369,7 +125,7 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
       payload: {
         name:            updated.name,
         description:     updated.description || undefined,
-        workflow_status: WORKFLOW_TO_KEY[updated.status] ?? 'todo',
+        workflow_status: (WORKFLOW_TO_KEY[updated.status] ?? 'todo') as 'todo' | 'in_progress' | 'in_review' | 'approved' | 'completed',
         member_ids:      updated.memberIds,
         start_date:      updated.startDate || undefined,
         end_date:        updated.endDate || undefined,
@@ -379,20 +135,20 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
     setShowEditProject(false);
   }
 
-  const priorityMap: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
-    Low: 'low', Normal: 'normal', High: 'high', Urgent: 'urgent',
-  };
-
   async function handleCreateSubTask(data: TaskFormData) {
     await createTask.mutateAsync({
-      firm_id: firmId!, project_id: projectId, parent_task_id: subTaskParentId,
-      title: data.title, description: data.description || undefined,
-      type: 'task',
-      priority: priorityMap[data.priority] ?? 'normal',
-      start_date: data.startDate || undefined,
-      deadline: data.endDate || undefined,
-      assignee_ids: data.assigneeIds,
-      task_type_id: data.task_type_id || undefined,
+      firm_id:        firmId!,
+      project_id:     projectId,
+      parent_task_id: subTaskParentId,
+      title:          data.title,
+      description:    data.description || undefined,
+      type:           'task',
+      priority:       PRIORITY_MAP[data.priority] ?? 'normal',
+      start_date:     data.startDate || undefined,
+      deadline:       data.endDate || undefined,
+      assignee_ids:   data.assigneeIds,
+      task_type_id:   data.task_type_id || undefined,
+      initial_status: resolveInitialStatus(data.initialStatus, data.assigneeIds),
     });
     setShowAddSubTask(false);
     setSubTaskParentId(undefined);
@@ -473,10 +229,20 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
             </p>
           </div>
 
-          {/* Actions */}
-          <div className="relative shrink-0">
+          {/* Actions + Activity toggle */}
+          <div className="flex items-center gap-2 shrink-0">
+            {!showActivity && (
+              <button
+                type="button"
+                onClick={() => setShowActivity(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#D5D7DA] bg-white text-[13px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
+              >
+                Activity
+              </button>
+            )}
+          <div ref={actionsRef} className="relative shrink-0">
             <button
-              onClick={() => setActionsOpen(v => !v)}
+              onClick={toggleActions}
               className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[#D5D7DA] bg-white text-[13px] font-semibold text-[#344054] hover:bg-[#F9FAFB] transition-colors"
             >
               Actions
@@ -485,9 +251,9 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
             {actionsOpen && (
               <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[180px]">
                 {[
-                  { label: 'Edit', onClick: () => { setActionsOpen(false); setShowEditProject(true); } },
-                  { label: 'Delete (with safety)', danger: true, onClick: () => setActionsOpen(false) },
-                  { label: 'Convert to Template', onClick: () => setActionsOpen(false) },
+                  { label: 'Edit', onClick: () => { closeActions(); setShowEditProject(true); } },
+                  { label: 'Delete (with safety)', danger: true, onClick: () => closeActions() },
+                  { label: 'Convert to Template', onClick: () => closeActions() },
                 ].map((item) => (
                   <button
                     key={item.label}
@@ -500,32 +266,16 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
               </div>
             )}
           </div>
+          </div>
         </div>
 
         {/* ── Metadata grid ── */}
         <div className="px-8 pb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5 border-b border-[#F2F4F7]">
           {/* Assignee */}
-          <div ref={assigneePickerRef} className="relative">
+          <div>
             <SectionLabel className="mb-2">Assignee</SectionLabel>
-            <AvatarStack
+            <InlineAssigneePicker
               avatars={members.map((m) => ({ name: m.name, src: m.avatar_url ?? undefined }))}
-              max={4}
-              showAddButton={true}
-              onAdd={() => setAssigneePickerOpen((v) => !v)}
-            />
-            {members.length === 0 && (
-              <button
-                type="button"
-                onClick={() => setAssigneePickerOpen((v) => !v)}
-                className="text-[13px] text-[#A4A7AE] hover:text-[#7F56D9] transition-colors"
-              >
-                + Add assignee
-              </button>
-            )}
-            <AssigneePickerDropdown
-              open={assigneePickerOpen}
-              onClose={() => setAssigneePickerOpen(false)}
-              anchorRef={assigneePickerRef as React.RefObject<HTMLElement | null>}
               users={users}
               selected={members.map((m) => m.id)}
               onToggle={toggleProjectMember}
@@ -545,10 +295,11 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
           <div>
             <SectionLabel className="mb-2">Priority</SectionLabel>
             {(() => {
-              const p = PRIORITY_BADGE[project.priority ?? 'low'] ?? PRIORITY_BADGE.low;
+              const priorityKey = project.priority ?? 'low';
+              const cls = PRIORITY_BADGE[priorityKey] ?? PRIORITY_BADGE.low;
               return (
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-semibold ${p.className}`}>
-                  {p.label}
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-semibold ${cls}`}>
+                  {PRIORITY_LABEL[priorityKey] ?? priorityKey}
                 </span>
               );
             })()}
@@ -674,37 +425,33 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
 
               {projectTasks.map((task) => {
                 const subTasks = task.subtasks ?? [];
+                const handleUpdateAssignees = (taskId: string, ids: string[]) =>
+                  updateTask.mutateAsync({ id: taskId, payload: { assignee_ids: ids } }).catch(() => {});
                 return (
                   <div key={task.id}>
-                    {/* Parent task row */}
                     <SubTaskRow
                       task={task}
                       users={users}
-                      onOpen={setSelectedTask}
-                      onNavigate={(t) => navigate(`/firms/${firmId}/tasks/${t.id}`)}
-                      onUpdateAssignees={(taskId, ids) =>
-                        updateTask.mutateAsync({ id: taskId, payload: { assignee_ids: ids } }).catch(() => {})
-                      }
+                      onClick={() => setSelectedTask(task)}
+                      onNavigate={() => navigate(`/firms/${firmId}/tasks/${task.id}`)}
+                      onUpdateAssignees={handleUpdateAssignees}
                       onAddSubTask={(parentId, parentDeadline) => {
                         setSubTaskParentId(parentId);
                         setSubTaskParentDeadline(parentDeadline);
                         setShowAddSubTask(true);
                       }}
                     />
-
-                    {/* Nested sub-task rows */}
                     {subTasks.length > 0 && (
                       <div className="border-t border-[#F2F4F7]">
                         {subTasks.map((sub) => (
-                          <NestedSubTaskRow
+                          <SubTaskRow
                             key={sub.id}
                             task={sub}
                             users={users}
-                            onOpen={setSelectedTask}
-                            onNavigate={(t) => navigate(`/firms/${firmId}/tasks/${t.id}`)}
-                            onUpdateAssignees={(taskId, ids) =>
-                              updateTask.mutateAsync({ id: taskId, payload: { assignee_ids: ids } }).catch(() => {})
-                            }
+                            isNested
+                            onClick={() => setSelectedTask(sub)}
+                            onNavigate={() => navigate(`/firms/${firmId}/tasks/${sub.id}`)}
+                            onUpdateAssignees={handleUpdateAssignees}
                           />
                         ))}
                       </div>
@@ -732,7 +479,16 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
       </div>
 
       {/* ── Right: Activity ── */}
-      {showActivity && <ActivityPanel projectId={projectId!} onClose={() => setShowActivity(false)} />}
+      {showActivity && (
+        <ActivityPanel
+          variant="aside"
+          scope="project"
+          scopeId={projectId!}
+          projectId={projectId!}
+          title="Activity"
+          onClose={() => setShowActivity(false)}
+        />
+      )}
 
       {/* Task detail drawer */}
       <TaskDetailPanel

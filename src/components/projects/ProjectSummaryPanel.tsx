@@ -8,6 +8,7 @@ import AvatarStack from '../ui/AvatarStack';
 import AttachmentsSection from '../tasks/AttachmentsSection';
 import { useTasks } from '../../hooks/useTasks';
 import { projectsApi } from '../../lib/api';
+import { TASK_STATUS_BADGE } from '../../lib/constants';
 import type { User } from '../../lib/api';
 import type { ProjectDetail } from './ProjectDetailPanel';
 
@@ -56,20 +57,6 @@ const TASK_STATUS_DOT: Record<string, string> = {
   blocked:            '#F04438',
 };
 
-const TASK_STATUS_BADGE: Record<string, { label: string; style: string }> = {
-  draft:              { label: 'Draft',              style: 'bg-[#F2F4F7] text-[#717680]' },
-  in_progress:        { label: 'In Progress',        style: 'bg-[#F4F3FF] text-[#6941C6]' },
-  assigned:           { label: 'Assigned',           style: 'bg-[#EEF4FF] text-[#3538CD]' },
-  revisions:          { label: 'Revisions',          style: 'bg-[#FFFAEB] text-[#B54708]' },
-  internal_review:    { label: 'Internal Review',    style: 'bg-[#F4F3FF] text-[#5925DC]' },
-  client_review:      { label: 'Client Review',      style: 'bg-[#EFF8FF] text-[#175CD3]' },
-  compliance_review:  { label: 'Compliance Review',  style: 'bg-[#FFFAEB] text-[#B54708]' },
-  approved:           { label: 'Approved',           style: 'bg-[#ECFDF3] text-[#027A48]' },
-  closed:             { label: 'Closed',             style: 'bg-[#F2F4F7] text-[#344054]' },
-  completed:          { label: 'Completed',          style: 'bg-[#ECFDF3] text-[#027A48]' },
-  blocked:            { label: 'Blocked',            style: 'bg-[#FFF1F3] text-[#C01048]' },
-  to_do:              { label: 'To Do',              style: 'bg-[#F2F4F7] text-[#717680]' },
-};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

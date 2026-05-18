@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { timeEntriesApi, projectTimeEntriesApi } from '../lib/api'
 import { useTimer } from '../context/TimerContext'
+import { queryKeys } from '../lib/queryKeys'
 
 // ── Query keys ────────────────────────────────────────────────────────────────
 
@@ -8,7 +9,7 @@ const PROJ_TIME_KEY = (id: string) => ['project-direct-time-entries', id]
 
 export function useTimeEntries(taskId: string | undefined) {
   return useQuery({
-    queryKey: ['time-entries', taskId],
+    queryKey: queryKeys.timeEntries.byTask(taskId ?? ''),
     queryFn:  () => timeEntriesApi.list(taskId!),
     enabled:  !!taskId,
   })
@@ -21,7 +22,7 @@ export function useStartTimer(taskId: string) {
     mutationFn: () => timeEntriesApi.start(taskId),
     onSuccess: (entry) => {
       startTimer({ entryId: entry.id, taskId, taskTitle: '', startedAt: entry.started_at })
-      qc.invalidateQueries({ queryKey: ['time-entries', taskId] })
+      qc.invalidateQueries({ queryKey: queryKeys.timeEntries.byTask(taskId) })
     },
   })
 }
@@ -34,7 +35,7 @@ export function useStopTimer(taskId: string) {
       timeEntriesApi.stop(taskId, entryId, description),
     onSuccess: () => {
       stopTimer()
-      qc.invalidateQueries({ queryKey: ['time-entries', taskId] })
+      qc.invalidateQueries({ queryKey: queryKeys.timeEntries.byTask(taskId) })
     },
   })
 }
@@ -44,7 +45,7 @@ export function useCreateTimeEntry(taskId: string) {
   return useMutation({
     mutationFn: (payload: { started_at: string; ended_at?: string; duration_seconds?: number; description?: string }) =>
       timeEntriesApi.create(taskId, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['time-entries', taskId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.timeEntries.byTask(taskId) }),
   })
 }
 
@@ -53,7 +54,7 @@ export function useUpdateTimeEntry(taskId: string) {
   return useMutation({
     mutationFn: ({ entryId, ...payload }: { entryId: string; started_at?: string; ended_at?: string; duration_seconds?: number; description?: string }) =>
       timeEntriesApi.update(taskId, entryId, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['time-entries', taskId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.timeEntries.byTask(taskId) }),
   })
 }
 
@@ -61,7 +62,7 @@ export function useDeleteTimeEntry(taskId: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (entryId: string) => timeEntriesApi.delete(taskId, entryId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['time-entries', taskId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.timeEntries.byTask(taskId) }),
   })
 }
 

@@ -11,7 +11,7 @@ import AttachmentsSection, { type AttachmentsSectionHandle } from '../tasks/Atta
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useTasks } from '../../hooks/useTasks';
 import type { User, Task } from '../../lib/api';
-import { TASK_STATUS_BADGE } from '../tasks/TaskRow';
+import { TASK_STATUS_BADGE } from '../../lib/constants';
 import TaskIcon from '../icons/TaskIcon';
 
 // ── Types ─────────────────────────────────────────────────────────────────────

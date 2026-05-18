@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HelpCircle, ChevronDown, ChevronRight, Plus, X, MessageSquare01, Clock } from '@untitled-ui/icons-react';
+import { HelpCircle, ChevronDown, ChevronRight, Plus, X } from '@untitled-ui/icons-react';
 import CountBadge from '../ui/CountBadge';
 import AvatarNameRow from '../ui/AvatarNameRow';
 import PanelFooter from '../ui/PanelFooter';
 import { TASK_STATUS_DOT } from '../../lib/constants';
-import { ChatTab } from '../chat/ChatTab';
+import ActivityPanel from '../activity';
 import { useTransitionTask, useUpdateTask } from '../../hooks/useTasks';
 import ProjectIcon from '../icons/ProjectIcon';
 import TaskIcon from '../icons/TaskIcon';
@@ -14,14 +14,13 @@ import AssigneePickerDropdown from '../ui/AssigneePickerDropdown';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
 import AttachmentsSection, { type AttachmentsSectionHandle } from './AttachmentsSection';
-import TimesheetPanel from '../timesheet/TimesheetPanel';
-import { useStartTimer, useStopTimer } from '../../hooks/useTimeEntries';
-import { useTimer } from '../../context/TimerContext';
-import { formatElapsed } from '../../lib/timeUtils';
+import TaskTimerRow from './TaskTimerRow';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useAssignableUsers } from '../../hooks/useAssignableUsers';
 import type { Task, User, Project } from '../../lib/api';
-import { TASK_STATUS_BADGE } from './TaskRow';
+import { TASK_STATUS_BADGE } from '../../lib/constants';
+import { PriorityBadge } from './TaskBadges';
+import { STATUS_LABELS, VALID_TRANSITIONS } from '../../lib/projectConstants';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -47,35 +46,6 @@ interface TaskDetailPanelProps {
   viewLabel?:          string;
 }
 
-// ── ChatSection — collapsible chat for a single task/sub-task ────────────────
-
-function ChatSection({ taskId }: { taskId: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-[#F9FAFB] transition-colors"
-      >
-        <span className="flex items-center gap-2 text-[13px] font-semibold text-[#414651]">
-          <MessageSquare01 width={15} height={15} className="text-[#7F56D9]" />
-          Chat
-        </span>
-        <ChevronDown
-          width={15} height={15}
-          className={`text-[#A4A7AE] transition-transform ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {open && (
-        <div style={{ height: 380 }} className="flex flex-col">
-          <ChatTab scope="task" scopeId={taskId} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PRIORITY_OPTIONS: { value: 'low' | 'normal' | 'high' | 'urgent'; label: string; dot: string }[] = [
@@ -84,29 +54,6 @@ const PRIORITY_OPTIONS: { value: 'low' | 'normal' | 'high' | 'urgent'; label: st
   { value: 'normal', label: 'Normal', dot: 'bg-yellow-400' },
   { value: 'low',    label: 'Low',    dot: 'bg-green-500'  },
 ];
-
-const STATUS_LABELS: Record<string, string> = {
-  to_do:           'To Do',
-  assigned:        'Assigned',
-  in_progress:     'In Progress',
-  revisions:       'Revisions',
-  internal_review: 'Internal Review',
-  client_review:   'Client Review',
-  completed:       'Completed',
-  blocked:         'Blocked',
-};
-
-
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  to_do:           ['assigned', 'in_progress', 'blocked'],
-  assigned:        ['in_progress', 'blocked'],
-  in_progress:     ['revisions', 'internal_review', 'blocked'],
-  revisions:       ['in_progress'],
-  internal_review: ['client_review', 'revisions'],
-  client_review:   ['completed', 'revisions'],
-  completed:       [],
-  blocked:         ['to_do', 'in_progress'],
-};
 
 const TYPE_LABELS: Record<string, string> = {
   task:               'Task',
@@ -147,19 +94,13 @@ export default function TaskDetailPanel({
   const [showProject,   setShowProject]   = useState(false);
   const [showStatus,    setShowStatus]    = useState(false);
   const [transitioning, setTransitioning] = useState(false);
+  const [showActivity,  setShowActivity]  = useState(true);
 
-  const [showTimesheet, setShowTimesheet]  = useState(false);
-  const { running, elapsed }               = useTimer();
-  const isTimerRunningHere                 = running?.taskId === task?.id;
-  const startTimer                         = useStartTimer(task?.id ?? '');
-  const stopTimer                          = useStopTimer(task?.id ?? '');
-
-  const priorityRef     = useRef<HTMLDivElement>(null);
-  const pickerRef       = useRef<HTMLDivElement>(null);
-  const projectRef      = useRef<HTMLDivElement>(null);
-  const statusRef       = useRef<HTMLDivElement>(null);
-  const attachmentsRef  = useRef<AttachmentsSectionHandle>(null);
-  const timesheetBtnRef = useRef<HTMLDivElement>(null);
+  const priorityRef    = useRef<HTMLDivElement>(null);
+  const pickerRef      = useRef<HTMLDivElement>(null);
+  const projectRef     = useRef<HTMLDivElement>(null);
+  const statusRef      = useRef<HTMLDivElement>(null);
+  const attachmentsRef = useRef<AttachmentsSectionHandle>(null);
   useClickOutside(priorityRef, () => setShowPriority(false));
   // pickerRef: no useClickOutside — AssigneePickerDropdown owns its own fixed backdrop
   useClickOutside(projectRef,  () => setShowProject(false));
@@ -561,14 +502,7 @@ export default function TaskDetailPanel({
                         showAddButton={false}
                       />
                     )}
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${
-                      sub.priority === 'urgent' ? 'bg-red-100 text-red-600'
-                      : sub.priority === 'high' ? 'bg-orange-100 text-orange-600'
-                      : sub.priority === 'normal' ? 'bg-yellow-100 text-yellow-600'
-                      : 'bg-green-100 text-green-600'
-                    }`}>
-                      {sub.priority === 'normal' ? 'Normal' : sub.priority ? sub.priority.charAt(0).toUpperCase() + sub.priority.slice(1) : ''}
-                    </span>
+                    <PriorityBadge priority={sub.priority} />
                   </div>
                 ))}
               </div>
@@ -586,55 +520,30 @@ export default function TaskDetailPanel({
         {/* Timesheet */}
         <div className="border-t border-[#F2F4F7] px-5 py-3">
           <p className="text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider mb-2.5">Timesheet</p>
-          <div ref={timesheetBtnRef} className="relative flex items-center gap-2">
-            {/* Clock icon — start/stop timer toggle */}
-            <button
-              type="button"
-              disabled={startTimer.isPending || stopTimer.isPending}
-              onClick={() => isTimerRunningHere
-                ? stopTimer.mutate({ entryId: running!.entryId })
-                : startTimer.mutate()
-              }
-              className={`flex items-center justify-center w-7 h-7 rounded-full border transition-colors disabled:opacity-50 ${
-                isTimerRunningHere
-                  ? 'border-[#FEE4E2] bg-[#FEF3F2] text-[#F04438] hover:bg-[#FEE4E2]'
-                  : 'border-[#E9EAEB] bg-white text-[#7F56D9] hover:border-[#D0D5DD]'
-              }`}
-              title={isTimerRunningHere ? 'Stop timer' : 'Start timer'}
-            >
-              {isTimerRunningHere
-                ? <span className="w-2.5 h-2.5 rounded-[2px] bg-[#F04438]" />
-                : <Clock width={13} height={13} />
-              }
-            </button>
-            {/* Text — opens timesheet panel for manual entry */}
-            <button
-              type="button"
-              onClick={() => setShowTimesheet((v) => !v)}
-              className="text-[13px] text-[#535862] hover:text-[#344054] transition-colors"
-            >
-              Log Time
-            </button>
-            <TimesheetPanel
-              taskId={task.id}
-              projectId={task.project_id ?? undefined}
-              open={showTimesheet}
-              onClose={() => setShowTimesheet(false)}
-              anchorRef={timesheetBtnRef as React.RefObject<HTMLElement | null>}
-            />
-          </div>
-          {isTimerRunningHere && (
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#F04438] animate-pulse shrink-0" />
-              <span className="text-[11px] font-mono font-semibold text-[#F04438]">{formatElapsed(elapsed)}</span>
-              <span className="text-[11px] text-[#A4A7AE]">running</span>
-            </div>
-          )}
+          <TaskTimerRow taskId={task.id} projectId={task.project_id ?? undefined} size="md" />
         </div>
 
-        {/* Chat — real-time SSE per task/sub-task */}
+        {/* Activity — chat, files, notes per task/sub-task */}
         <div className="border-t border-[#F2F4F7]">
-          <ChatSection taskId={task.id} />
+          <div className="flex items-center justify-between px-5 py-2.5">
+            <p className="text-[11px] font-semibold text-[#A4A7AE] uppercase tracking-wider">Activity</p>
+            <button
+              type="button"
+              onClick={() => setShowActivity((v) => !v)}
+              className="text-[12px] font-medium text-[#717680] hover:text-[#6941C6] transition-colors"
+            >
+              {showActivity ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          {showActivity && (
+            <ActivityPanel
+              variant="inline"
+              height={420}
+              scope="task"
+              scopeId={task.id}
+              projectId={task.project_id ?? null}
+            />
+          )}
         </div>
 
         {/* Save error */}
