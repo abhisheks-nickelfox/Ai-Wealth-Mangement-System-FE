@@ -118,8 +118,8 @@ export default function ActivityPanel({
       <div className="h-px bg-[#E9EAEB] shrink-0" />
 
       {/* Tab content */}
-      {activeTab === 'recent' && <ChatTab scope={scope} scopeId={scopeId} />}
-      {activeTab === 'files'  && <ActivityFilesTab projectId={projectId} />}
+      {activeTab === 'recent' && <ChatTab scope={scope} scopeId={scopeId} projectId={projectId} />}
+      {activeTab === 'files'  && <ActivityFilesTab projectId={projectId} scope={scope} scopeId={scopeId} />}
       {activeTab === 'notes'  && <ActivityNotesTab scope={scope} scopeId={scopeId} />}
     </>
   );

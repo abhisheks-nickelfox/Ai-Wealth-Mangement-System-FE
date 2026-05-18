@@ -3,6 +3,7 @@ import { Formik, Form } from 'formik';
 import { Save01, Plus, Trash01 } from '@untitled-ui/icons-react';
 import SlideOver from '../ui/SlideOver';
 import MultiSelect from '../ui/MultiSelect';
+import Select from '../ui/Select';
 import Avatar from '../ui/Avatar';
 import Input from '../ui/Input';
 import InlineAddPanel from '../ui/InlineAddPanel';
@@ -31,8 +32,8 @@ interface EditUserDrawerProps {
 
 export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUserDrawerProps) {
   // Complex multi-value state kept outside Formik
-  const [roles,           setRoles]           = useState<string[]>([]);
-  const [status,          setStatus]          = useState<string[]>([]);
+  const [role,            setRole]            = useState('');
+  const [status,          setStatus]          = useState('');
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [selectedSkills,  setSelectedSkills]  = useState<SkillEntry[]>([]);
   const [skillErrors,     setSkillErrors]     = useState<Record<string, boolean>>({});
@@ -51,15 +52,15 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
   const createMemberRole = useCreateMemberRole();
   const createSkill      = useCreateSkill();
 
-  const isMember = roles.includes('member');
+  const isMember = role === 'member';
 
   // Sync state when drawer opens or liveUser changes
   useEffect(() => {
     if (!open) return;
     const u = liveUser ?? user;
     if (!u) return;
-    setRoles([u.role]);
-    setStatus([u.status]);
+    setRole(u.role);
+    setStatus(u.status);
     setSelectedSkills(
       u.skills.map((s) => ({
         id:         s.id,
@@ -168,7 +169,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
           }}
           validationSchema={editUserSchema}
           onSubmit={async (values, { setFieldError, setSubmitting }) => {
-            if (roles.length === 0 || status.length === 0) {
+            if (!role || !status) {
               setFieldError('firstName', 'Role and status are required.');
               setSubmitting(false);
               return;
@@ -199,7 +200,7 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
             }
 
             const memberRoleName = isMember && selectedRoleIds.length > 0
-              ? memberRoles.find((r) => r.id === selectedRoleIds[0])?.name
+              ? memberRoles.find((mr) => mr.id === selectedRoleIds[0])?.name
               : undefined;
 
             const firstName = values.firstName?.trim() ?? '';
@@ -214,9 +215,9 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
                   name:        fullName,
                   first_name:  firstName || undefined,
                   last_name:   lastName  || undefined,
-                  role:        roles[0] as 'admin' | 'member',
+                  role:        role as 'admin' | 'member',
                   member_role: memberRoleName ?? (isMember ? undefined : ''),
-                  status:      status[0] as User['status'],
+                  status:      status as User['status'],
                   skills_with_experience: selectedSkills.map((e) => ({
                     skill_id:   e.id,
                     experience: e.experience || null,
@@ -279,23 +280,18 @@ export default function EditUserDrawer({ user, open, onClose, onSaved }: EditUse
               </div>
 
               {/* Status */}
-              <MultiSelect
-                label="Status"
-                options={STATUS_OPTIONS}
-                value={status}
-                onChange={(vals) => { if (vals.length > 0) setStatus(vals.slice(-1)); }}
-                columns={1}
-              />
+              <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+                {STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </Select>
 
               {/* System Role */}
-              <MultiSelect
-                label="Role"
-                options={ROLE_OPTIONS}
-                value={roles}
-                onChange={(vals) => { if (vals.length > 0) setRoles(vals.slice(-1)); }}
-                columns={1}
-                singleSelect
-              />
+              <Select label="Role" value={role} onChange={(e) => setRole(e.target.value)}>
+                {ROLE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </Select>
 
               {/* Member Role */}
               {isMember && (

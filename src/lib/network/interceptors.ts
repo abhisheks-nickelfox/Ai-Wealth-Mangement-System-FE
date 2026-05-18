@@ -6,11 +6,12 @@ function emitApiError(message: string) {
 }
 
 function getToken(): string | null {
-  return localStorage.getItem('mw_token');
+  const entry = document.cookie.split('; ').find((r) => r.startsWith('mw_token='));
+  return entry ? decodeURIComponent(entry.split('=')[1]) : null;
 }
 
 function clearToken(): void {
-  localStorage.removeItem('mw_token');
+  document.cookie = 'mw_token=; path=/; Max-Age=0; SameSite=Strict';
 }
 
 export function applyInterceptors(instance: AxiosInstance): void {

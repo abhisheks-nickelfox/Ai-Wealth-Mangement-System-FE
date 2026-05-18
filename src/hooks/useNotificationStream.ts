@@ -17,7 +17,8 @@ export function useNotificationStream() {
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('mw_token') ?? sessionStorage.getItem('mw_token');
+    const entry = document.cookie.split('; ').find((r) => r.startsWith('mw_token='));
+    const token = entry ? decodeURIComponent(entry.split('=')[1]) : null;
     if (!token) return;
 
     const url = `${API_URL}/notifications/stream?token=${encodeURIComponent(token)}`;

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send01, Trash01 } from '@untitled-ui/icons-react';
+import { Send01, Trash01, Attachment01, Download01, X } from '@untitled-ui/icons-react';
+import { useQueryClient } from '@tanstack/react-query';
 import Avatar from '../ui/Avatar';
 import {
   useMessages,
@@ -12,8 +13,10 @@ import {
 import { useMessageStream } from '../../hooks/useMessageStream';
 import { useAuth } from '../../context/AuthContext';
 import { useMentionableUsers } from '../../hooks/useMentionableUsers';
-import { messagesApi } from '../../lib/api';
+import { messagesApi, projectAttachmentsApi, attachmentsApi } from '../../lib/api';
 import type { Message, MessageReaction, MentionUser } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
+import { formatFileSize } from '../../lib/formatUtils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -44,18 +47,81 @@ function groupByDate(messages: Message[]) {
 
 // ── @mention helpers ──────────────────────────────────────────────────────────
 
-/** Splits a message body on @word tokens and wraps each in a mention span.
- *  isSelf=true → bubble is purple so use white/light color for the mention. */
+interface FilePayload { __file: true; name: string; url: string; size: number; type: string }
+
+function getFileEmoji(type: string, name: string): string {
+  if (type.startsWith('image/'))                                  return '🖼️';
+  if (type === 'application/pdf')                                 return '📄';
+  if (type.includes('spreadsheet') || type.includes('excel') || /\.(xlsx?|csv)$/i.test(name)) return '📊';
+  if (type.includes('word') || type.includes('document') || /\.docx?$/i.test(name))           return '📝';
+  if (type.includes('zip') || type.includes('rar') || type.includes('tar'))                   return '🗜️';
+  if (type.startsWith('video/'))                                  return '🎬';
+  if (type.startsWith('audio/'))                                  return '🎵';
+  return '📎';
+}
+
+function FileCard({ file, isSelf }: { file: FilePayload; isSelf: boolean }) {
+  const bg      = isSelf ? 'bg-white/15' : 'bg-[#E9EAEB]';
+  const nameCol = isSelf ? 'text-white'  : 'text-[#181D27]';
+  const metaCol = isSelf ? 'text-white/70' : 'text-[#717680]';
+  const dlCol   = isSelf ? 'text-white/80 hover:text-white' : 'text-[#7F56D9] hover:text-[#6941C6]';
+  return (
+    <a
+      href={file.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-opacity hover:opacity-90 w-full ${bg}`}
+      title="Download file"
+    >
+      <span className="text-2xl leading-none shrink-0">{getFileEmoji(file.type, file.name)}</span>
+      <div className="flex-1 min-w-0">
+        <p className={`text-[13px] font-medium truncate ${nameCol}`}>{file.name}</p>
+        <p className={`text-[11px] ${metaCol}`}>{formatFileSize(file.size)}</p>
+      </div>
+      <Download01 width={16} height={16} className={`shrink-0 ${dlCol}`} />
+    </a>
+  );
+}
+
+/** Tokenises a body string into URLs, @mentions, and plain text — then renders each correctly.
+ *  File messages (JSON prefix) are rendered as attachment cards. */
 function renderBody(body: string, isSelf: boolean): React.ReactNode {
-  const parts = body.split(/(@\w+)/g);
+  // File attachment card
+  if (body.startsWith('{"__file":true')) {
+    try {
+      const f = JSON.parse(body) as FilePayload;
+      return <FileCard file={f} isSelf={isSelf} />;
+    } catch {}
+  }
+
   const mentionClass = isSelf
     ? 'text-white font-semibold underline underline-offset-2 decoration-white/60'
     : 'text-[#7F56D9] font-semibold';
-  return parts.map((part, i) =>
-    /^@\w+$/.test(part)
-      ? <span key={i} className={mentionClass}>{part}</span>
-      : <span key={i}>{part}</span>,
-  );
+  const urlClass = isSelf
+    ? 'underline break-all text-white/90 hover:text-white transition-colors'
+    : 'underline break-all text-[#7F56D9] hover:text-[#6941C6] transition-colors';
+
+  // Split on URLs first, then split non-URL segments on @mentions
+  const nodes: React.ReactNode[] = [];
+  const urlSegments = body.split(/(https?:\/\/[^\s<>"{}|\\^`[\]]+)/g);
+  urlSegments.forEach((seg, i) => {
+    if (/^https?:\/\//.test(seg)) {
+      nodes.push(
+        <a key={`url-${i}`} href={seg} target="_blank" rel="noopener noreferrer" className={urlClass}>
+          {seg}
+        </a>,
+      );
+      return;
+    }
+    seg.split(/(@\w+)/g).forEach((part, j) => {
+      if (/^@\w+$/.test(part)) {
+        nodes.push(<span key={`m-${i}-${j}`} className={mentionClass}>{part}</span>);
+      } else {
+        nodes.push(<span key={`t-${i}-${j}`}>{part}</span>);
+      }
+    });
+  });
+  return nodes;
 }
 
 // ── Quick-reaction emojis ─────────────────────────────────────────────────────
@@ -251,7 +317,7 @@ function MessageBubble({ message, isSelf, myId, scope, scopeId, onDelete }: Bubb
         <Avatar name={message.author.name} src={message.author.avatar_url ?? undefined} size="sm" className="shrink-0 mt-0.5" />
       )}
 
-      <div className={`flex flex-col max-w-[65%] ${isSelf ? 'items-end' : 'items-start'}`}>
+      <div className={`flex flex-col max-w-[65%] min-w-0 ${isSelf ? 'items-end' : 'items-start'}`}>
         {!isSelf && (
           <span className="text-[11px] text-[#6B7280] mb-1 ml-0.5">{message.author.name}</span>
         )}
@@ -287,7 +353,7 @@ function MessageBubble({ message, isSelf, myId, scope, scopeId, onDelete }: Bubb
 
           {/* Bubble */}
           <div
-            className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-[1.55] whitespace-pre-wrap break-words
+            className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-[1.55] whitespace-pre-wrap break-words overflow-hidden w-full
               ${isSelf
                 ? 'bg-[#7F56D9] text-white rounded-br-sm'
                 : 'bg-[#F3F4F6] text-[#111827] rounded-bl-sm'
@@ -328,14 +394,19 @@ function DateDivider({ label }: { label: string }) {
 
 // ── ChatTab ───────────────────────────────────────────────────────────────────
 
-export function ChatTab({ scope, scopeId }: { scope: string; scopeId: string }) {
+export function ChatTab({ scope, scopeId, projectId }: { scope: string; scopeId: string; projectId?: string | null }) {
   const { user }     = useAuth();
+  const queryClient  = useQueryClient();
   const [draft, setDraft]               = useState('');
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [activeIndex, setActiveIndex]   = useState(0);
+  const [pendingFile,  setPendingFile]  = useState<File | null>(null);
+  const [isUploading,  setIsUploading]  = useState(false);
+  const [uploadError,  setUploadError]  = useState<string | null>(null);
   const bottomRef    = useRef<HTMLDivElement>(null);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const composerRef  = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: messages = [], isLoading } = useMessages(scope, scopeId);
@@ -450,6 +521,52 @@ export function ChatTab({ scope, scopeId }: { scope: string; scopeId: string }) 
     deleteMessage.mutate({ messageId, scope, scopeId });
   };
 
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('File too large. Maximum size is 10 MB.');
+      return;
+    }
+
+    setPendingFile(file);
+    setIsUploading(true);
+    setUploadError(null);
+
+    try {
+      let fileUrl: string;
+
+      // Upload to project attachments when possible (universal — visible in Files tab)
+      const uploadProjectId = scope === 'project' ? scopeId : (projectId ?? null);
+      if (uploadProjectId) {
+        const result = await projectAttachmentsApi.upload(uploadProjectId, file);
+        fileUrl = result.file_url;
+        queryClient.invalidateQueries({ queryKey: queryKeys.projectAttachments.byProject(uploadProjectId) });
+      } else {
+        const result = await attachmentsApi.upload(scopeId, file);
+        fileUrl = result.storage_url;
+        queryClient.invalidateQueries({ queryKey: queryKeys.attachments.byTask(scopeId) });
+      }
+
+      const body = JSON.stringify({
+        __file: true,
+        name:   file.name,
+        url:    fileUrl,
+        size:   file.size,
+        type:   file.type || 'application/octet-stream',
+      } satisfies FilePayload);
+
+      sendMessage.mutate({ scope, scope_id: scopeId, body });
+      setPendingFile(null);
+    } catch {
+      setUploadError('Upload failed. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  }, [scope, scopeId, projectId, queryClient, sendMessage]);
+
   const groups = groupByDate(messages);
   const myId   = user?.id ?? '';
 
@@ -513,12 +630,64 @@ export function ChatTab({ scope, scopeId }: { scope: string; scopeId: string }) 
 
       {/* Composer */}
       <div className="shrink-0 border-t border-[#E5E7EB] px-4 py-3">
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar"
+          onChange={handleFileSelect}
+        />
+
         <div ref={composerRef} className="relative">
           {/* @mention picker */}
           {mentionSuggestions.length > 0 && (
             <MentionPicker users={mentionSuggestions} activeIndex={activeIndex} onSelect={handleSelectMention} />
           )}
+
+          {/* Pending file preview */}
+          {pendingFile && (
+            <div className="mb-2 flex items-center gap-2.5 bg-[#F0EAFF] border border-[#D6BBFB] rounded-lg px-3 py-2">
+              <span className="text-[18px] leading-none shrink-0">{getFileEmoji(pendingFile.type, pendingFile.name)}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-medium text-[#6941C6] truncate">{pendingFile.name}</p>
+                <p className="text-[10px] text-[#9CA3AF]">{formatFileSize(pendingFile.size)}</p>
+              </div>
+              {isUploading ? (
+                <div className="w-4 h-4 rounded-full border-2 border-[#7F56D9] border-t-transparent animate-spin shrink-0" />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setPendingFile(null); setUploadError(null); }}
+                  className="shrink-0 text-[#9CA3AF] hover:text-red-500 transition-colors"
+                  aria-label="Remove file"
+                >
+                  <X width={12} height={12} />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Upload error */}
+          {uploadError && (
+            <p className="mb-2 text-[11px] text-red-500 flex items-center gap-1">
+              <span>⚠</span> {uploadError}
+            </p>
+          )}
+
           <div className="flex items-end gap-2 bg-[#F9FAFB] rounded-xl border border-[#E5E7EB] px-3.5 py-2.5 focus-within:border-[#7F56D9] focus-within:ring-2 focus-within:ring-[#7F56D9]/10 transition-all">
+            {/* Attachment button */}
+            <button
+              type="button"
+              onClick={() => { setUploadError(null); fileInputRef.current?.click(); }}
+              disabled={isUploading}
+              className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-[#9CA3AF] hover:text-[#7F56D9] hover:bg-[#F0EAFF] transition-colors disabled:opacity-40"
+              aria-label="Attach file"
+              title="Attach file"
+            >
+              <Attachment01 width={15} height={15} />
+            </button>
+
             <textarea
               ref={textareaRef}
               value={draft}
@@ -539,7 +708,7 @@ export function ChatTab({ scope, scopeId }: { scope: string; scopeId: string }) 
             </button>
           </div>
         </div>
-        <p className="text-[10px] text-[#D1D5DB] mt-1.5 ml-1">Enter to send · Shift+Enter for new line · @ to mention</p>
+        <p className="text-[10px] text-[#D1D5DB] mt-1.5 ml-1">Enter to send · Shift+Enter for new line · @ to mention · 📎 to attach</p>
       </div>
     </div>
   );

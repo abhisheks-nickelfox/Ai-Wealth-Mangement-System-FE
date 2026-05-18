@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Formik, Form } from 'formik';
 import { UserPlus01 } from '@untitled-ui/icons-react';
-import MultiSelect from '../../components/ui/MultiSelect';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Button from '../../components/ui/Button';
@@ -43,7 +42,7 @@ export default function AddUserPage() {
             }
           }}
         >
-          {({ values, errors, touched, handleChange, handleBlur, setFieldValue, isSubmitting }) => (
+          {({ values, errors, touched, handleChange, handleBlur, isSubmitting }) => (
             <Form className="flex flex-col gap-6">
 
               {/* Root-level error from API */}
@@ -66,20 +65,19 @@ export default function AddUserPage() {
               />
 
               {/* Role */}
-              <div>
-                <MultiSelect
-                  label="Role"
-                  placeholder="Select role"
-                  options={ROLE_OPTIONS}
-                  value={values.role ? [values.role as SystemRole] : []}
-                  onChange={(vals) => setFieldValue('role', vals.length > 0 ? vals[vals.length - 1] : '')}
-                  columns={1}
-                  singleSelect
-                />
-                {touched.role && errors.role && (
-                  <p className="text-xs text-red-600 mt-1">{errors.role}</p>
-                )}
-              </div>
+              <Select
+                label="Role"
+                name="role"
+                value={values.role}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                error={touched.role && errors.role ? errors.role : undefined}
+              >
+                <option value="">Select role</option>
+                {ROLE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </Select>
 
               {/* Rate */}
               <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-4">
@@ -96,19 +94,17 @@ export default function AddUserPage() {
                   onBlur={handleBlur}
                   error={touched.rateAmount && errors.rateAmount ? errors.rateAmount : undefined}
                 />
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-[#414651]">Frequency</label>
-                  <Select
-                    name="rateFrequency"
-                    value={values.rateFrequency}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                  >
-                    {RATE_FREQUENCIES.map((f) => (
-                      <option key={f} value={f}>{f}</option>
-                    ))}
-                  </Select>
-                </div>
+                <Select
+                  label="Frequency"
+                  name="rateFrequency"
+                  value={values.rateFrequency}
+                  onChange={handleChange}
+                  onBlur={handleBlur}
+                >
+                  {RATE_FREQUENCIES.map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </Select>
               </div>
 
               {/* Actions */}

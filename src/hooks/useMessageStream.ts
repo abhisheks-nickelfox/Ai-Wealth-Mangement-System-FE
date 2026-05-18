@@ -38,7 +38,8 @@ export function useMessageStream(
   useEffect(() => {
     if (!scope || !scopeId) return;
 
-    const token = localStorage.getItem('mw_token');
+    const entry = document.cookie.split('; ').find((r) => r.startsWith('mw_token='));
+    const token = entry ? decodeURIComponent(entry.split('=')[1]) : null;
     if (!token) return;
 
     const url = `${API_URL}/messages/stream?scope=${encodeURIComponent(scope)}&scope_id=${encodeURIComponent(scopeId)}&token=${encodeURIComponent(token)}`;
