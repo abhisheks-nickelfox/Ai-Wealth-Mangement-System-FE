@@ -7,6 +7,7 @@ import NavItem from '../sidebar/NavItem';
 import ExpandableNavItem from '../sidebar/ExpandableNavItem';
 import { useFirms } from '../../hooks/useFirms';
 import { useMyTasks } from '../../hooks/useTasks';
+import { useUnreadNotificationCount } from '../../hooks/useNotifications';
 import { useAuth } from '../../context/AuthContext';
 import type { Task } from '../../lib/api';
 
@@ -32,13 +33,13 @@ const NavIcon = ({ src }: { src: string }) => (
 function buildMyTaskItems(tasks: Task[]) {
   const today = new Date().toISOString().slice(0, 10);
   const counts = {
-    todo:        tasks.filter((t) => t.status === 'to_do').length,
+    // todo:        tasks.filter((t) => t.status === 'to_do').length,
     assignedMe:  tasks.length,
     todayDue:    tasks.filter((t) => t.deadline === today).length,
     overdue:     tasks.filter((t) => !!t.deadline && t.deadline < today).length,
   };
   return [
-    { id: 'todo',        label: 'Todo',          ...(counts.todo       > 0 && { badge: { count: counts.todo,       variant: 'blue'    as const } }) },
+    // { id: 'todo',        label: 'Todo',          ...(counts.todo       > 0 && { badge: { count: counts.todo,       variant: 'blue'    as const } }) },
     { id: 'assigned-me', label: 'Assigned to me',...(counts.assignedMe > 0 && { badge: { count: counts.assignedMe, variant: 'brand'   as const } }) },
     { id: 'today-due',   label: 'Today Due',     ...(counts.todayDue   > 0 && { badge: { count: counts.todayDue,   variant: 'success' as const } }) },
     { id: 'overdue',     label: 'Overdue',       ...(counts.overdue    > 0 && { badge: { count: counts.overdue,    variant: 'error'   as const } }) },
@@ -93,6 +94,7 @@ export default function Sidebar() {
   const { user }                                       = useAuth();
   const { data: firms = [], isLoading: firmsLoading }  = useFirms();
   const { data: myTasks = [] }                         = useMyTasks(user?.id);
+  const unreadCount                                    = useUnreadNotificationCount();
 
   const firmItems  = firms.map((f) => ({ id: f.id, label: f.name }));
   const myTaskItems = useMemo(() => buildMyTaskItems(myTasks), [myTasks]);
@@ -133,6 +135,7 @@ export default function Sidebar() {
             icon={<NavIcon src={iconInbox} />}
             active={activeNav === 'inbox'}
             onClick={() => navigate('/inbox')}
+            {...(unreadCount > 0 && { badge: { count: unreadCount, variant: 'error' as const } })}
           />
           <div data-tour="tour-dashboard">
             <NavItem

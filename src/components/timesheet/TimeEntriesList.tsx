@@ -1,14 +1,16 @@
 import { useMemo } from 'react'
 import TimeEntryUserGroup from './TimeEntryUserGroup'
 import type { TaskTimeEntrySummary } from '../../lib/api'
+import type { EditTimeEntryPayload } from './EditTimeEntryPopup'
 
 interface TimeEntriesListProps {
   summary:       TaskTimeEntrySummary
   currentUserId: string
   onDelete:      (entryId: string) => void
+  onEdit?:       (entryId: string, payload: EditTimeEntryPayload) => Promise<void>
 }
 
-export default function TimeEntriesList({ summary, currentUserId, onDelete }: TimeEntriesListProps) {
+export default function TimeEntriesList({ summary, currentUserId, onDelete, onEdit }: TimeEntriesListProps) {
   const grouped = useMemo(() => {
     const map = new Map<string, {
       userId:    string
@@ -34,7 +36,6 @@ export default function TimeEntriesList({ summary, currentUserId, onDelete }: Ti
       g.total += entry.duration_seconds ?? 0
     }
 
-    // Current user first, then alphabetical
     return Array.from(map.values()).sort((a, b) => {
       if (a.userId === currentUserId) return -1
       if (b.userId === currentUserId) return 1
@@ -63,6 +64,7 @@ export default function TimeEntriesList({ summary, currentUserId, onDelete }: Ti
           defaultOpen={g.userId === currentUserId}
           currentUserId={currentUserId}
           onDelete={onDelete}
+          onEdit={onEdit}
         />
       ))}
     </div>

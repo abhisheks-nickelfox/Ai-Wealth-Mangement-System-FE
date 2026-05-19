@@ -8,6 +8,7 @@ import {
   useStartProjectTimer,
   useStopProjectTimer,
   useCreateProjectTimeEntry,
+  useUpdateProjectTimeEntry,
   useDeleteProjectTimeEntry,
 } from '../../hooks/useTimeEntries'
 import { useTimer } from '../../context/TimerContext'
@@ -33,6 +34,7 @@ export default function ProjectTimesheetPanel({
   const startTimer        = useStartProjectTimer(projectId)
   const stopTimer         = useStopProjectTimer(projectId)
   const createEntry       = useCreateProjectTimeEntry(projectId)
+  const updateEntry       = useUpdateProjectTimeEntry(projectId)
   const deleteEntry       = useDeleteProjectTimeEntry(projectId)
 
   const isRunningHere   = running?.projectId === projectId
@@ -104,6 +106,14 @@ export default function ProjectTimesheetPanel({
                   total_seconds:     summary.own_total_seconds,
                 }}
                 currentUserId={user.id}
+                onEdit={(entryId, payload) =>
+                  new Promise<void>((resolve, reject) =>
+                    updateEntry.mutate({ entryId, ...payload }, {
+                      onSuccess: () => resolve(),
+                      onError:   (err) => reject(err),
+                    })
+                  )
+                }
                 onDelete={(entryId) => {
                   deleteEntry.mutate(entryId)
                   fireProjectMessage('Deleted a time entry from this project')
@@ -133,6 +143,14 @@ export default function ProjectTimesheetPanel({
                     entries={task.entries}
                     subtasks={task.subtasks}
                     currentUserId={user.id}
+                    onEdit={(entryId, payload) =>
+                  new Promise<void>((resolve, reject) =>
+                    updateEntry.mutate({ entryId, ...payload }, {
+                      onSuccess: () => resolve(),
+                      onError:   (err) => reject(err),
+                    })
+                  )
+                }
                     onDelete={(entryId) => {
                       deleteEntry.mutate(entryId)
                       fireProjectMessage('Deleted a time entry from this project')

@@ -5,6 +5,8 @@ import TimeEntryUserGroup from './TimeEntryUserGroup'
 import { formatSeconds } from '../../lib/timeUtils'
 import type { TimeEntry, SubtaskTimeSummary } from '../../lib/api'
 
+import type { EditTimeEntryPayload } from './EditTimeEntryPopup'
+
 interface TimesheetTaskRowProps {
   title:         string
   totalSeconds:  number
@@ -12,13 +14,14 @@ interface TimesheetTaskRowProps {
   subtasks?:     SubtaskTimeSummary[]
   currentUserId: string
   onDelete:      (entryId: string) => void
+  onEdit?:       (entryId: string, payload: EditTimeEntryPayload) => Promise<void>
   defaultOpen?:  boolean
-  depth?:        number   // 0 = task, 1 = subtask (controls indent + bg shade)
+  depth?:        number
 }
 
 export default function TimesheetTaskRow({
   title, totalSeconds, entries, subtasks = [],
-  currentUserId, onDelete, defaultOpen = false, depth = 0,
+  currentUserId, onDelete, onEdit, defaultOpen = false, depth = 0,
 }: TimesheetTaskRowProps) {
   const [open, setOpen] = useState(defaultOpen)
 
@@ -94,10 +97,10 @@ export default function TimesheetTaskRow({
               defaultOpen={g.userId === currentUserId}
               currentUserId={currentUserId}
               onDelete={onDelete}
+              onEdit={onEdit}
             />
           ))}
 
-          {/* Nested subtask rows */}
           {subtasks.map((sub) => (
             <TimesheetTaskRow
               key={sub.task_id}
@@ -106,6 +109,7 @@ export default function TimesheetTaskRow({
               entries={sub.entries}
               currentUserId={currentUserId}
               onDelete={onDelete}
+              onEdit={onEdit}
               depth={depth + 1}
             />
           ))}

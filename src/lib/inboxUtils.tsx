@@ -137,16 +137,19 @@ export function applyFilters(
   if (!anyTypeActive && !anyClientActive) return items;
 
   return items.filter((n) => {
-    if (anyTypeActive) {
-      if (filters.mentions && /@\w+/.test(n.message)) return true;
-      if (filters.replies && n.message.toLowerCase().includes('reply')) return true;
-      if (filters.unread && !n.read) return true;
-      if (filters.assignedToMe && n.message.toLowerCase().includes('assigned')) return true;
-      if (filters.overdue && n.message.toLowerCase().includes('overdue')) return true;
-      if (filters.cleared && n.read) return true;
-      if (!anyClientActive) return false;
-    }
-    // Client filter would need firm mapping — pass through if no match data
-    return true;
+    const passesType = anyTypeActive ? (
+      (filters.mentions     && /@\w+/.test(n.message)) ||
+      (filters.replies      && n.message.toLowerCase().includes('reply')) ||
+      (filters.unread       && !n.read) ||
+      (filters.assignedToMe && n.message.toLowerCase().includes('assigned')) ||
+      (filters.overdue      && n.message.toLowerCase().includes('overdue')) ||
+      (filters.cleared      && n.read)
+    ) : true;
+
+    const passesClient = anyClientActive
+      ? filters.clients.includes(n.firm_name ?? '')
+      : true;
+
+    return passesType && passesClient;
   });
 }

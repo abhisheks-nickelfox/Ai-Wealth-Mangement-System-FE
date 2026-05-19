@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { getCookie } from '../lib/cookies';
 import { queryKeys } from '../lib/queryKeys';
 import type { Message, MessageReaction } from '../lib/api';
 
@@ -38,14 +39,20 @@ export function useMessageStream(
   useEffect(() => {
     if (!scope || !scopeId) return;
 
-    const entry = document.cookie.split('; ').find((r) => r.startsWith('mw_token='));
-    const token = entry ? decodeURIComponent(entry.split('=')[1]) : null;
+    const token = getCookie('mw_token');
     if (!token) return;
 
     const url = `${API_URL}/messages/stream?scope=${encodeURIComponent(scope)}&scope_id=${encodeURIComponent(scopeId)}&token=${encodeURIComponent(token)}`;
 
     const es = new EventSource(url);
     esRef.current = es;
+
+    // On connect: immediately refetch to close the race window between the
+    // initial query load and SSE becoming active. Any messages posted in that
+    // gap would otherwise be invisible until the next render.
+    es.onopen = () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.messages.byScope(scope, scopeId) });
+    };
 
     es.onmessage = (event) => {
       try {
@@ -73,6 +80,11 @@ export function useMessageStream(
           qc.setQueryData<Message[]>(key, (old = []) =>
             old.some((m) => m.id === incoming.id) ? old : [...old, incoming],
           );
+          // System messages (status change, assignee change) always accompany
+          // new time-log entries — invalidate so the activity feed stays live.
+          if (incoming.is_system && scope === 'task') {
+            void qc.invalidateQueries({ queryKey: queryKeys.timeLogs.byTask(scopeId) });
+          }
         }
 
         if (parsed.type === 'messages_read' && parsed.reader_id && parsed.message_ids) {

@@ -1,24 +1,24 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { CornerDownLeft, XClose, FaceHappy, Send01 } from '@untitled-ui/icons-react';
-import type { Message, MentionUser } from '../../lib/api';
+import type { Message } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { useMentionableUsers } from '../../hooks/useMentionableUsers';
 import { QUICK_EMOJIS } from '../../lib/constants';
 import Avatar from '../ui/Avatar';
 
 interface InlineReplyComposerProps {
-  parentMsg:    Message;
-  mentionUsers: MentionUser[];
-  onSend:  (body: string) => void;
-  onClose: () => void;
+  parentMsg: Message;
+  onSend:    (body: string) => void;
+  onClose:   () => void;
 }
 
 export default function InlineReplyComposer({
   parentMsg,
-  mentionUsers,
   onSend,
   onClose,
 }: InlineReplyComposerProps) {
   const { user } = useAuth();
+  const { data: mentionUsers = [] } = useMentionableUsers();
   const myId = user?.id;
 
   const [draft,        setDraft]        = useState('');

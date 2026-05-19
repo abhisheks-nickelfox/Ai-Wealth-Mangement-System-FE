@@ -108,6 +108,15 @@ export function useCreateProjectTimeEntry(projectId: string) {
   })
 }
 
+export function useUpdateProjectTimeEntry(projectId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ entryId, ...payload }: { entryId: string; started_at?: string; ended_at?: string; duration_seconds?: number; description?: string }) =>
+      projectTimeEntriesApi.update(projectId, entryId, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: PROJ_TIME_KEY(projectId) }),
+  })
+}
+
 export function useDeleteProjectTimeEntry(projectId: string) {
   const qc = useQueryClient()
   return useMutation({

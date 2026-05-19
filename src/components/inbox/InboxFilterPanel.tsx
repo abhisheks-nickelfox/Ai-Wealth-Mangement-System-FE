@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { AppNotification } from '../../lib/api';
 import { type ActiveFilters, DEFAULT_FILTERS } from '../../lib/inboxUtils';
 import SlideOver from '../ui/SlideOver';
 import Checkbox from '../ui/Checkbox';
 import SearchInput from '../ui/SearchInput';
+
+type BoolFilterKey = 'mentions' | 'replies' | 'unread' | 'assignedToMe' | 'overdue' | 'cleared';
 
 interface InboxFilterPanelProps {
   open: boolean;
@@ -26,14 +28,14 @@ export default function InboxFilterPanel({
   const [clientSearch, setClientSearch] = useState('');
   const [showAll, setShowAll] = useState(false);
 
-  const counts = {
+  const counts = useMemo(() => ({
     mentions:     notifications.filter((n) => /@\w+/.test(n.message)).length,
     replies:      notifications.filter((n) => n.message.toLowerCase().includes('reply')).length,
     unread:       notifications.filter((n) => !n.read).length,
     assignedToMe: notifications.filter((n) => n.message.toLowerCase().includes('assigned')).length,
     overdue:      notifications.filter((n) => n.message.toLowerCase().includes('overdue')).length,
     cleared:      notifications.filter((n) => n.read).length,
-  };
+  }), [notifications]);
 
   const filteredFirms = firmNames.filter((c) =>
     c.toLowerCase().includes(clientSearch.toLowerCase()),
@@ -59,8 +61,6 @@ export default function InboxFilterPanel({
     onApply(local);
     onClose();
   }
-
-  type BoolFilterKey = 'mentions' | 'replies' | 'unread' | 'assignedToMe' | 'overdue' | 'cleared';
 
   const filterRows: { key: BoolFilterKey; label: string }[] = [
     { key: 'mentions',     label: 'Mentions'      },

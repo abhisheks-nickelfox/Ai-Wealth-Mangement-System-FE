@@ -6,10 +6,10 @@ import { useAuth } from '../context/AuthContext';
 
 export function useMessages(scope: string, scopeId: string) {
   return useQuery({
-    queryKey: queryKeys.messages.byScope(scope, scopeId),
-    queryFn:  () => messagesApi.list(scope, scopeId),
-    enabled:  !!scope && !!scopeId,
-    // No refetchInterval — real-time updates come via SSE (useMessageStream)
+    queryKey:  queryKeys.messages.byScope(scope, scopeId),
+    queryFn:   () => messagesApi.list(scope, scopeId),
+    enabled:   !!scope && !!scopeId,
+    staleTime: 0, // always load fresh — SSE keeps cache live while panel is open
   });
 }
 

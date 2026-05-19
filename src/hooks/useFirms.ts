@@ -56,6 +56,15 @@ export function useProjects(firmId?: string) {
   });
 }
 
+export function useProjectDetail(id: string | null) {
+  return useQuery({
+    queryKey:  queryKeys.projects.detail(id ?? ''),
+    queryFn:   () => projectsApi.get(id!),
+    enabled:   !!id,
+    staleTime: 120_000,
+  });
+}
+
 export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({

@@ -6,6 +6,7 @@ import { useClickOutside } from '../../hooks/useClickOutside';
 import { useUser } from '../../hooks/useUsers';
 import { useFirmDetail } from '../../hooks/useFirms';
 import AccountCard from './AccountCard';
+import HeaderTimerWidget from '../timesheet/HeaderTimerWidget';
 
 // ── Route → breadcrumb config ─────────────────────────────────────────────────
 
@@ -180,7 +181,9 @@ export default function TopBar() {
         <div />
       )}
 
-      {/* Right: account card */}
+      {/* Right: running timer + account card */}
+      <div className="flex items-center gap-3">
+      <HeaderTimerWidget />
       <div className="relative" ref={containerRef} data-tour="tour-profile">
         <div onClick={() => setOpen((v) => !v)}>
           <AccountCard
@@ -210,6 +213,7 @@ export default function TopBar() {
             </button>
           </div>
         )}
+      </div>
       </div>
     </header>
   );

@@ -112,7 +112,7 @@ export default function InboxPage() {
           <div>
             <h1 className="text-2xl font-semibold text-[#181D27]">Inbox</h1>
             <p className="text-sm text-[#535862] mt-1">
-              Manage your team members, roles, and access across projects.
+              Stay on top of your mentions and notifications.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">

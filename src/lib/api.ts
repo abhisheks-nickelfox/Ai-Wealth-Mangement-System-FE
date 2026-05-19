@@ -745,6 +745,8 @@ export const projectTimeEntriesApi = {
     request<TimeEntry>('PATCH', `/projects/${projectId}/time-entries/${entryId}/stop`, description ? { description } : undefined),
   create: (projectId: string, payload: { started_at: string; ended_at?: string; duration_seconds?: number; description?: string }) =>
     request<TimeEntry>('POST', `/projects/${projectId}/time-entries`, payload),
+  update: (projectId: string, entryId: string, payload: Partial<{ started_at: string; ended_at: string; duration_seconds: number; description: string }>) =>
+    request<TimeEntry>('PATCH', `/projects/${projectId}/time-entries/${entryId}`, payload),
   delete: (projectId: string, entryId: string) =>
     request<void>('DELETE', `/projects/${projectId}/time-entries/${entryId}`),
 };

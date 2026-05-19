@@ -1,24 +1,16 @@
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import { getCookie, deleteCookie } from '../cookies';
 
 // Dispatched globally so any mounted component can surface the error as a toast
 function emitApiError(message: string) {
   window.dispatchEvent(new CustomEvent<{ message: string }>('api-error', { detail: { message } }));
 }
 
-function getToken(): string | null {
-  const entry = document.cookie.split('; ').find((r) => r.startsWith('mw_token='));
-  return entry ? decodeURIComponent(entry.split('=')[1]) : null;
-}
-
-function clearToken(): void {
-  document.cookie = 'mw_token=; path=/; Max-Age=0; SameSite=Strict';
-}
-
 export function applyInterceptors(instance: AxiosInstance): void {
   // ── Request: inject Bearer token ────────────────────────────────────────────
   instance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-      const token = getToken();
+      const token = getCookie('mw_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -45,7 +37,7 @@ export function applyInterceptors(instance: AxiosInstance): void {
           `Request failed with status ${error.response.status}`;
 
         if (error.response.status === 401 && !window.location.pathname.startsWith('/login')) {
-          clearToken();
+          deleteCookie('mw_token');
           window.location.href = '/login';
         }
 

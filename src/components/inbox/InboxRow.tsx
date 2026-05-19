@@ -1,10 +1,11 @@
-import { Mail01, X, Building02 } from '@untitled-ui/icons-react';
+import { Mail01, X } from '@untitled-ui/icons-react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { AppNotification } from '../../lib/api';
+import { messagesApi, timeLogsApi } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
 import { formatDateShort, highlightMentions } from '../../lib/inboxUtils';
 import StatusCircle from './StatusCircle';
-import { FileIcon } from './icons';
-import TaskIcon from '../icons/TaskIcon';
-import ProjectIcon from '../icons/ProjectIcon';
+import { FileIcon, ScopeIcon } from './icons';
 import Avatar from '../ui/Avatar';
 
 interface InboxRowProps {
@@ -15,12 +16,6 @@ interface InboxRowProps {
   onSelect:   (item: AppNotification) => void;
   onMarkRead: (id: string) => void;
   onClear:    (id: string) => void;
-}
-
-function ScopeIcon({ scope, className }: { scope: string; className?: string }) {
-  if (scope === 'firm')    return <Building02 width={16} height={16} className={className} />;
-  if (scope === 'project') return <ProjectIcon width={16} height={16} className={className} />;
-  return <TaskIcon width={14} height={16} className={className} />;
 }
 
 function NotificationBreadcrumb({ item }: { item: AppNotification }) {
@@ -50,6 +45,26 @@ function NotificationBreadcrumb({ item }: { item: AppNotification }) {
 export default function InboxRow({
   item, isSelected, clearing, clearDelay, onSelect, onMarkRead, onClear,
 }: InboxRowProps) {
+  const qc      = useQueryClient();
+  const scope   = item.scope   ?? 'task';
+  const scopeId = item.scope_id ?? item.ticket_id ?? '';
+
+  function handleMouseEnter() {
+    if (!scopeId) return;
+    qc.prefetchQuery({
+      queryKey:  queryKeys.messages.byScope(scope, scopeId),
+      queryFn:   () => messagesApi.list(scope, scopeId),
+      staleTime: 60_000,
+    });
+    if (scope === 'task') {
+      qc.prefetchQuery({
+        queryKey:  queryKeys.timeLogs.byTask(scopeId),
+        queryFn:   () => timeLogsApi.list(scopeId),
+        staleTime: 60_000,
+      });
+    }
+  }
+
   return (
     /* Outer wrapper collapses height after the slide finishes */
     <div
@@ -76,6 +91,7 @@ export default function InboxRow({
           tabIndex={0}
           onClick={() => onSelect(item)}
           onKeyDown={(e) => e.key === 'Enter' && onSelect(item)}
+          onMouseEnter={handleMouseEnter}
           className={`flex items-center px-6 py-3.5 gap-4 border-b border-[#F2F4F7] cursor-pointer relative group transition-colors ${
             isSelected ? 'bg-[#F9F5FF]' : 'hover:bg-[#FAFAFA]'
           }`}

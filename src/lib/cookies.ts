@@ -15,5 +15,7 @@ export function getCookie(name: string): string | null {
 }
 
 export function deleteCookie(name: string): void {
-  document.cookie = `${name}=; path=/; Max-Age=0; SameSite=Strict`;
+  let cookie = `${name}=; path=/; Max-Age=0; SameSite=Strict`;
+  if (window.location.protocol === 'https:') cookie += '; Secure';
+  document.cookie = cookie;
 }

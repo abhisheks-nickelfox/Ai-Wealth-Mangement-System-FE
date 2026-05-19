@@ -5,7 +5,7 @@ import TimesheetTaskRow from './TimesheetTaskRow'
 import { formatSeconds } from '../../lib/timeUtils'
 import {
   useTimeEntries, useStartTimer, useStopTimer,
-  useCreateTimeEntry, useDeleteTimeEntry,
+  useCreateTimeEntry, useDeleteTimeEntry, useUpdateTimeEntry,
 } from '../../hooks/useTimeEntries'
 import { useTimer } from '../../context/TimerContext'
 import { useAuth } from '../../context/AuthContext'
@@ -33,6 +33,7 @@ export default function TimesheetPanel({
   const stopTimer         = useStopTimer(taskId)
   const createEntry       = useCreateTimeEntry(taskId)
   const deleteEntry       = useDeleteTimeEntry(taskId)
+  const updateEntry       = useUpdateTimeEntry(taskId)
 
   const isRunningHere    = running?.taskId === taskId
   const totalSeconds     = summary?.total_seconds ?? 0
@@ -113,6 +114,14 @@ export default function TimesheetPanel({
                   fireTaskMessage('Deleted a time entry')
                   fireProjectMessage('Deleted a time entry from a task')
                 }}
+                onEdit={(entryId, payload) =>
+                  new Promise<void>((resolve, reject) =>
+                    updateEntry.mutate({ entryId, ...payload }, {
+                      onSuccess: () => resolve(),
+                      onError:   (err) => reject(err),
+                    })
+                  )
+                }
               />
             ) : (
               <div className="px-3 py-4 text-center text-[12px] text-[#A4A7AE]">
@@ -136,6 +145,14 @@ export default function TimesheetPanel({
                     entries={sub.entries}
                     currentUserId={user.id}
                     onDelete={(entryId) => deleteEntry.mutate(entryId)}
+                    onEdit={(entryId, payload) =>
+                      new Promise<void>((resolve, reject) =>
+                        updateEntry.mutate({ entryId, ...payload }, {
+                          onSuccess: () => resolve(),
+                          onError:   (err) => reject(err),
+                        })
+                      )
+                    }
                     depth={1}
                   />
                 ))}

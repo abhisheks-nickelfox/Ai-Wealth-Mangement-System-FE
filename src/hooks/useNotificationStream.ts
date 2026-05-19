@@ -1,24 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { getCookie } from '../lib/cookies';
+import { queryKeys } from '../lib/queryKeys';
+import type { AppNotification } from '../lib/api';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
 
-/**
- * Opens a persistent SSE connection to /api/notifications/stream for the
- * logged-in user. When the server broadcasts a notification_update event
- * (after any inbox write — @mention, reply, assignment, etc.) this hook
- * invalidates the notifications query so the inbox and unread badge refresh
- * instantly without polling.
- *
- * Mount once in AppLayout so the connection stays alive for the whole session.
- */
 export function useNotificationStream() {
   const qc    = useQueryClient();
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    const entry = document.cookie.split('; ').find((r) => r.startsWith('mw_token='));
-    const token = entry ? decodeURIComponent(entry.split('=')[1]) : null;
+    const token = getCookie('mw_token');
     if (!token) return;
 
     const url = `${API_URL}/notifications/stream?token=${encodeURIComponent(token)}`;
@@ -27,11 +20,27 @@ export function useNotificationStream() {
 
     es.onmessage = (event) => {
       try {
-        const parsed = JSON.parse(event.data) as { type: string };
+        const parsed = JSON.parse(event.data) as {
+          type: string;
+          notification?: AppNotification;
+        };
+
         if (parsed.type === 'notification_update') {
-          // refetchQueries fires immediately; invalidateQueries only marks stale
-          // and waits for the next render cycle — noticeably slower.
-          void qc.refetchQueries({ queryKey: ['notifications'] });
+          if (parsed.notification) {
+            // Instant cache update — notification appears immediately.
+            // A background invalidate follows to fill in joined fields
+            // (firm_name, project_name, actor avatar, etc.).
+            qc.setQueryData<AppNotification[]>(
+              queryKeys.notifications.all,
+              (old = []) =>
+                old.some((n) => n.id === parsed.notification!.id)
+                  ? old
+                  : [parsed.notification!, ...old],
+            );
+          }
+          // Always background-refetch so joined fields (actor, firm_name …)
+          // arrive shortly after the instant optimistic update.
+          void qc.invalidateQueries({ queryKey: queryKeys.notifications.all });
         }
       } catch {
         // heartbeat comments or malformed — ignore
