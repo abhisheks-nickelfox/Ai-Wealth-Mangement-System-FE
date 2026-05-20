@@ -8,17 +8,17 @@ export const firmStep1Schema = Yup.object({
     .min(2, 'Firm name must be at least 2 characters')
     .max(100, 'Firm name must be 100 characters or fewer')
     .matches(/[a-zA-Z]/, 'Firm name must contain at least one letter')
-    .required('Firm name is required'),
+    .required('Please enter the firm name'),
   location: Yup.string()
     .trim()
     .min(2, 'Location must be at least 2 characters')
     .max(100, 'Location must be 100 characters or fewer')
     .matches(/[a-zA-Z]/, 'Location must contain at least one letter')
-    .required('Location is required'),
+    .required('Please enter the firm location'),
   website: Yup.string()
     .trim()
     .matches(URL_REGEX, 'Please enter a valid website URL (e.g. www.example.com)')
-    .required('Firm website is required'),
+    .required('Please enter the firm website'),
   description: Yup.string()
     .trim()
     .optional()
@@ -32,7 +32,7 @@ export const firmStep1Schema = Yup.object({
 export const firmStep2Schema = Yup.object({
   contactName: Yup.string()
     .trim()
-    .required('Contact name is required')
+    .required('Please enter the contact person\'s name')
     .min(2, 'Contact name must be at least 2 characters')
     .matches(/[a-zA-Z]/, 'Contact name must contain at least one letter'),
   contactRole: Yup.string()
@@ -43,8 +43,8 @@ export const firmStep2Schema = Yup.object({
       return /[a-zA-Z]/.test(val);
     }),
   contactEmail: Yup.string()
-    .required('Email is required')
-    .test('valid-email', 'Please enter a valid email address', (val) => {
+    .required('Please enter the contact email address')
+    .test('valid-email', 'Please enter a valid email address (e.g. name@company.com)', (val) => {
       if (!val || !val.trim()) return false;
       return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
     }),

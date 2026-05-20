@@ -32,7 +32,7 @@ import SearchInput from '../../components/ui/SearchInput';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import EmptyState from '../../components/ui/EmptyState';
 import { useCreateTask } from '../../hooks/useTasks';
-import { STATUS_GROUP_LABEL, STATUS_GROUP_ORDER, PRIORITY_MAP } from '../../lib/projectConstants';
+import { STATUS_GROUP_LABEL, STATUS_GROUP_ORDER } from '../../lib/projectConstants';
 import type { Task, Firm } from '../../lib/api';
 import type { TaskDetailData } from '../../components/tasks/TaskDetailPanel';
 import type { TaskFormData } from '../../components/tasks/AddTaskModal';
@@ -77,9 +77,7 @@ function ColumnHeaders() {
       <span className="flex-1 min-w-0 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
         Tasks
       </span>
-      <span className={`${COL_ASSIGNEE} text-[11px] font-bold uppercase tracking-wider text-[#6B7280] text-center shrink-0`}>
-        Assignee
-      </span>
+      <span className={`${COL_ASSIGNEE} shrink-0`} />
       <span className={`${COL_DATE} text-[11px] font-bold uppercase tracking-wider text-[#6B7280] shrink-0`}>
         Due date
       </span>
@@ -106,6 +104,7 @@ interface StatusGroupProps {
   onDelete: (task: Task) => void;
   onAssigneeChange: (taskId: string, assigneeId: string | null) => void;
   onAddSubTask: (parentTask: Task) => void;
+  hideAssigneePicker?: boolean;
 }
 
 function StatusGroup({
@@ -118,6 +117,7 @@ function StatusGroup({
   onDelete,
   onAssigneeChange,
   onAddSubTask,
+  hideAssigneePicker,
 }: StatusGroupProps) {
   const [collapsed, setCollapsed] = useState(false);
   const label = STATUS_GROUP_LABEL[status] ?? status;
@@ -152,6 +152,7 @@ function StatusGroup({
               task={task}
               firm={firmsMap.get(task.firm_id) ?? null}
               usersMap={usersMap}
+              hideAssigneePicker={hideAssigneePicker}
               onOpenDetail={onOpenDetail}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -386,6 +387,7 @@ export default function MyTasksPage() {
         description:  data.description,
         priority:     data.priority,
         assignee_ids: data.assignee_ids,
+        start_date:   data.start_date || undefined,
         deadline:     data.deadline || undefined,
         project_id:   data.project_id,
       },
@@ -411,7 +413,8 @@ export default function MyTasksPage() {
       title:          data.title,
       description:    data.description || undefined,
       type:           'task',
-      priority:       PRIORITY_MAP[data.priority] ?? 'normal',
+      priority:       data.priority,
+      start_date:     data.startDate || undefined,
       deadline:       data.endDate || undefined,
       assignee_ids:   data.assigneeIds,
       parent_task_id: addTaskParentId || undefined,
@@ -530,7 +533,8 @@ export default function MyTasksPage() {
                 tasks={tasks}
                 firmsMap={firmsMap}
                 usersMap={usersMap}
-                  onOpenDetail={setSelectedTask}
+                hideAssigneePicker
+                onOpenDetail={(task) => navigate(`/firms/${task.firm_id}/tasks/${task.id}`)}
                 onEdit={setSelectedTask}
                 onDelete={handleDeleteTask}
                 onAssigneeChange={(taskId, assigneeId) =>

@@ -288,7 +288,7 @@ export interface Project {
   workflow_status: 'todo' | 'in_progress' | 'in_review' | 'approved' | 'completed';
   start_date:      string | null;
   end_date:        string | null;
-  priority:        'high' | 'medium' | 'low';
+  priority:        'high' | 'normal' | 'low' | 'urgent';
   share_token:     string | null;
   created_at:      string;
   updated_at:      string;
@@ -383,6 +383,7 @@ export interface Task {
   type:            string;
   priority:        'low' | 'normal' | 'high' | 'urgent';
   status:          'to_do' | 'assigned' | 'in_progress' | 'revisions' | 'internal_review' | 'client_review' | 'completed' | 'blocked';
+  start_date:      string | null;
   deadline:        string | null;
   estimated_hours: number | null;
   ai_generated:    boolean;
@@ -475,7 +476,7 @@ export const tasksApi = {
     const qs = q.toString() ? `?${q.toString()}` : '';
     return request<{ data: Task[] }>('GET', `/tasks${qs}`).then((r) => r.data);
   },
-  update: (id: string, payload: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'deadline'>> & { assignee_id?: string | null; assignee_ids?: string[]; project_id?: string | null }) =>
+  update: (id: string, payload: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'deadline' | 'start_date'>> & { assignee_id?: string | null; assignee_ids?: string[]; project_id?: string | null }) =>
     request<{ data: Task }>('PATCH', `/tasks/${id}`, payload).then((r) => r.data),
   assignApprove: (id: string, payload: { assignee_id: string; priority?: string; deadline?: string }) =>
     request<{ data: Task }>('PATCH', `/tasks/${id}/assign-approve`, payload).then((r) => r.data),

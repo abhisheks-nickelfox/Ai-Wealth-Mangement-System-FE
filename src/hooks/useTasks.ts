@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tasksApi } from '../lib/api';
-import type { Task, CreateTaskPayload } from '../lib/api';
+import type { Task, CreateTaskPayload, User } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
 
 export function useCreateTask() {
@@ -60,11 +60,29 @@ export function useUpdateTask() {
         project_id?:   string | null;
         firm_id?:      string;
         status?:       string;
+        start_date?:   string;
       };
     }) => tasksApi.update(id, payload),
     onMutate: async ({ id, payload }) => {
       await qc.cancelQueries({ queryKey: queryKeys.tasks.detail(id) });
+      await qc.cancelQueries({ queryKey: queryKeys.tasks.all });
       const previous = qc.getQueryData<Task>(queryKeys.tasks.detail(id));
+
+      // Build resolved assignees from cache when assignee_ids is changing.
+      // Only consider Active users — same filter useActiveUsers applies.
+      const resolveAssignees = (ids: string[], existing: Task['assignees']) => {
+        const usersCache = (qc.getQueryData<User[]>(queryKeys.users.all) ?? [])
+          .filter((u) => u.status === 'Active');
+        return ids.map((uid) => {
+          const found = existing?.find((a) => a.id === uid);
+          if (found) return found;
+          const u = usersCache.find((u) => u.id === uid);
+          return u
+            ? { id: uid, name: u.name, email: u.email, avatar_url: u.avatar_url ?? null }
+            : { id: uid, name: uid, email: '', avatar_url: null };
+        });
+      };
+
       if (previous) {
         qc.setQueryData<Task>(queryKeys.tasks.detail(id), {
           ...previous,
@@ -74,8 +92,29 @@ export function useUpdateTask() {
           ...(payload.description !== undefined && { description: payload.description }),
           ...(payload.deadline    !== undefined && { deadline:    payload.deadline }),
           ...(payload.project_id  !== undefined && { project_id:  payload.project_id }),
+          ...(payload.assignee_ids !== undefined && {
+            assignees: resolveAssignees(payload.assignee_ids, previous.assignees),
+          }),
         });
       }
+
+      // Optimistically patch every task list (useMyTasks, useTasks, etc.)
+      qc.setQueriesData<Task[]>({ queryKey: queryKeys.tasks.all }, (old) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((t) => {
+          if (t.id !== id) return t;
+          return {
+            ...t,
+            ...(payload.status      !== undefined && { status:      payload.status as Task['status'] }),
+            ...(payload.priority    !== undefined && { priority:    payload.priority }),
+            ...(payload.deadline    !== undefined && { deadline:    payload.deadline }),
+            ...(payload.project_id  !== undefined && { project_id:  payload.project_id }),
+            ...(payload.assignee_ids !== undefined && {
+              assignees: resolveAssignees(payload.assignee_ids, t.assignees),
+            }),
+          };
+        });
+      });
 
       // Optimistically patch the parent task's embedded subtask entry so assignee
       // changes in SubTaskRow feel instant without waiting for the API response.

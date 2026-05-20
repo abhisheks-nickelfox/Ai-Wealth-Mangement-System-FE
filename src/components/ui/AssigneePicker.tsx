@@ -29,7 +29,12 @@ export default function AssigneePicker({
   function handleOpen() {
     if (!open && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+      const dropdownWidth = 220;
+      const viewportWidth = window.innerWidth;
+      const left = rect.left + dropdownWidth > viewportWidth - 12
+        ? rect.right - dropdownWidth
+        : rect.left;
+      setDropdownPos({ top: rect.bottom + 4, left });
     }
     setOpen((v) => !v);
   }

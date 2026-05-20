@@ -14,7 +14,7 @@ interface SubTaskRowProps {
   onClick:            () => void;
   onNavigate?:        () => void;
   onUpdateAssignees?: (taskId: string, ids: string[]) => void;
-  onAddSubTask?:      (parentId: string, parentDeadline?: string) => void;
+  onAddSubTask?:      (parentId: string, parentDeadline?: string, parentStartDate?: string) => void;
   isNested?:          boolean;
 }
 
@@ -53,7 +53,7 @@ export default function SubTaskRow({
         {!isNested && onAddSubTask && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onAddSubTask(task.id, task.deadline ?? undefined); }}
+            onClick={(e) => { e.stopPropagation(); onAddSubTask(task.id, task.deadline ?? undefined, task.start_date ?? undefined); }}
             className="opacity-0 group-hover:opacity-100 shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-[#A4A7AE] hover:text-[#6941C6] hover:bg-[#F4F3FF] transition-all"
           >
             <Plus width={10} height={10} />

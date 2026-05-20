@@ -19,8 +19,8 @@ export default function FileUploadZone({
   files,
   onAdd,
   onRemove,
-  accept = 'image/svg+xml,image/png,image/jpeg,image/gif',
-  hint = 'SVG, PNG, JPG or GIF (max. 800×400px)',
+  accept = 'image/svg+xml,image/png,image/jpeg,image/gif,application/pdf',
+  hint = 'SVG, PNG, JPG, GIF or PDF (max. 800×400px)',
   label,
 }: FileUploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);

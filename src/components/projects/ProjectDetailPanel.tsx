@@ -13,6 +13,7 @@ import { useTasks } from '../../hooks/useTasks';
 import type { User, Task } from '../../lib/api';
 import { TASK_STATUS_BADGE } from '../../lib/constants';
 import TaskIcon from '../icons/TaskIcon';
+import HelpTooltip from '../ui/HelpTooltip';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,7 +30,7 @@ export interface ProjectDetail {
   firmAbbr:        string;
   startDate?:      string;
   endDate?:        string;
-  priority?:       'high' | 'medium' | 'low';
+  priority?:       'urgent' | 'high' | 'normal' | 'low';
   createdAt?:      string;
 }
 
@@ -56,9 +57,10 @@ const STATUS_OPTIONS: { value: ProjectStatus; dot: string }[] = [
   { value: 'Blocked',     dot: 'bg-red-500'   },
 ];
 
-const PRIORITY_OPTIONS: { value: 'high' | 'medium' | 'low'; label: string; dot: string }[] = [
-  { value: 'high',   label: 'High',   dot: 'bg-red-400'    },
-  { value: 'medium', label: 'Medium', dot: 'bg-yellow-400' },
+const PRIORITY_OPTIONS: { value: 'urgent' | 'high' | 'normal' | 'low'; label: string; dot: string }[] = [
+  { value: 'urgent', label: 'Urgent', dot: 'bg-red-500'    },
+  { value: 'high',   label: 'High',   dot: 'bg-orange-400' },
+  { value: 'normal', label: 'Normal', dot: 'bg-yellow-400' },
   { value: 'low',    label: 'Low',    dot: 'bg-green-500'  },
 ];
 
@@ -73,7 +75,7 @@ export default function ProjectDetailPanel({
   const [name,        setName]        = useState('');
   const [description, setDescription] = useState('');
   const [status,      setStatus]      = useState<ProjectStatus>('To Do');
-  const [priority,    setPriority]    = useState<'high' | 'medium' | 'low'>('medium');
+  const [priority,    setPriority]    = useState<'urgent' | 'high' | 'normal' | 'low'>('normal');
   const [memberIds,   setMemberIds]   = useState<string[]>([]);
   const [startDate,   setStartDate]   = useState('');
   const [endDate,     setEndDate]     = useState('');
@@ -104,7 +106,7 @@ export default function ProjectDetailPanel({
       setName(project.name);
       setDescription(project.description ?? '');
       setStatus(project.status);
-      setPriority(project.priority ?? 'medium');
+      setPriority(project.priority ?? 'normal');
       setMemberIds(project.memberIds);
       setStartDate(project.startDate ?? '');
       setEndDate(project.endDate ?? '');
@@ -180,7 +182,10 @@ export default function ProjectDetailPanel({
 
         {/* Description */}
         <div>
-          <label className="block text-sm font-medium text-[#344054] mb-1.5">Description</label>
+          <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
+            Description
+            <HelpTooltip text="Provide a clear overview of the project's goals, scope, and key deliverables." position="top" />
+          </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -192,7 +197,10 @@ export default function ProjectDetailPanel({
 
         {/* Status */}
         <div ref={statusRef} className="relative">
-          <label className="block text-sm font-medium text-[#344054] mb-1.5">Status</label>
+          <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
+            Status
+            <HelpTooltip text="Current stage: To Do → In progress → In Review → Approved → Completed (or Blocked)." position="top" />
+          </label>
           <button
             type="button"
             onClick={() => setShowStatus((v) => !v)}
@@ -223,7 +231,10 @@ export default function ProjectDetailPanel({
 
         {/* Priority */}
         <div ref={priorityRef} className="relative">
-          <label className="block text-sm font-medium text-[#344054] mb-1.5">Priority</label>
+          <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
+            Priority
+            <HelpTooltip text="Urgent: drop everything · High: ASAP · Normal: standard · Low: backlog" position="top" />
+          </label>
           <button
             type="button"
             onClick={() => setShowPriority((v) => !v)}

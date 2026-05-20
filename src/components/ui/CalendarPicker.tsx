@@ -2,9 +2,12 @@ import { useState } from 'react'
 import { ChevronUp, ChevronDown } from '@untitled-ui/icons-react'
 
 interface CalendarPickerProps {
-  value:    Date
-  onChange: (date: Date) => void
-  onClose:  () => void
+  value:     Date | null
+  onChange:  (date: Date) => void
+  onClose:   () => void
+  onClear?:  () => void
+  min?:      Date
+  max?:      Date
 }
 
 const DAYS   = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
@@ -16,9 +19,19 @@ function isSameDay(a: Date, b: Date) {
          a.getDate()     === b.getDate()
 }
 
-export default function CalendarPicker({ value, onChange, onClose }: CalendarPickerProps) {
+function stripTime(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+
+export default function CalendarPicker({ value, onChange, onClose, onClear, min, max }: CalendarPickerProps) {
   const today = new Date()
-  const [cursor, setCursor] = useState(new Date(value.getFullYear(), value.getMonth(), 1))
+
+  // When value is null, default cursor to current month
+  const initialCursor = value
+    ? new Date(value.getFullYear(), value.getMonth(), 1)
+    : new Date(today.getFullYear(), today.getMonth(), 1)
+
+  const [cursor, setCursor] = useState(initialCursor)
 
   function prevMonth() {
     setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))
@@ -27,13 +40,26 @@ export default function CalendarPicker({ value, onChange, onClose }: CalendarPic
     setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))
   }
   function goToday() {
+    const stripped = stripTime(today)
+    const minStripped = min ? stripTime(min) : null
+    const maxStripped = max ? stripTime(max) : null
+    // No-op if today is outside min/max range
+    if (minStripped && stripped < minStripped) return
+    if (maxStripped && stripped > maxStripped) return
     setCursor(new Date(today.getFullYear(), today.getMonth(), 1))
     onChange(new Date(today))
     onClose()
   }
 
+  function isDisabled(date: Date): boolean {
+    const stripped = stripTime(date)
+    if (min && stripped < stripTime(min)) return true
+    if (max && stripped > stripTime(max)) return true
+    return false
+  }
+
   // Build grid: start from Sunday of the week containing the 1st
-  const firstDay  = cursor.getDay()                                    // 0–6
+  const firstDay    = cursor.getDay()
   const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
   const cells: { date: Date; inMonth: boolean }[] = []
 
@@ -98,8 +124,21 @@ export default function CalendarPicker({ value, onChange, onClose }: CalendarPic
       {/* Date grid */}
       <div className="grid grid-cols-7">
         {cells.map(({ date, inMonth }, i) => {
-          const isSelected = isSameDay(date, value)
+          const isSelected = value ? isSameDay(date, value) : false
           const isToday    = isSameDay(date, today)
+          const disabled   = isDisabled(date)
+
+          if (disabled) {
+            return (
+              <div
+                key={i}
+                className="w-8 h-8 mx-auto flex items-center justify-center rounded-full text-[12px] text-[#D0D5DD] cursor-not-allowed"
+              >
+                {date.getDate()}
+              </div>
+            )
+          }
+
           return (
             <button
               key={i}
@@ -118,6 +157,19 @@ export default function CalendarPicker({ value, onChange, onClose }: CalendarPic
           )
         })}
       </div>
+
+      {/* Footer — Clear link */}
+      {onClear && value && (
+        <div className="mt-2 pt-2 border-t border-[#F2F4F7] flex justify-end px-1">
+          <button
+            type="button"
+            onClick={() => { onClear(); onClose() }}
+            className="text-[11px] font-semibold text-[#717680] hover:text-[#344054] transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      )}
     </div>
   )
 }

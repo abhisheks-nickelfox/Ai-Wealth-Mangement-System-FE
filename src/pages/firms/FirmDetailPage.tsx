@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronRight } from '@untitled-ui/icons-react';
 import Toast from '../../components/ui/Toast';
@@ -43,6 +43,7 @@ export default function FirmDetailPage() {
   const [activeTab, setActiveTab]       = useState<TabId>('projects');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const { toast: firmToast, notify: notifyFirm, dismiss: dismissFirmToast } = useToast();
+  const deletedRef = useRef(false);
 
   const deleteFirm = useDeleteFirm();
 
@@ -56,9 +57,9 @@ export default function FirmDetailPage() {
   async function handleDeleteConfirm() {
     try {
       await deleteFirm.mutateAsync(id!);
+      deletedRef.current = true;
       setShowDeleteModal(false);
-      notifyFirm('Firm deleted successfully');
-      setTimeout(() => navigate('/firms'), 1500);
+      navigate('/dashboard');
     } catch (err) {
       setShowDeleteModal(false);
       notifyFirm((err as Error).message || 'Failed to delete firm', 'error');
@@ -75,9 +76,9 @@ export default function FirmDetailPage() {
     );
   }
 
-  // ── Error state ────────────────────────────────────────────────────────────
+  // ── Error state (suppressed if deletion just completed) ───────────────────
 
-  if (error) {
+  if (error && !deletedRef.current) {
     return (
       <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="flex flex-col flex-1 items-center justify-center gap-3">

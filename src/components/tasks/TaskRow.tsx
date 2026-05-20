@@ -58,6 +58,7 @@ export interface TaskRowProps {
   projects?: Project[];
   indented?: boolean;
   depth?: number;
+  hideAssigneePicker?: boolean;
   onEdit?: (task: Task) => void;
   onDelete?: (task: Task) => void;
   onOpenDetail?: (task: Task) => void;
@@ -68,7 +69,7 @@ export interface TaskRowProps {
 }
 
 export function TaskRow({
-  task, usersMap, projects = [], indented = false, depth = 0,
+  task, usersMap, projects = [], indented = false, depth = 0, hideAssigneePicker = false,
   onEdit, onDelete, onOpenDetail, onNavigate, onAssigneeChange, onProjectChange, onAddSubTask,
 }: TaskRowProps) {
   const [contextOpen,       setContextOpen]       = useState(false);
@@ -146,34 +147,38 @@ export function TaskRow({
         </button>
 
         {/* Assignee column */}
-        <div
-          ref={assigneeAnchorRef}
-          className={`${COL_ASSIGNEE} relative flex justify-center`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setPickerOpen((v) => !v); }}
-            className={`transition-opacity ${currentAssignees.length === 0 ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}
-            aria-label="Assign"
+        {hideAssigneePicker ? (
+          <div className={`${COL_ASSIGNEE}`} />
+        ) : (
+          <div
+            ref={assigneeAnchorRef}
+            className={`${COL_ASSIGNEE} relative flex justify-center`}
+            onClick={(e) => e.stopPropagation()}
           >
-            <AvatarStack
-              avatars={currentAssignees.map((a: { id: string; name: string; avatar_url?: string | null }) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
-              max={4}
-              showAddButton={true}
-              addAs="div"
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setPickerOpen((v) => !v); }}
+              className={`transition-opacity ${currentAssignees.length === 0 ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}
+              aria-label="Assign"
+            >
+              <AvatarStack
+                avatars={currentAssignees.map((a: { id: string; name: string; avatar_url?: string | null }) => ({ name: a.name, src: a.avatar_url ?? undefined }))}
+                max={4}
+                showAddButton={true}
+                addAs="div"
+              />
+            </button>
+            <AssigneePickerDropdown
+              open={pickerOpen}
+              onClose={() => setPickerOpen(false)}
+              anchorRef={assigneeAnchorRef as React.RefObject<HTMLElement | null>}
+              users={assignableUsersInRow}
+              selected={currentAssigneeIds}
+              onToggle={(uid) => { onAssigneeChange?.(task.id, uid); setPickerOpen(false); }}
+              multiSelect={false}
             />
-          </button>
-          <AssigneePickerDropdown
-            open={pickerOpen}
-            onClose={() => setPickerOpen(false)}
-            anchorRef={assigneeAnchorRef as React.RefObject<HTMLElement | null>}
-            users={assignableUsersInRow}
-            selected={currentAssigneeIds}
-            onToggle={(uid) => { onAssigneeChange?.(task.id, uid); setPickerOpen(false); }}
-            multiSelect={false}
-          />
-        </div>
+          </div>
+        )}
 
         {/* Due date column */}
         <div className={`${COL_DATE} text-[12px] ${overdue ? 'text-red-500 font-medium' : 'text-[#717680]'}`}>
@@ -293,6 +298,7 @@ export function TaskRow({
                 projects={projects}
                 indented
                 depth={depth + 1}
+                hideAssigneePicker={hideAssigneePicker}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onOpenDetail={onOpenDetail}

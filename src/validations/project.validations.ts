@@ -4,7 +4,7 @@ export const createProjectSchema = Yup.object({
   name: Yup.string()
     .trim()
     .matches(/[a-zA-Z]/, 'Project name must contain at least one letter')
-    .required('Project name is required'),
+    .required('Please enter a name for this project'),
   description: Yup.string()
     .trim()
     .optional(),

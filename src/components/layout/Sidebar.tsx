@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SearchLg } from '@untitled-ui/icons-react';
+import SearchModal from './SearchModal';
 
 import NavSection from '../sidebar/NavSection';
 import NavItem from '../sidebar/NavItem';
@@ -102,6 +103,20 @@ export default function Sidebar() {
   // Derive active firm from URL
   const activeFirm = getActiveFirmId(location.pathname);
 
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Open on ⌘K / Ctrl+K
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <aside className="w-64 shrink-0 bg-white border-r border-gray-200 flex flex-col h-screen sticky top-0 overflow-y-auto">
 
@@ -116,14 +131,25 @@ export default function Sidebar() {
 
       {/* ── Search ───────────────────────────────────────────────────── */}
       <div className="px-3 pb-3 shrink-0">
-        <div className="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 bg-white shadow-sm">
+        <button
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          className="w-full flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 bg-white shadow-sm hover:border-gray-400 transition-colors"
+        >
           <SearchLg width={16} height={16} className="text-gray-400 shrink-0" />
-          <span className="flex-1 text-sm text-gray-400">Search</span>
+          <span className="flex-1 text-left text-sm text-gray-400">Search</span>
           <span className="border border-gray-200 rounded px-1.5 py-0.5 text-[11px] text-gray-400 font-medium leading-none">
             ⌘K
           </span>
-        </div>
+        </button>
       </div>
+
+      <SearchModal
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        firms={firms}
+        tasks={myTasks}
+      />
 
       {/* ── Navigation ───────────────────────────────────────────────── */}
       <nav className="flex-1 px-2 overflow-y-auto pb-4">

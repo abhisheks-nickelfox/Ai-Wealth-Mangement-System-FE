@@ -1,13 +1,13 @@
 import { useState, useRef } from 'react';
 import { Formik, Form } from 'formik';
 import {
-  HelpCircle,
-  CalendarDate,
   ChevronDown,
   X,
 } from '@untitled-ui/icons-react';
+import HelpTooltip from '../ui/HelpTooltip';
 import Avatar from '../ui/Avatar';
 import AssigneePicker from '../ui/AssigneePicker';
+import DatePickerField from '../ui/DatePickerField';
 import FileUploadZone, { type UploadedFile, createUploadedFile, revokeUploadedFiles } from '../ui/FileUploadZone';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
@@ -33,15 +33,16 @@ export interface ProjectFormData {
   startDate: string;
   endDate: string;
   assigneeIds: string[];
-  priority: 'High' | 'Medium' | 'Low';
+  priority: 'Urgent' | 'High' | 'Normal' | 'Low';
   files: File[];
   workflowStatus: string;
 }
 
-const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'] as const;
+const PRIORITY_OPTIONS = ['Urgent', 'High', 'Normal', 'Low'] as const;
 const PRIORITY_DOT: Record<string, string> = {
-  High:   'bg-red-500',
-  Medium: 'bg-yellow-400',
+  Urgent: 'bg-red-500',
+  High:   'bg-orange-400',
+  Normal: 'bg-yellow-400',
   Low:    'bg-green-500',
 };
 
@@ -69,7 +70,7 @@ export default function AddProjectModal({
   const [startDate,   setStartDate]   = useState('');
   const [endDate,     setEndDate]     = useState('');
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
-  const [priority,    setPriority]    = useState<'High' | 'Medium' | 'Low'>('High');
+  const [priority,    setPriority]    = useState<'Urgent' | 'High' | 'Normal' | 'Low'>('High');
   const [files,       setFiles]       = useState<UploadedFile[]>([]);
 
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
@@ -131,8 +132,8 @@ export default function AddProjectModal({
           setSubmitting(false);
           return;
         }
-        if (endDate < startDate) {
-          setDateError('End date must be on or after the start date.');
+        if (startDate && endDate && endDate < startDate) {
+          setDateError('End date must be on or after start date.');
           setSubmitting(false);
           return;
         }
@@ -195,8 +196,9 @@ export default function AddProjectModal({
 
               {/* Choose from a template */}
               <div ref={templateRef} className="relative">
-                <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
                   Choose from a template <span className="text-red-500">*</span>
+                  <HelpTooltip text="Start from a pre-built structure to save time on setup." position="top" />
                 </label>
                 <button
                   type="button"
@@ -239,12 +241,12 @@ export default function AddProjectModal({
               <div>
                 <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
                   Description
-                  <HelpCircle width={14} height={14} className="text-[#A4A7AE]" />
+                  <HelpTooltip text="Provide a clear overview of the project's goals, scope, and key deliverables." position="top" />
                 </label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="A little about the company and the team that you'll be working with."
+                  placeholder="Describe the project goals, scope, and key deliverables."
                   rows={4}
                   className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] placeholder-[#A4A7AE] outline-none focus:ring-2 focus:ring-[#7F56D9] focus:border-transparent transition bg-white resize-none"
                 />
@@ -254,32 +256,33 @@ export default function AddProjectModal({
               <div className="flex flex-col gap-1.5">
                 <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-4 items-end">
 
-                  <Input
+                  <DatePickerField
                     label="Start date"
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => { setStartDate(e.target.value); setDateError(''); }}
-                    rightIcon={<CalendarDate width={16} height={16} className="text-[#717680] pointer-events-none" />}
                     required
+                    value={startDate}
+                    onChange={(v) => { setStartDate(v); setDateError(''); }}
+                    max={endDate || undefined}
                     error={!startDate && dateError ? 'Required' : undefined}
+                    clearable
                   />
 
-                  <Input
+                  <DatePickerField
                     label="End date"
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => { setEndDate(e.target.value); setDateError(''); }}
-                    rightIcon={<CalendarDate width={16} height={16} className="text-[#717680] pointer-events-none" />}
                     required
+                    value={endDate}
+                    onChange={(v) => { setEndDate(v); setDateError(''); }}
+                    min={startDate || undefined}
                     error={!endDate && dateError ? 'Required' : undefined}
+                    clearable
                   />
 
                   <AssigneePicker users={users} selected={assigneeIds} onToggle={toggleAssignee} />
 
                   {/* Priority */}
                   <div ref={priorityRef} className="relative">
-                    <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                    <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
                       Priority <span className="text-red-500">*</span>
+                      <HelpTooltip text="Urgent: drop everything · High: ASAP · Normal: standard · Low: backlog" position="top" />
                     </label>
                     <button
                       type="button"
@@ -329,8 +332,9 @@ export default function AddProjectModal({
 
               {/* Upload files */}
               <div>
-                <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
                   Upload files <span className="text-red-500">*</span>
+                  <HelpTooltip text="Attach briefs, references, or any project-related documents (PDF, images, etc.)." position="top" />
                 </label>
                 <FileUploadZone files={files} onAdd={addFile} onRemove={removeFile} />
               </div>

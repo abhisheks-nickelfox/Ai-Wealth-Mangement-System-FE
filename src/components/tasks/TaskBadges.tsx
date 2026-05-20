@@ -3,6 +3,24 @@
 import type { Task } from '../../lib/api';
 import { TASK_STATUS_COLORS, TASK_STATUS_LABELS } from '../../lib/constants';
 
+// ── Shared priority constants (single source of truth) ────────────────────────
+
+/** Dot colour for each priority value (use with `w-2 h-2 rounded-full` span). */
+export const PRIORITY_DOT: Record<string, string> = {
+  urgent: 'bg-red-500',
+  high:   'bg-orange-400',
+  normal: 'bg-yellow-400',
+  low:    'bg-green-500',
+};
+
+/** Ordered priority options for dropdowns/selects. */
+export const PRIORITY_OPTIONS: { value: 'urgent' | 'high' | 'normal' | 'low'; label: string; dot: string }[] = [
+  { value: 'urgent', label: 'Urgent', dot: 'bg-red-500'    },
+  { value: 'high',   label: 'High',   dot: 'bg-orange-400' },
+  { value: 'normal', label: 'Normal', dot: 'bg-yellow-400' },
+  { value: 'low',    label: 'Low',    dot: 'bg-green-500'  },
+];
+
 // ── Priority badge ─────────────────────────────────────────────────────────────
 
 export function PriorityBadge({ priority }: { priority: Task['priority'] }) {

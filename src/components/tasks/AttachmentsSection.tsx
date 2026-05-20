@@ -8,6 +8,11 @@ import type { ProjectAttachment } from '../../lib/api';
 import CountBadge from '../ui/CountBadge';
 import { formatFileSize } from '../../lib/formatUtils';
 
+/** Strip UUID prefix that the storage layer prepends (e.g. "abc123_file.pdf" → "file.pdf") */
+function cleanFileName(name: string): string {
+  return name.replace(/^[0-9a-f]{8}-[0-9a-f-]{27}_/i, '');
+}
+
 function FileTypeIcon({ type, name }: { type: string; name: string }) {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   if (type.startsWith('image/')) {
@@ -88,7 +93,7 @@ function SavedAttachmentItem({
 
       <div className="flex-1 min-w-0">
         <p className={`text-[12px] font-medium truncate ${markedForDelete ? 'line-through text-red-400' : 'text-[#181D27]'}`}>
-          {att.file_name}
+          {cleanFileName(att.file_name)}
         </p>
         <div className="flex items-center gap-1.5">
           <p className="text-[11px] text-[#A4A7AE]">{formatFileSize(att.file_size)}</p>
@@ -117,13 +122,12 @@ function SavedAttachmentItem({
           <>
             <a
               href={att.file_url}
-              download={att.file_name}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="text-[11px] text-[#7F56D9] hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
-              Download
+              View
             </a>
             <button
               type="button"
@@ -403,7 +407,7 @@ const AttachmentsSection = forwardRef<AttachmentsSectionHandle, Props>(
                   {(() => {
                     const att = savedAttachments.find((a) => a.id === confirmDeleteId);
                     return att
-                      ? `"${att.file_name}" will be permanently deleted.`
+                      ? `"${cleanFileName(att.file_name)}" will be permanently deleted.`
                       : 'This attachment will be permanently deleted.';
                   })()}
                 </p>

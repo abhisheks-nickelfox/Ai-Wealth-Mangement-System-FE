@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send01, Trash01, Attachment01, Download01, X } from '@untitled-ui/icons-react';
+import { Send01, Trash01, Attachment01, Eye, X } from '@untitled-ui/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 import Avatar from '../ui/Avatar';
 import {
@@ -47,7 +47,7 @@ function groupByDate(messages: Message[]) {
 
 // ── @mention helpers ──────────────────────────────────────────────────────────
 
-interface FilePayload { __file: true; name: string; url: string; size: number; type: string }
+interface FilePayload { __file: true; name: string; url: string; size: number; type: string; caption?: string }
 
 function getFileEmoji(type: string, name: string): string {
   if (type.startsWith('image/'))                                  return '🖼️';
@@ -65,20 +65,22 @@ function FileCard({ file, isSelf }: { file: FilePayload; isSelf: boolean }) {
   const nameCol = isSelf ? 'text-white'  : 'text-[#181D27]';
   const metaCol = isSelf ? 'text-white/70' : 'text-[#717680]';
   const dlCol   = isSelf ? 'text-white/80 hover:text-white' : 'text-[#7F56D9] hover:text-[#6941C6]';
+  // Strip UUID prefix from stored name (e.g. "abc123_filename.pdf" → "filename.pdf")
+  const displayName = file.name.replace(/^[0-9a-f-]{8,}-[0-9a-f-]+_/i, '');
   return (
     <a
       href={file.url}
       target="_blank"
       rel="noopener noreferrer"
-      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-opacity hover:opacity-90 w-full ${bg}`}
-      title="Download file"
+      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-opacity hover:opacity-90 w-full overflow-hidden ${bg}`}
+      title={displayName}
     >
       <span className="text-2xl leading-none shrink-0">{getFileEmoji(file.type, file.name)}</span>
-      <div className="flex-1 min-w-0">
-        <p className={`text-[13px] font-medium truncate ${nameCol}`}>{file.name}</p>
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <p className={`text-[13px] font-medium truncate ${nameCol}`}>{displayName}</p>
         <p className={`text-[11px] ${metaCol}`}>{formatFileSize(file.size)}</p>
       </div>
-      <Download01 width={16} height={16} className={`shrink-0 ${dlCol}`} />
+      <Eye width={16} height={16} className={`shrink-0 ${dlCol}`} />
     </a>
   );
 }
@@ -90,7 +92,14 @@ function renderBody(body: string, isSelf: boolean): React.ReactNode {
   if (body.startsWith('{"__file":true')) {
     try {
       const f = JSON.parse(body) as FilePayload;
-      return <FileCard file={f} isSelf={isSelf} />;
+      return (
+        <div className="flex flex-col gap-2 w-full">
+          {f.caption && (
+            <p className="text-[13px] leading-[1.55] whitespace-pre-wrap break-words px-0.5">{f.caption}</p>
+          )}
+          <FileCard file={f} isSelf={isSelf} />
+        </div>
+      );
     } catch {}
   }
 
@@ -353,7 +362,8 @@ function MessageBubble({ message, isSelf, myId, scope, scopeId, onDelete }: Bubb
 
           {/* Bubble */}
           <div
-            className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-[1.55] whitespace-pre-wrap break-words overflow-hidden w-full
+            className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-[1.55] overflow-hidden w-full
+              ${message.body.startsWith('{"__file":true') ? '' : 'whitespace-pre-wrap break-words'}
               ${isSelf
                 ? 'bg-[#7F56D9] text-white rounded-br-sm'
                 : 'bg-[#F3F4F6] text-[#111827] rounded-bl-sm'
@@ -402,6 +412,7 @@ export function ChatTab({ scope, scopeId, projectId }: { scope: string; scopeId:
   const [activeIndex, setActiveIndex]   = useState(0);
   const [pendingFile,  setPendingFile]  = useState<File | null>(null);
   const [isUploading,  setIsUploading]  = useState(false);
+  const [uploadedUrl,  setUploadedUrl]  = useState<string | null>(null);
   const [uploadError,  setUploadError]  = useState<string | null>(null);
   const bottomRef    = useRef<HTMLDivElement>(null);
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
@@ -430,6 +441,14 @@ export function ChatTab({ scope, scopeId, projectId }: { scope: string; scopeId:
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
+
+  // Auto-resize textarea as user types (max ~5 lines, then scroll)
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [draft]);
 
   // Reset active index whenever the suggestion list changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -483,13 +502,35 @@ export function ChatTab({ scope, scopeId, projectId }: { scope: string; scopeId:
   }
 
   const handleSend = useCallback(() => {
+    if (sendMessage.isPending || isUploading) return;
     const body = draft.trim();
-    if (!body || sendMessage.isPending) return;
-    setDraft('');
+
+    if (pendingFile && uploadedUrl) {
+      const fileBody = JSON.stringify({
+        __file:  true,
+        name:    pendingFile.name,
+        url:     uploadedUrl,
+        size:    pendingFile.size,
+        type:    pendingFile.type || 'application/octet-stream',
+        caption: body || undefined,
+      } satisfies FilePayload);
+      sendMessage.mutate({ scope, scope_id: scopeId, body: fileBody });
+      setDraft('');
+      setPendingFile(null);
+      setUploadedUrl(null);
+    } else if (body) {
+      sendMessage.mutate({ scope, scope_id: scopeId, body });
+      setDraft('');
+    } else {
+      return;
+    }
+
     setMentionQuery(null);
-    sendMessage.mutate({ scope, scope_id: scopeId, body });
-    textareaRef.current?.focus();
-  }, [draft, scope, scopeId, sendMessage]);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '22px';
+      textareaRef.current.focus();
+    }
+  }, [draft, scope, scopeId, sendMessage, pendingFile, uploadedUrl, isUploading]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Escape') { setMentionQuery(null); return; }
@@ -532,13 +573,13 @@ export function ChatTab({ scope, scopeId, projectId }: { scope: string; scopeId:
     }
 
     setPendingFile(file);
+    setUploadedUrl(null);
     setIsUploading(true);
     setUploadError(null);
 
     try {
       let fileUrl: string;
 
-      // Upload to project attachments when possible (universal — visible in Files tab)
       const uploadProjectId = scope === 'project' ? scopeId : (projectId ?? null);
       if (uploadProjectId) {
         const result = await projectAttachmentsApi.upload(uploadProjectId, file);
@@ -550,22 +591,15 @@ export function ChatTab({ scope, scopeId, projectId }: { scope: string; scopeId:
         queryClient.invalidateQueries({ queryKey: queryKeys.attachments.byTask(scopeId) });
       }
 
-      const body = JSON.stringify({
-        __file: true,
-        name:   file.name,
-        url:    fileUrl,
-        size:   file.size,
-        type:   file.type || 'application/octet-stream',
-      } satisfies FilePayload);
-
-      sendMessage.mutate({ scope, scope_id: scopeId, body });
-      setPendingFile(null);
+      setUploadedUrl(fileUrl);
     } catch {
       setUploadError('Upload failed. Please try again.');
+      setPendingFile(null);
+      setUploadedUrl(null);
     } finally {
       setIsUploading(false);
     }
-  }, [scope, scopeId, projectId, queryClient, sendMessage]);
+  }, [scope, scopeId, projectId, queryClient]);
 
   const groups = groupByDate(messages);
   const myId   = user?.id ?? '';
@@ -648,17 +682,32 @@ export function ChatTab({ scope, scopeId, projectId }: { scope: string; scopeId:
           {/* Pending file preview */}
           {pendingFile && (
             <div className="mb-2 flex items-center gap-2.5 bg-[#F0EAFF] border border-[#D6BBFB] rounded-lg px-3 py-2">
-              <span className="text-[18px] leading-none shrink-0">{getFileEmoji(pendingFile.type, pendingFile.name)}</span>
+              {/* File icon with circular upload spinner */}
+              <div className="relative w-9 h-9 shrink-0 flex items-center justify-center">
+                {isUploading && (
+                  <svg className="absolute inset-0 w-9 h-9 -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15" fill="none" stroke="#D6BBFB" strokeWidth="2.5" />
+                    <circle
+                      cx="18" cy="18" r="15" fill="none"
+                      stroke="#7F56D9" strokeWidth="2.5"
+                      strokeDasharray="28 66" strokeLinecap="round"
+                      className="animate-spin origin-center"
+                      style={{ animationDuration: '1s' }}
+                    />
+                  </svg>
+                )}
+                <span className="text-[20px] leading-none">{getFileEmoji(pendingFile.type, pendingFile.name)}</span>
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] font-medium text-[#6941C6] truncate">{pendingFile.name}</p>
-                <p className="text-[10px] text-[#9CA3AF]">{formatFileSize(pendingFile.size)}</p>
+                <p className="text-[10px] text-[#9CA3AF]">
+                  {isUploading ? 'Uploading…' : formatFileSize(pendingFile.size)}
+                </p>
               </div>
-              {isUploading ? (
-                <div className="w-4 h-4 rounded-full border-2 border-[#7F56D9] border-t-transparent animate-spin shrink-0" />
-              ) : (
+              {!isUploading && (
                 <button
                   type="button"
-                  onClick={() => { setPendingFile(null); setUploadError(null); }}
+                  onClick={() => { setPendingFile(null); setUploadedUrl(null); setUploadError(null); }}
                   className="shrink-0 text-[#9CA3AF] hover:text-red-500 transition-colors"
                   aria-label="Remove file"
                 >
@@ -695,12 +744,12 @@ export function ChatTab({ scope, scopeId, projectId }: { scope: string; scopeId:
               onKeyDown={handleKeyDown}
               placeholder="Type a message… Use @ to mention someone"
               rows={1}
-              className="flex-1 resize-none bg-transparent text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none leading-[1.55] max-h-32 overflow-y-auto"
-              style={{ minHeight: '22px' }}
+              className="flex-1 resize-none bg-transparent text-[13px] text-[#111827] placeholder-[#9CA3AF] outline-none leading-[1.55] overflow-y-auto"
+              style={{ minHeight: '22px', maxHeight: '120px' }}
             />
             <button
               onClick={handleSend}
-              disabled={!draft.trim() || sendMessage.isPending}
+              disabled={(!draft.trim() && !uploadedUrl) || sendMessage.isPending || isUploading}
               className="shrink-0 w-8 h-8 rounded-lg bg-[#7F56D9] flex items-center justify-center text-white transition-opacity disabled:opacity-40 hover:bg-[#6941C6]"
               aria-label="Send"
             >

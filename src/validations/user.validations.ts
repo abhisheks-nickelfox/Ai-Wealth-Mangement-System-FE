@@ -2,19 +2,19 @@ import * as Yup from 'yup';
 
 export const createUserSchema = Yup.object({
   email: Yup.string()
-    .email('Enter a valid email address')
-    .required('Email is required'),
+    .email('Please enter a valid email address (e.g. you@example.com)')
+    .required('Email address is required'),
   role: Yup.string()
-    .oneOf(['admin', 'member', 'project_manager'], 'Select a valid role')
-    .required('Role is required'),
+    .oneOf(['admin', 'member', 'project_manager'], 'Please select a valid role')
+    .required('Please select a role for this user'),
   rateAmount: Yup.string()
     .optional()
-    .test('is-valid-number', 'Rate must be a positive number', (val) => {
+    .test('is-valid-number', 'Rate must be 0 or a positive number', (val) => {
       if (!val) return true;
       const n = parseFloat(val);
       return !Number.isNaN(n) && n >= 0;
     })
-    .test('max-rate', 'Rate cannot exceed 99,999,999.99', (val) => {
+    .test('max-rate', 'Rate is too high — maximum allowed is 99,999,999', (val) => {
       if (!val) return true;
       return parseFloat(val) <= 99_999_999.99;
     }),
@@ -33,19 +33,19 @@ export const editUserSchema = Yup.object({
     .matches(/[a-zA-Z]/, 'Last name must contain at least one letter')
     .optional(),
   role: Yup.string()
-    .oneOf(['admin', 'member', 'project_manager'], 'Select a valid role')
+    .oneOf(['admin', 'member', 'project_manager'], 'Please select a valid role')
     .optional(),
   status: Yup.string()
     .oneOf(['Active', 'invited', 'Disabled'])
     .optional(),
   rateAmount: Yup.string()
     .optional()
-    .test('is-valid-number', 'Rate must be a positive number', (val) => {
+    .test('is-valid-number', 'Rate must be 0 or a positive number', (val) => {
       if (!val) return true;
       const n = parseFloat(val);
       return !Number.isNaN(n) && n >= 0;
     })
-    .test('max-rate', 'Rate cannot exceed 99,999,999.99', (val) => {
+    .test('max-rate', 'Rate is too high — maximum allowed is 99,999,999', (val) => {
       if (!val) return true;
       return parseFloat(val) <= 99_999_999.99;
     }),

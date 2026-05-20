@@ -2,10 +2,10 @@ import * as Yup from 'yup';
 
 export const passwordStepSchema = Yup.object({
   password: Yup.string()
-    .min(8, 'Password must be at least 8 characters')
-    .required('Password is required'),
+    .min(8, 'Password must be at least 8 characters long')
+    .required('Please choose a password'),
   confirm: Yup.string()
-    .oneOf([Yup.ref('password')], 'Passwords do not match')
+    .oneOf([Yup.ref('password')], 'Passwords do not match — please re-enter')
     .required('Please confirm your password'),
 });
 
@@ -20,7 +20,7 @@ export const personalDetailsSchema = Yup.object({
     .required('Last name is required'),
   phoneNumber: Yup.string()
     .optional()
-    .test('e164-format', 'Phone number must be in E.164 format (e.g. +12025551234)', (val) => {
+    .test('e164-format', 'Please enter a valid phone number including your country code (e.g. +1 202 555 1234)', (val) => {
       if (!val || !val.trim()) return true;
       return /^\+[1-9]\d{6,14}$/.test(val);
     }),

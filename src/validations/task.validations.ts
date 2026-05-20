@@ -1,6 +1,6 @@
 import * as Yup from 'yup';
 
-export const TASK_PRIORITIES = ['Urgent', 'High', 'Normal', 'Low'] as const;
+export const TASK_PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const;
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
 /**
@@ -11,33 +11,33 @@ export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 export const createTaskSchema = (requireProject: boolean) =>
   Yup.object({
     taskTypeId: Yup.string()
-      .required('Task type is required'),
+      .required('Please select a task type'),
 
     title: Yup.string()
       .trim()
       .min(2, 'Task name must be at least 2 characters')
-      .required('Task name is required'),
+      .required('Please enter a name for this task'),
 
     description: Yup.string()
       .trim()
       .optional(),
 
     projectId: requireProject
-      ? Yup.string().required('Project is required')
+      ? Yup.string().required('Please select a project for this task')
       : Yup.string().optional(),
 
     priority: Yup.string()
-      .oneOf([...TASK_PRIORITIES], 'Select a valid priority')
-      .required('Priority is required'),
+      .oneOf([...TASK_PRIORITIES], 'Please select a priority level')
+      .required('Please select a priority level'),
 
     startDate: Yup.string()
-      .required('Start date is required'),
+      .required('Please select a start date'),
 
     endDate: Yup.string()
-      .required('End date (due date) is required')
+      .required('Please select a due date for this task')
       .test(
         'end-after-start',
-        'End date must be on or after start date',
+        'Due date must be the same as or after the start date',
         function (endDate) {
           const { startDate } = this.parent as { startDate: string };
           if (!startDate || !endDate) return true;
@@ -61,7 +61,7 @@ export type TaskFormValues = {
 
 export const taskInitialValues = (
   defaultProjectId = '',
-  defaultPriority: TaskPriority = 'High',
+  defaultPriority: TaskPriority = 'high',
 ): TaskFormValues => ({
   taskTypeId:  '',
   title:       '',

@@ -1,14 +1,15 @@
 import { useRef, useEffect, useState } from 'react';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import {
-  HelpCircle,
-  CalendarDate,
   ChevronDown,
   X,
 } from '@untitled-ui/icons-react';
+import HelpTooltip from '../ui/HelpTooltip';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
+import DatePickerField from '../ui/DatePickerField';
 import AssigneePicker from '../ui/AssigneePicker';
+import { PRIORITY_DOT, PRIORITY_OPTIONS } from './TaskBadges';
 import FileUploadZone, {
   type UploadedFile,
   createUploadedFile,
@@ -19,7 +20,6 @@ import { useTaskTypes } from '../../hooks/useTaskTypes';
 import {
   createTaskSchema,
   taskInitialValues,
-  TASK_PRIORITIES,
   type TaskFormValues,
   type TaskPriority,
 } from '../../validations/task.validations';
@@ -44,6 +44,8 @@ export interface AddTaskModalProps {
   parentTaskId?: string;
   /** Deadline of the parent task — sub-task end date must not exceed it. */
   parentTaskDeadline?: string;
+  /** Start date of the parent task — sub-task start date must not be before it. */
+  parentTaskStartDate?: string;
   onCreate?: (data: TaskFormData) => Promise<void>;
 }
 
@@ -63,14 +65,6 @@ export interface TaskFormData {
   parentTaskId?: string;
 }
 
-// ── Priority dot colours ──────────────────────────────────────────────────────
-
-const PRIORITY_DOT: Record<string, string> = {
-  Urgent: 'bg-red-500',
-  High:   'bg-orange-400',
-  Medium: 'bg-yellow-400',
-  Low:    'bg-green-500',
-};
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -84,6 +78,7 @@ export default function AddTaskModal({
   defaultStatus,
   parentTaskId,
   parentTaskDeadline,
+  parentTaskStartDate,
   onCreate,
 }: AddTaskModalProps) {
   const { data: taskTypes = [] } = useTaskTypes();
@@ -158,21 +153,35 @@ export default function AddTaskModal({
       validationSchema={schema}
       validate={(values) => {
         const errs: Partial<Record<keyof typeof values, string>> = {};
-        if (values.endDate) {
-          if (values.projectId) {
-            const proj = projects.find((p) => p.id === values.projectId);
-            if (proj?.end_date && values.endDate > proj.end_date) {
-              errs.endDate = `End date cannot exceed project due date (${proj.end_date})`;
-            }
+        const proj = values.projectId ? projects.find((p) => p.id === values.projectId) : undefined;
+
+        // start date constraints
+        if (values.startDate) {
+          if (proj?.start_date && values.startDate < proj.start_date) {
+            errs.startDate = `Start date cannot be before project start date (${proj.start_date})`;
+          } else if (parentTaskStartDate && values.startDate < parentTaskStartDate) {
+            errs.startDate = `Sub-task start date cannot be before parent task start date (${parentTaskStartDate})`;
+          } else if (values.startDate && values.endDate && values.startDate > values.endDate) {
+            errs.startDate = 'Start date cannot be after end date';
           }
-          if (parentTaskDeadline && values.endDate > parentTaskDeadline) {
+        }
+
+        // end date constraints
+        if (values.endDate) {
+          if (proj?.end_date && values.endDate > proj.end_date) {
+            errs.endDate = `End date cannot exceed project due date (${proj.end_date})`;
+          } else if (parentTaskDeadline && values.endDate > parentTaskDeadline) {
             errs.endDate = `Sub-task due date cannot exceed parent task due date (${parentTaskDeadline})`;
+          } else if (proj?.start_date && values.endDate < proj.start_date) {
+            errs.endDate = `End date cannot be before project start date (${proj.start_date})`;
+          } else if (values.startDate && values.endDate < values.startDate) {
+            errs.endDate = 'End date must be on or after start date';
           }
         }
         return errs;
       }}
       validateOnBlur
-      validateOnChange={false}
+      validateOnChange
       onSubmit={handleSubmit}
     >
       {({ values, errors, touched, isSubmitting, setFieldValue, resetForm }) => {
@@ -216,8 +225,9 @@ export default function AddTaskModal({
 
               {/* Task type */}
               <div ref={typeRef} className="relative">
-                <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
                   Task Type <span className="text-red-500">*</span>
+                  <HelpTooltip text="Categorise the work (e.g. Design, Development, Content) for filtering and reporting." position="top" />
                 </label>
                 <button
                   type="button"
@@ -300,7 +310,7 @@ export default function AddTaskModal({
               <div>
                 <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
                   Description
-                  <HelpCircle width={14} height={14} className="text-[#A4A7AE]" />
+                  <HelpTooltip text="Describe what needs to be done, acceptance criteria, and any relevant context." position="top" />
                 </label>
                 <Field
                   as="textarea"
@@ -315,8 +325,9 @@ export default function AddTaskModal({
               {/* Project — hidden for sub-tasks */}
               {!parentTaskId && (
                 <div ref={projectRef} className="relative">
-                  <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                  <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
                     Project <span className="text-red-500">*</span>
+                    <HelpTooltip text="The project this task belongs to. Dates will be constrained to the project's timeline." position="top" />
                   </label>
                   <button
                     type="button"
@@ -347,6 +358,16 @@ export default function AddTaskModal({
                             type="button"
                             onClick={() => {
                               setFieldValue('projectId', p.id);
+                              // Clear dates that are now out of bounds for the new project
+                              if (values.startDate && p.start_date && values.startDate < p.start_date) {
+                                setFieldValue('startDate', '');
+                              }
+                              if (values.endDate) {
+                                if ((p.end_date && values.endDate > p.end_date) ||
+                                    (p.start_date && values.endDate < p.start_date)) {
+                                  setFieldValue('endDate', '');
+                                }
+                              }
                               setShowProjectMenu(false);
                             }}
                             className={`w-full text-left px-3 py-2 text-sm hover:bg-[#F9FAFB] ${
@@ -365,25 +386,26 @@ export default function AddTaskModal({
               {/* Start date / End date / Assignee / Priority */}
               <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-4 items-start">
 
-                <div>
-                  <label className="block text-sm font-medium text-[#344054] mb-1.5">
-                    Start date <span className="text-red-500">*</span>
-                  </label>
-                  <Field name="startDate">
-                    {({ field }: import('formik').FieldProps) => (
-                      <Input
-                        {...field}
-                        type="date"
-                        error={touched.startDate && errors.startDate ? errors.startDate : undefined}
-                        rightIcon={<CalendarDate width={16} height={16} className="text-[#717680] pointer-events-none" />}
-                      />
-                    )}
-                  </Field>
-                </div>
+                <DatePickerField
+                  label="Start date"
+                  required
+                  value={values.startDate}
+                  onChange={(v) => { setFieldValue('startDate', v); }}
+                  min={(() => {
+                    const minStart = parentTaskStartDate
+                      ? (selectedProject?.start_date && selectedProject.start_date > parentTaskStartDate ? selectedProject.start_date : parentTaskStartDate)
+                      : selectedProject?.start_date;
+                    return minStart ?? undefined;
+                  })()}
+                  max={values.endDate || selectedProject?.end_date || undefined}
+                  error={touched.startDate && errors.startDate ? errors.startDate : undefined}
+                  clearable
+                />
 
                 <div>
-                  <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                  <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
                     End date <span className="text-red-500">*</span>
+                    <HelpTooltip text="When the task must be completed. Cannot exceed the project or parent task deadline." position="top" />
                     {(() => {
                       const cap = parentTaskDeadline
                         ? (selectedProject?.end_date && selectedProject.end_date < parentTaskDeadline ? selectedProject.end_date : parentTaskDeadline)
@@ -393,22 +415,19 @@ export default function AddTaskModal({
                       ) : null;
                     })()}
                   </label>
-                  <Field name="endDate">
-                    {({ field }: import('formik').FieldProps) => {
+                  <DatePickerField
+                    value={values.endDate}
+                    onChange={(v) => setFieldValue('endDate', v)}
+                    min={values.startDate || selectedProject?.start_date || undefined}
+                    max={(() => {
                       const maxDate = parentTaskDeadline
                         ? (selectedProject?.end_date && selectedProject.end_date < parentTaskDeadline ? selectedProject.end_date : parentTaskDeadline)
                         : selectedProject?.end_date;
-                      return (
-                      <Input
-                        {...field}
-                        type="date"
-                        max={maxDate ?? undefined}
-                        error={touched.endDate && errors.endDate ? errors.endDate : undefined}
-                        rightIcon={<CalendarDate width={16} height={16} className="text-[#717680] pointer-events-none" />}
-                      />
-                      );
-                    }}
-                  </Field>
+                      return maxDate ?? undefined;
+                    })()}
+                    error={touched.endDate && errors.endDate ? errors.endDate : undefined}
+                    clearable
+                  />
                 </div>
 
                 <AssigneePicker
@@ -424,8 +443,9 @@ export default function AddTaskModal({
 
                 {/* Priority */}
                 <div ref={priorityRef} className="relative">
-                  <label className="block text-sm font-medium text-[#344054] mb-1.5">
+                  <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
                     Priority <span className="text-red-500">*</span>
+                    <HelpTooltip text="Urgent: drop everything · High: ASAP · Normal: standard · Low: backlog" position="top" />
                   </label>
                   <button
                     type="button"
@@ -433,23 +453,23 @@ export default function AddTaskModal({
                     className="w-full border border-[#D5D7DA] rounded-lg px-3 py-2.5 text-sm text-[#181D27] outline-none focus:ring-2 focus:ring-[#7F56D9] transition bg-white flex items-center gap-2 whitespace-nowrap"
                   >
                     <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[values.priority]}`} />
-                    {values.priority}
+                    {PRIORITY_OPTIONS.find((o) => o.value === values.priority)?.label ?? values.priority}
                     <ChevronDown width={14} height={14} className="ml-auto text-[#717680]" />
                   </button>
                   {showPriorityMenu && (
                     <div className="absolute bottom-full mb-1 left-0 z-10 bg-white border border-[#E9EAEB] rounded-xl shadow-lg py-1 min-w-[130px]">
-                      {TASK_PRIORITIES.map((p) => (
+                      {PRIORITY_OPTIONS.map(({ value, label }) => (
                         <button
-                          key={p}
+                          key={value}
                           type="button"
                           onClick={() => {
-                            setFieldValue('priority', p as TaskPriority);
+                            setFieldValue('priority', value as TaskPriority);
                             setShowPriorityMenu(false);
                           }}
                           className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[#344054] hover:bg-[#F9FAFB]"
                         >
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[p]}`} />
-                          {p}
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[value]}`} />
+                          {label}
                         </button>
                       ))}
                     </div>

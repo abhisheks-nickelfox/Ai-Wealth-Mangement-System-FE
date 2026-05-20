@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HelpCircle, ChevronDown, ChevronRight, Plus, X } from '@untitled-ui/icons-react';
+import { ChevronDown, ChevronRight, Plus, X } from '@untitled-ui/icons-react';
+import HelpTooltip from '../ui/HelpTooltip';
 import CountBadge from '../ui/CountBadge';
 import AvatarNameRow from '../ui/AvatarNameRow';
 import PanelFooter from '../ui/PanelFooter';
@@ -13,13 +14,14 @@ import AvatarStack from '../ui/AvatarStack';
 import AssigneePickerDropdown from '../ui/AssigneePickerDropdown';
 import SlideOver from '../ui/SlideOver';
 import Input from '../ui/Input';
+import DatePickerField from '../ui/DatePickerField';
 import AttachmentsSection, { type AttachmentsSectionHandle } from './AttachmentsSection';
 import TaskTimerRow from './TaskTimerRow';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useAssignableUsers } from '../../hooks/useAssignableUsers';
 import type { Task, User, Project } from '../../lib/api';
 import { TASK_STATUS_BADGE } from '../../lib/constants';
-import { PriorityBadge } from './TaskBadges';
+import { PriorityBadge, PRIORITY_OPTIONS } from './TaskBadges';
 import { STATUS_LABELS, VALID_TRANSITIONS } from '../../lib/projectConstants';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -29,31 +31,26 @@ export interface TaskDetailData {
   description:  string;
   priority:     'low' | 'normal' | 'high' | 'urgent';
   assignee_ids: string[];
+  start_date:   string;
   deadline:     string;
   project_id:   string | null;
 }
 
 interface TaskDetailPanelProps {
-  open:                boolean;
-  onClose:             () => void;
-  task:                Task | null;
-  users:               User[];
-  projects?:           Project[];
-  firmId?:             string;
-  parentTaskDeadline?: string;
-  onSave?:             (taskId: string, data: TaskDetailData) => Promise<void>;
+  open:                 boolean;
+  onClose:              () => void;
+  task:                 Task | null;
+  users:                User[];
+  projects?:            Project[];
+  firmId?:              string;
+  parentTaskDeadline?:  string;
+  parentTaskStartDate?: string;
+  onSave?:              (taskId: string, data: TaskDetailData) => Promise<void>;
   onViewTask?:         () => void;
   viewLabel?:          string;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const PRIORITY_OPTIONS: { value: 'low' | 'normal' | 'high' | 'urgent'; label: string; dot: string }[] = [
-  { value: 'urgent', label: 'Urgent', dot: 'bg-red-500'    },
-  { value: 'high',   label: 'High',   dot: 'bg-orange-400' },
-  { value: 'normal', label: 'Normal', dot: 'bg-yellow-400' },
-  { value: 'low',    label: 'Low',    dot: 'bg-green-500'  },
-];
 
 const TYPE_LABELS: Record<string, string> = {
   task:               'Task',
@@ -72,6 +69,7 @@ export default function TaskDetailPanel({
   projects = [],
   firmId,
   parentTaskDeadline,
+  parentTaskStartDate,
   onSave,
   onViewTask,
   viewLabel = 'View Task',
@@ -81,6 +79,7 @@ export default function TaskDetailPanel({
   const [description,  setDescription]  = useState('');
   const [priority,     setPriority]     = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
   const [assigneeIds,  setAssigneeIds]  = useState<string[]>([]);
+  const [startDate,    setStartDate]    = useState('');
   const [deadline,     setDeadline]     = useState('');
   const [projectId,    setProjectId]    = useState<string | null>(null);
   const [taskStatus,   setTaskStatus]   = useState('');
@@ -115,6 +114,7 @@ export default function TaskDetailPanel({
       setTitle(task.title);
       setDescription(task.description ?? '');
       setPriority(task.priority ?? 'normal');
+      setStartDate(task.start_date ?? '');
       setDeadline(task.deadline ?? '');
       setProjectId(task.project_id ?? null);
       setTaskStatus(task.status ?? 'to_do');
@@ -154,24 +154,44 @@ export default function TaskDetailPanel({
       return;
     }
 
+    const proj = projectId ? projects.find((p) => p.id === projectId) : undefined;
+
+    // start date constraints
+    if (startDate) {
+      if (proj?.start_date && startDate < proj.start_date) {
+        setDeadlineError(`Start date cannot be before project start date (${proj.start_date})`);
+        return;
+      }
+      if (parentTaskStartDate && startDate < parentTaskStartDate) {
+        setDeadlineError(`Sub-task start date cannot be before parent task start date (${parentTaskStartDate})`);
+        return;
+      }
+    }
+
+    // deadline constraints
     if (deadline) {
+      if (startDate && deadline < startDate) {
+        setDeadlineError(`Due date cannot be before the start date`);
+        return;
+      }
       if (parentTaskDeadline && deadline > parentTaskDeadline) {
         setDeadlineError(`Sub-task due date cannot exceed the parent task due date (${parentTaskDeadline})`);
         return;
       }
-      if (projectId) {
-        const proj = projects.find((p) => p.id === projectId);
-        if (proj?.end_date && deadline > proj.end_date) {
-          setDeadlineError(`Task due date cannot exceed the project end date (${proj.end_date})`);
-          return;
-        }
+      if (proj?.end_date && deadline > proj.end_date) {
+        setDeadlineError(`Task due date cannot exceed the project end date (${proj.end_date})`);
+        return;
+      }
+      if (proj?.start_date && deadline < proj.start_date) {
+        setDeadlineError(`Due date cannot be before project start date (${proj.start_date})`);
+        return;
       }
     }
     setDeadlineError('');
 
     setSaving(true);
     try {
-      await onSave?.(task.id, { title, description, priority, assignee_ids: assigneeIds, deadline, project_id: projectId });
+      await onSave?.(task.id, { title, description, priority, assignee_ids: assigneeIds, start_date: startDate, deadline, project_id: projectId });
       await attachmentsRef.current?.commit();
       onClose();
     } catch (err) {
@@ -252,7 +272,7 @@ export default function TaskDetailPanel({
         <div>
           <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
             Description
-            <HelpCircle width={14} height={14} className="text-[#A4A7AE]" />
+            <HelpTooltip text="Describe what needs to be done, acceptance criteria, and any relevant context." position="top" />
           </label>
           <textarea
             value={description}
@@ -265,7 +285,10 @@ export default function TaskDetailPanel({
 
         {/* Priority */}
         <div ref={priorityRef} className="relative">
-          <label className="block text-sm font-medium text-[#344054] mb-1.5">Priority</label>
+          <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
+            Priority
+            <HelpTooltip text="Urgent: drop everything · High: ASAP · Normal: standard · Low: backlog" position="top" />
+          </label>
           <button
             type="button"
             onClick={() => setShowPriority((v) => !v)}
@@ -296,7 +319,10 @@ export default function TaskDetailPanel({
 
         {/* Status */}
         <div ref={statusRef} className="relative">
-          <label className="block text-sm font-medium text-[#344054] mb-1.5">Status</label>
+          <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
+            Status
+            <HelpTooltip text="Current workflow stage. Only valid transitions are allowed — invalid ones show an error." position="top" />
+          </label>
           <button
             type="button"
             disabled={transitioning}
@@ -342,7 +368,10 @@ export default function TaskDetailPanel({
         {/* Project — hidden for sub-tasks */}
         {projects.length > 0 && !task?.parent_task_id && (
           <div ref={projectRef} className="relative">
-            <label className="block text-sm font-medium text-[#344054] mb-1.5">Project</label>
+            <label className="flex items-center gap-1 text-sm font-medium text-[#344054] mb-1.5">
+              Project
+              <HelpTooltip text="The project this task belongs to. Changing it may adjust allowed date ranges." position="top" />
+            </label>
             <button
               type="button"
               onClick={() => setShowProject((v) => !v)}
@@ -389,23 +418,36 @@ export default function TaskDetailPanel({
           </div>
         )}
 
-        {/* Deadline */}
-        <div>
-          <Input
+        {/* Start date + Deadline */}
+        <div className="grid grid-cols-2 gap-3">
+          <DatePickerField
+            label="Start Date"
+            value={startDate}
+            onChange={(v) => { setStartDate(v); setDeadlineError(''); }}
+            min={(() => {
+              const projStart = projects.find((p) => p.id === projectId)?.start_date;
+              if (parentTaskStartDate && projStart) return projStart > parentTaskStartDate ? projStart : parentTaskStartDate;
+              return parentTaskStartDate ?? projStart ?? undefined;
+            })()}
+            max={deadline || undefined}
+            clearable
+          />
+          <DatePickerField
             label="Deadline"
-            type="date"
             value={deadline}
-            onChange={(e) => { setDeadline(e.target.value); setDeadlineError(''); }}
+            onChange={(v) => { setDeadline(v); setDeadlineError(''); }}
+            min={startDate || projects.find((p) => p.id === projectId)?.start_date || undefined}
             max={(() => {
               const projEnd = projects.find((p) => p.id === projectId)?.end_date;
               if (parentTaskDeadline && projEnd) return projEnd < parentTaskDeadline ? projEnd : parentTaskDeadline;
               return parentTaskDeadline ?? projEnd ?? undefined;
             })()}
+            clearable
           />
-          {deadlineError && (
-            <p className="mt-1 text-xs text-red-500">{deadlineError}</p>
-          )}
         </div>
+        {deadlineError && (
+          <p className="-mt-2 text-xs text-red-500">{deadlineError}</p>
+        )}
 
         {/* Assignees — multi-select */}
         <div>
@@ -464,7 +506,10 @@ export default function TaskDetailPanel({
         {!task.parent_task_id && (
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <p className="text-sm font-semibold text-[#181D27]">Sub Tasks</p>
+              <p className="flex items-center gap-1 text-sm font-semibold text-[#181D27]">
+                Sub Tasks
+                <HelpTooltip text="Break this task into smaller steps for easier tracking and assignment." position="top" />
+              </p>
               {(task.subtasks ?? []).length > 0 && (
                 <CountBadge count={task.subtasks!.length} />
               )}

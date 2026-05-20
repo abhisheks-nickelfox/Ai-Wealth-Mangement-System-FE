@@ -127,7 +127,7 @@ export default function ActivityPanel({
   if (isAside) {
     return (
       <aside
-        className="shrink-0 flex flex-col border-l border-[#E9EAEB] bg-white h-full isolate relative"
+        className="shrink-0 flex flex-col border-l border-[#E9EAEB] bg-white h-full isolate relative overflow-hidden"
         style={{ width: panelWidth }}
         aria-label="Activity panel"
       >
@@ -143,7 +143,7 @@ export default function ActivityPanel({
   }
 
   return (
-    <div className="flex flex-col" style={{ height }}>
+    <div className="flex flex-col overflow-hidden" style={{ height }}>
       {content}
     </div>
   );

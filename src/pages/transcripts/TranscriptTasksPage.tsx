@@ -85,10 +85,13 @@ export default function TranscriptTasksPage() {
     await updateTask.mutateAsync({
       id: activeTask.id,
       payload: {
-        title:       data.title,
-        description: data.description,
-        priority:    data.priority,
-        deadline:    data.deadline || null,
+        title:        data.title,
+        description:  data.description,
+        priority:     data.priority,
+        assignee_ids: data.assignee_ids,
+        start_date:   data.start_date || undefined,
+        deadline:     data.deadline || undefined,
+        project_id:   data.project_id,
       },
     });
   }

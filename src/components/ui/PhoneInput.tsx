@@ -42,7 +42,7 @@ export function buildE164Phone(raw: string, countryCode: string): string {
 export function getPhoneValidationError(raw: string, countryCode: string): string {
   if (!raw.trim()) return 'Phone number is required';
 
-  if (/[^\d\s\-().+]/.test(raw)) return 'Phone number contains invalid characters';
+  if (/[^\d\s\-().+]/.test(raw)) return 'Phone number can only contain digits, spaces, dashes, or parentheses';
 
   const country = COUNTRIES.find((c) => c.code === countryCode) ?? COUNTRIES[0];
   const localDigits = raw.trim().replace(/\D/g, '');

@@ -27,7 +27,7 @@ import type { ProjectDetail } from '../../components/projects/ProjectDetailPanel
 import type { TaskFormData } from '../../components/tasks/AddTaskModal';
 import type { TaskDetailData } from '../../components/tasks/TaskDetailPanel';
 import { PRIORITY_BADGE, PRIORITY_LABEL } from '../../lib/constants';
-import { WORKFLOW_LABEL, WORKFLOW_TO_KEY, PRIORITY_MAP } from '../../lib/projectConstants';
+import { WORKFLOW_LABEL, WORKFLOW_TO_KEY } from '../../lib/projectConstants';
 import { resolveInitialStatus } from '../../lib/taskUtils';
 import { useDropdown } from '../../hooks/useDropdown';
 import { projectsApi, messagesApi } from '../../lib/api';
@@ -58,8 +58,9 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
   const [showEditProject, setShowEditProject] = useState(false);
   const updateProject = useUpdateProject();
   const [showAddSubTask,       setShowAddSubTask]       = useState(false);
-  const [subTaskParentId,      setSubTaskParentId]      = useState<string | undefined>();
-  const [subTaskParentDeadline, setSubTaskParentDeadline] = useState<string | undefined>();
+  const [subTaskParentId,        setSubTaskParentId]        = useState<string | undefined>();
+  const [subTaskParentDeadline,  setSubTaskParentDeadline]  = useState<string | undefined>();
+  const [subTaskParentStartDate, setSubTaskParentStartDate] = useState<string | undefined>();
   const [selectedTask,    setSelectedTask]    = useState<Task | null>(null);
   const [showActivity,    setShowActivity]    = useState(true);
 
@@ -104,7 +105,7 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
   async function handleSaveTask(taskId: string, data: TaskDetailData) {
     await updateTask.mutateAsync({ id: taskId, payload: {
       title: data.title, description: data.description, priority: data.priority,
-      assignee_ids: data.assignee_ids, deadline: data.deadline || undefined, project_id: data.project_id,
+      assignee_ids: data.assignee_ids, start_date: data.start_date || undefined, deadline: data.deadline || undefined, project_id: data.project_id,
     }});
 
     // Clamp sub-task deadlines that now exceed the updated task deadline
@@ -143,7 +144,7 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
       title:          data.title,
       description:    data.description || undefined,
       type:           'task',
-      priority:       PRIORITY_MAP[data.priority] ?? 'normal',
+      priority:       data.priority,
       start_date:     data.startDate || undefined,
       deadline:       data.endDate || undefined,
       assignee_ids:   data.assigneeIds,
@@ -435,9 +436,10 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
                       onClick={() => setSelectedTask(task)}
                       onNavigate={() => navigate(`/firms/${firmId}/tasks/${task.id}`)}
                       onUpdateAssignees={handleUpdateAssignees}
-                      onAddSubTask={(parentId, parentDeadline) => {
+                      onAddSubTask={(parentId, parentDeadline, parentStartDate) => {
                         setSubTaskParentId(parentId);
                         setSubTaskParentDeadline(parentDeadline);
+                        setSubTaskParentStartDate(parentStartDate);
                         setShowAddSubTask(true);
                       }}
                     />
@@ -503,6 +505,11 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
             ? allTasks.find((t) => t.id === selectedTask.parent_task_id)?.deadline ?? undefined
             : undefined
         }
+        parentTaskStartDate={
+          selectedTask?.parent_task_id
+            ? allTasks.find((t) => t.id === selectedTask.parent_task_id)?.start_date ?? undefined
+            : undefined
+        }
         onSave={handleSaveTask}
         viewLabel={selectedTask?.parent_task_id ? 'View Sub Task' : 'View Task'}
         onViewTask={selectedTask ? () => {
@@ -514,13 +521,14 @@ export function ProjectFullContent({ firmId: firmIdProp, projectId: projectIdPro
       {/* Add task modal */}
       <AddTaskModal
         open={showAddSubTask}
-        onClose={() => { setShowAddSubTask(false); setSubTaskParentId(undefined); setSubTaskParentDeadline(undefined); }}
+        onClose={() => { setShowAddSubTask(false); setSubTaskParentId(undefined); setSubTaskParentDeadline(undefined); setSubTaskParentStartDate(undefined); }}
         firmName={firm?.name}
         users={users}
         projects={projects}
         defaultProjectId={projectId}
         parentTaskId={subTaskParentId}
         parentTaskDeadline={subTaskParentDeadline}
+        parentTaskStartDate={subTaskParentStartDate}
         onCreate={handleCreateSubTask}
       />
 

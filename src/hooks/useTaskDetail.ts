@@ -56,6 +56,7 @@ export function useTaskDetail(firmId: string | undefined, taskId: string | undef
         description:  data.description,
         priority:     data.priority,
         assignee_ids: data.assignee_ids,
+        start_date:   data.start_date || undefined,
         deadline:     data.deadline || undefined,
         project_id:   data.project_id,
       },

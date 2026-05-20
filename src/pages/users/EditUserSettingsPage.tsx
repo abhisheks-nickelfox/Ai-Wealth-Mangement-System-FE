@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Edit02, Trash01, Plus, Mail01 } from '@untitled-ui/icons-react';
+import { Edit02, Trash01, Plus, Mail01, InfoCircle } from '@untitled-ui/icons-react';
 import { useUser, useUpdateUser } from '../../hooks/useUsers';
 import { useSkills } from '../../hooks/useSkills';
 import { profileApi } from '../../lib/api';
@@ -79,7 +79,7 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
   function saveEditSkill(skillId: string) {
     const n = Number(editSkillExp);
     if (!editSkillExp || isNaN(n) || n < 1 || n > 50) {
-      setToast({ message: 'Invalid experience — must be a number between 1 and 50.', isError: true });
+      setToast({ message: 'Please enter valid years of experience (1–50) for each skill.', isError: true });
       return;
     }
     setLocalSkills((p) => p.map((s) => s.id === skillId ? { ...s, experience: editSkillExp } : s));
@@ -117,7 +117,7 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
     if (invalidExp.length > 0) {
       const names = invalidExp.map((s) => s.name).join(', ');
       setToast({
-        message: `Invalid experience for: ${names}. Must be a number between 1 and 50.`,
+        message: `Please enter valid years of experience (1–50) for: ${names}.`,
         isError: true,
       });
       return;
@@ -215,10 +215,20 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
           </div>
         </div>
 
+        {/* ── Invited notice ── */}
+        {isInvitedUser && (
+          <div className="flex items-start gap-2.5 bg-[#FFFAEB] border border-[#FEC84B] rounded-xl px-4 py-3.5 mb-2">
+            <InfoCircle width={16} height={16} className="text-[#B54708] shrink-0 mt-0.5" />
+            <p className="text-[13px] text-[#92400E] leading-[1.6]">
+              This member hasn't completed onboarding yet. Name, photo, and skills will be set by the member when they accept the invite. You can only update their system role, cost, or permissions here.
+            </p>
+          </div>
+        )}
+
         {/* ── Form: full-width so SectionRow borders span edge to edge ── */}
         <div>
 
-          {/* Name */}
+          {/* Name — locked for invited */}
           <SettingsRow label="Name" required>
             <div className="flex gap-3">
               <div className="flex-1 min-w-0">
@@ -226,6 +236,7 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="First name"
+                  disabled={isInvitedUser}
                 />
               </div>
               <div className="flex-1 min-w-0">
@@ -233,6 +244,7 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Last name"
+                  disabled={isInvitedUser}
                 />
               </div>
             </div>
@@ -249,32 +261,30 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
             />
           </SettingsRow>
 
-          {/* Photo */}
+          {/* Photo — locked for invited */}
           <SettingsRow label={`${photoLabel} photo`} required helpText="x"
             sublabel="This will be displayed on your profile.">
             <div className="flex gap-4 items-start">
               <div className="relative shrink-0">
                 <Avatar src={displayAvatar} name={user.name} size="lg" />
-                {croppedUrl && (
-                  <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-green-500 ring-2 ring-white">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                      <path d="M2 5l2 2 4-4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </span>
-                )}
               </div>
-              <div className="flex-1 flex flex-col gap-2">
-                <FileUpload accept="image/svg+xml,image/png,image/jpeg,image/gif"
-                  maxSizeMB={2} onFile={handleFile} />
-                {croppedUrl && (
-                  <p className="text-xs font-medium text-green-600 flex items-center gap-1.5">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M2.5 6l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    New photo ready — will be saved when you click Save changes
-                  </p>
-                )}
-              </div>
+              {!isInvitedUser && (
+                <div className="flex-1 flex flex-col gap-2">
+                  <FileUpload accept="image/svg+xml,image/png,image/jpeg,image/gif"
+                    maxSizeMB={2} onFile={handleFile} />
+                  {croppedUrl && (
+                    <p className="text-xs font-medium text-green-600 flex items-center gap-1.5">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2.5 6l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      New photo ready — will be saved when you click Save changes
+                    </p>
+                  )}
+                </div>
+              )}
+              {isInvitedUser && (
+                <p className="text-sm text-gray-400 italic self-center">Photo will be set during onboarding</p>
+              )}
             </div>
           </SettingsRow>
 
@@ -321,78 +331,79 @@ function UserSettingsForm({ userId, user }: { userId: string; user: User }) {
             </div>
           </SettingsRow>
 
-          {/* Skills — 3-column card grid */}
-          <SettingsRow label="Skills">
-            <div className="flex flex-col gap-3">
-              {localSkills.length > 0 && (
-                <div className="grid grid-cols-3 gap-3">
-                  {localSkills.map((skill) =>
-                    editingSkillId === skill.id ? (
-                      <div key={skill.id}
-                        className="flex flex-col gap-2 bg-white border border-[#D5D7DA] rounded-lg p-3">
-                        <span className="text-sm font-medium text-[#181D27]">{skill.name}</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={50}
-                          value={editSkillExp}
-                          onChange={(e) => setEditSkillExp(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
-                          placeholder="Years (1–50)"
-                          className={`text-sm border rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full ${
-                            editSkillExp && Number(editSkillExp) > 50
-                              ? 'border-red-400 text-red-600'
-                              : 'border-[#D5D7DA]'
-                          }`}
-                        />
-                        {editSkillExp && Number(editSkillExp) > 50 && (
-                          <p className="text-[10px] text-red-500">Invalid, max 50 years</p>
-                        )}
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="primary" onClick={() => saveEditSkill(skill.id)}
-                            className="flex-1">
-                            Save
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditingSkillId(null)}>
-                            Cancel
-                          </Button>
+          {/* Skills — locked for invited */}
+          {!isInvitedUser && (
+            <SettingsRow label="Skills">
+              <div className="flex flex-col gap-3">
+                {localSkills.length > 0 && (
+                  <div className="grid grid-cols-3 gap-3">
+                    {localSkills.map((skill) =>
+                      editingSkillId === skill.id ? (
+                        <div key={skill.id}
+                          className="flex flex-col gap-2 bg-white border border-[#D5D7DA] rounded-lg p-3">
+                          <span className="text-sm font-medium text-[#181D27]">{skill.name}</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={50}
+                            value={editSkillExp}
+                            onChange={(e) => setEditSkillExp(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+                            placeholder="Years (1–50)"
+                            className={`text-sm border rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#9E77ED] w-full ${
+                              editSkillExp && Number(editSkillExp) > 50
+                                ? 'border-red-400 text-red-600'
+                                : 'border-[#D5D7DA]'
+                            }`}
+                          />
+                          {editSkillExp && Number(editSkillExp) > 50 && (
+                            <p className="text-[10px] text-red-500">Max 50 years allowed</p>
+                          )}
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="primary" onClick={() => saveEditSkill(skill.id)}
+                              className="flex-1">
+                              Save
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setEditingSkillId(null)}>
+                              Cancel
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div key={skill.id}
-                        className="flex items-start justify-between bg-white border border-[#E9EAEB] rounded-lg px-4 py-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-[#181D27] truncate">{skill.name}</p>
-                          <p className="text-sm text-gray-500 mt-0.5">
-                            {skill.experience ? `${skill.experience} yr${Number(skill.experience) === 1 ? '' : 's'} experience` : '— experience'}
-                          </p>
+                      ) : (
+                        <div key={skill.id}
+                          className="flex items-start justify-between bg-white border border-[#E9EAEB] rounded-lg px-4 py-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-[#181D27] truncate">{skill.name}</p>
+                            <p className="text-sm text-gray-500 mt-0.5">
+                              {skill.experience ? `${skill.experience} yr${Number(skill.experience) === 1 ? '' : 's'} experience` : '— experience'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 ml-2 shrink-0">
+                            <button onClick={() => startEditSkill(skill)}
+                              className="p-1 rounded hover:bg-gray-100 text-[#717680] hover:text-[#414651] transition-colors">
+                              <Edit02 width={14} height={14} />
+                            </button>
+                            <button onClick={() => removeSkill(skill.id)}
+                              className="p-1 rounded hover:bg-gray-100 text-[#717680] hover:text-red-600 transition-colors">
+                              <Trash01 width={14} height={14} />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 ml-2 shrink-0">
-                          <button onClick={() => startEditSkill(skill)}
-                            className="p-1 rounded hover:bg-gray-100 text-[#717680] hover:text-[#414651] transition-colors">
-                            <Edit02 width={14} height={14} />
-                          </button>
-                          <button onClick={() => removeSkill(skill.id)}
-                            className="p-1 rounded hover:bg-gray-100 text-[#717680] hover:text-red-600 transition-colors">
-                            <Trash01 width={14} height={14} />
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              )}
-
-              <Button
-                variant="secondary"
-                size="sm"
-                leftIcon={<Plus width={14} height={14} />}
-                onClick={() => setSkillsModalOpen(true)}
-                className="self-start"
-              >
-                Add more skills
-              </Button>
-            </div>
-          </SettingsRow>
+                      )
+                    )}
+                  </div>
+                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<Plus width={14} height={14} />}
+                  onClick={() => setSkillsModalOpen(true)}
+                  className="self-start"
+                >
+                  Add more skills
+                </Button>
+              </div>
+            </SettingsRow>
+          )}
 
           {/* Extra Permissions */}
           <SettingsRow label="Extra Permissions">

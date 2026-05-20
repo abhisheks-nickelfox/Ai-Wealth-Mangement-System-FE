@@ -20,6 +20,7 @@ import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import EmptyState from '../../components/ui/EmptyState';
 import { SummaryProjectStatusSection } from '../../components/projects/SummaryProjectStatusSection';
 import type { Project } from '../../lib/api';
+import { projectAttachmentsApi } from '../../lib/api';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -47,8 +48,8 @@ const GROUP_TO_WORKFLOW: Record<string, string> = {
   blocked:      'in_progress',
 };
 
-const PROJ_PRIORITY_MAP: Record<string, 'high' | 'medium' | 'low'> = {
-  High: 'high', Medium: 'medium', Low: 'low',
+const PROJ_PRIORITY_MAP: Record<string, 'urgent' | 'high' | 'normal' | 'low'> = {
+  Urgent: 'urgent', High: 'high', Normal: 'normal', Low: 'low',
 };
 
 // ── ProjectFilterPanel ────────────────────────────────────────────────────────
@@ -265,7 +266,7 @@ export default function ProjectsSummaryPage() {
 
   async function handleCreateProject(data: ProjectFormData) {
     if (!addProjectFirmId) return;
-    await createProject.mutateAsync({
+    const newProject = await createProject.mutateAsync({
       firm_id:         addProjectFirmId,
       name:            data.name,
       description:     data.description || undefined,
@@ -275,6 +276,11 @@ export default function ProjectsSummaryPage() {
       end_date:        data.endDate   || undefined,
       priority:        PROJ_PRIORITY_MAP[data.priority] ?? 'medium',
     });
+    if (data.files && data.files.length > 0) {
+      await Promise.allSettled(
+        data.files.map((f) => projectAttachmentsApi.upload(newProject.id, f)),
+      );
+    }
   }
 
   function openDetailPanel(project: Project) {

@@ -6,6 +6,10 @@ import EmptyState from '../ui/EmptyState';
 import { projectAttachmentsApi } from '../../lib/api';
 import { queryKeys } from '../../lib/queryKeys';
 import { formatFileSize, formatRelativeDate } from '../../lib/formatUtils';
+
+function cleanFileName(name: string): string {
+  return name.replace(/^[0-9a-f]{8}-[0-9a-f-]{27}_/i, '');
+}
 import { useMessages } from '../../hooks/useMessages';
 import type { ProjectAttachment, Message } from '../../lib/api';
 
@@ -114,7 +118,7 @@ export default function ActivityFilesTab({ projectId, scope, scopeId }: Activity
                   {deleteConfirmId === att.id ? (
                     <div className="flex items-center gap-3 px-5 py-3 bg-red-50">
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium text-[#181D27] truncate">{att.file_name}</p>
+                        <p className="text-[13px] font-medium text-[#181D27] truncate">{cleanFileName(att.file_name)}</p>
                         <p className="text-[12px] text-red-600 mt-0.5">Delete this file? This cannot be undone.</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -148,7 +152,7 @@ export default function ActivityFilesTab({ projectId, scope, scopeId }: Activity
                           rel="noopener noreferrer"
                           className="text-[13px] font-medium text-[#181D27] hover:text-[#6941C6] truncate block transition-colors"
                         >
-                          {att.file_name}
+                          {cleanFileName(att.file_name)}
                         </a>
                         <p className="text-[11px] text-[#A4A7AE] mt-0.5">
                           {formatFileSize(att.file_size)} · {att.uploader_name ?? 'Unknown'} · {formatRelativeDate(att.created_at)}

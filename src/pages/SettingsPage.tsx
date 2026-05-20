@@ -5,7 +5,6 @@ import {
   Trash01,
   Edit01,
   Plus,
-  HelpCircle,
   Eye,
   EyeOff,
 } from '@untitled-ui/icons-react';
@@ -19,6 +18,7 @@ import FileUpload from '../components/ui/FileUpload';
 import Checkbox from '../components/ui/Checkbox';
 import DeleteConfirmModal from '../components/ui/DeleteConfirmModal';
 import SettingsRow from '../components/ui/SettingsRow';
+import HelpTooltip from '../components/ui/HelpTooltip';
 import SlideOver from '../components/ui/SlideOver';
 import { useAuth } from '../context/AuthContext';
 import AssigneePickerDropdown from '../components/ui/AssigneePickerDropdown';
@@ -188,7 +188,7 @@ function AddSkillPanel({ onClose, onCreated }: AddSkillPanelProps) {
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+            placeholder="e.g. Proficiency in designing user interfaces using Figma or Sketch."
             rows={5}
             className="w-full px-3.5 py-2.5 text-sm border border-[#D5D7DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9E77ED] resize-none placeholder:text-[#9DA4AE]"
           />
@@ -596,7 +596,7 @@ function TaskTypePanel({ taskType, open, onClose, onSaved }: TaskTypePanelProps)
     <SlideOver
       open={open}
       onClose={onClose}
-      title={isEdit ? 'Edit Task Type' : 'Create A Task Type'}
+      title={isEdit ? 'Edit Task Type' : 'Create a Task Type'}
       subtitle={isEdit ? 'Update the task type name, description or colour.' : 'Redesign of untitledui.com'}
       width="max-w-lg"
       footer={
@@ -631,7 +631,7 @@ function TaskTypePanel({ taskType, open, onClose, onSaved }: TaskTypePanelProps)
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+            placeholder="e.g. Used for content creation tasks such as blog posts, social media copy, and email campaigns."
             rows={5}
             className="w-full px-3.5 py-2.5 text-sm border border-[#D5D7DA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#9E77ED] resize-none placeholder:text-[#9DA4AE]"
           />
@@ -725,7 +725,7 @@ function TaskTypeManagement() {
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#7F56D9] text-white text-sm font-semibold hover:bg-[#6941C6] transition-colors"
         >
           <Plus width={16} height={16} />
-          Create A Task Type
+          Create a Task Type
         </button>
       </div>
 
@@ -734,10 +734,14 @@ function TaskTypeManagement() {
         <div className="grid grid-cols-[200px_1fr_180px_160px_72px] items-center px-4 py-3 bg-gray-50 border-b border-[#E9EAEB]">
           <span className="text-xs font-semibold text-[#535862] uppercase tracking-wider">Task Type</span>
           <span className="flex items-center gap-1 text-xs font-semibold text-[#535862] uppercase tracking-wider">
-            Description <HelpCircle width={14} height={14} className="text-[#9DA4AE]" />
+            Description <HelpTooltip text="A brief explanation of what this task type is used for and when to apply it." position="top" />
           </span>
-          <span className="text-xs font-semibold text-[#535862] uppercase tracking-wider">Default Team</span>
-          <span className="text-xs font-semibold text-[#535862] uppercase tracking-wider">Usage</span>
+          <span className="flex items-center gap-1 text-xs font-semibold text-[#535862] uppercase tracking-wider">
+            Default Team <HelpTooltip text="Team members pre-assigned to tasks of this type. Can be changed per task." position="top" />
+          </span>
+          <span className="flex items-center gap-1 text-xs font-semibold text-[#535862] uppercase tracking-wider">
+            Usage <HelpTooltip text="Number of active tasks currently using this task type." position="top" />
+          </span>
           <span />
         </div>
 
@@ -745,7 +749,7 @@ function TaskTypeManagement() {
           <LoadingSpinner />
         ) : taskTypes.length === 0 ? (
           <div className="px-4 py-8 text-sm text-[#717680] text-center">
-            No task types yet. Click "Create A Task Type" to get started.
+            No task types yet. Click "Create a Task Type" to get started.
           </div>
         ) : (
           paginated.map((tt) => {
@@ -868,10 +872,14 @@ function SkillManagement() {
         <div className="grid grid-cols-[200px_1fr_180px_160px_72px] items-center px-4 py-3 bg-gray-50 border-b border-[#E9EAEB]">
           <span className="text-xs font-semibold text-[#535862] uppercase tracking-wider">Skill Type</span>
           <span className="flex items-center gap-1 text-xs font-semibold text-[#535862] uppercase tracking-wider">
-            Description <HelpCircle width={14} height={14} className="text-[#9DA4AE]" />
+            Description <HelpTooltip text="A brief explanation of what this skill represents and how it is applied on projects." position="top" />
           </span>
-          <span className="text-xs font-semibold text-[#535862] uppercase tracking-wider">Members with Skill</span>
-          <span className="text-xs font-semibold text-[#535862] uppercase tracking-wider">On going usage</span>
+          <span className="flex items-center gap-1 text-xs font-semibold text-[#535862] uppercase tracking-wider">
+            Members with Skill <HelpTooltip text="Team members who have this skill listed on their profile." position="top" />
+          </span>
+          <span className="flex items-center gap-1 text-xs font-semibold text-[#535862] uppercase tracking-wider">
+            On going usage <HelpTooltip text="Number of active tasks currently assigned to members who have this skill." position="top" />
+          </span>
           <span />
         </div>
 
@@ -981,7 +989,7 @@ export default function SettingsPage() {
   const { user: authUser, refreshUser } = useAuth();
 
   const [mainTab,    setMainTab]    = useState<MainTab>('personal');
-  const [orgSubTab,  setOrgSubTab]  = useState<OrgSubTab>('skills');
+  const [orgSubTab,  setOrgSubTab]  = useState<OrgSubTab>('details');
   const [profile,    setProfile]    = useState<User | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState(false);
@@ -1119,7 +1127,7 @@ export default function SettingsPage() {
       return isNaN(n) || n < 1 || n > 50;
     });
     if (invalidExp.length > 0) {
-      notify('Invalid experience — must be a number between 1 and 50.', 'error');
+      notify('Please enter valid years of experience (1–50) for each skill.', 'error');
       return;
     }
     setSaving(true);
@@ -1329,7 +1337,7 @@ export default function SettingsPage() {
                                 </button>
                               </div>
                               {editExp && Number(editExp) > 50 && (
-                                <p className="text-[10px] text-red-500">Invalid, max 50 years</p>
+                                <p className="text-[10px] text-red-500">Max 50 years allowed</p>
                               )}
                             </div>
                           </>
@@ -1528,7 +1536,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-1.5 mb-0.5">
                 <span className="text-sm font-semibold text-[#181D27]">Upload logo</span>
                 <span className="text-red-500 text-sm">*</span>
-                <HelpCircle width={14} height={14} className="text-[#9DA4AE]" />
+                <HelpTooltip text="Recommended size: 400×400px. Supported formats: PNG, JPG, SVG (max 2MB)." position="right" />
               </div>
               <p className="text-sm text-[#535862] mb-4">This will be displayed on your profile.</p>
 

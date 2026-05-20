@@ -58,7 +58,7 @@ function getSkillsValidationError(skillRows: SkillRow[]): string {
 
     const expNum = Number(row.experience);
     if (isNaN(expNum) || expNum < 1 || expNum > 50) {
-      return 'Invalid experience — must be a number between 1 and 50.';
+      return 'Please enter valid years of experience (1–50) for each skill.';
     }
   }
 
@@ -523,7 +523,7 @@ export default function OnboardingPage() {
                       className={`${dropdownCls} ${row.experience && Number(row.experience) > 50 ? 'border-red-400 focus:ring-red-300' : ''}`}
                     />
                     {row.experience && Number(row.experience) > 50 && (
-                      <p className="text-[10px] text-right text-red-500">Invalid, max 50 years</p>
+                      <p className="text-[10px] text-right text-red-500">Max 50 years allowed</p>
                     )}
                   </div>
 

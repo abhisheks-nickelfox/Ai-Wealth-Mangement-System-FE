@@ -1,4 +1,4 @@
-import { HelpCircle } from '@untitled-ui/icons-react';
+import HelpTooltip from './HelpTooltip';
 
 interface SettingsRowProps {
   label: string;
@@ -34,7 +34,7 @@ export default function SettingsRow({
               {label}
               {required && <span className="text-[#7F56D9] ml-0.5">*</span>}
             </p>
-            {helpText && <HelpCircle width={14} height={14} className="text-[#9DA4AE] shrink-0" />}
+            {helpText && <HelpTooltip text={helpText} position="right" />}
           </div>
           {description && <p className="text-sm text-[#717680] mt-0.5 leading-snug">{description}</p>}
         </div>

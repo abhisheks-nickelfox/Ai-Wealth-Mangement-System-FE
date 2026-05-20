@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { HelpCircle, XClose } from '@untitled-ui/icons-react';
+import { XClose } from '@untitled-ui/icons-react';
+import HelpTooltip from '../ui/HelpTooltip';
 import Button from '../ui/Button';
 import type { Skill } from '../../lib/api';
 
@@ -73,7 +74,7 @@ export default function AddSkillsModal({
     );
     if (invalid.size > 0) {
       setErrorRowIds(invalid);
-      setErrorMsg('Invalid experience — must be a number between 1 and 50.');
+      setErrorMsg('Please enter valid years of experience (1–50) for each skill.');
       return;
     }
     setErrorRowIds(new Set());
@@ -103,11 +104,11 @@ export default function AddSkillsModal({
         <div className="grid mb-3" style={{ gridTemplateColumns: '1fr 1fr 40px', gap: '16px' }}>
           <div className="flex items-center gap-1.5 text-sm font-medium text-gray-600">
             Skills <span className="text-gray-400">*</span>
-            <HelpCircle width={15} height={15} className="text-[#7F56D9] ml-0.5" />
+            <HelpTooltip text="Select the skill or area of expertise for this team member." position="top" size={15} />
           </div>
           <div className="flex items-center gap-1.5 text-sm font-medium text-gray-600">
             Experience <span className="text-gray-400">*</span>
-            <HelpCircle width={15} height={15} className="text-[#7F56D9] ml-0.5" />
+            <HelpTooltip text="Choose how long this team member has been actively using this skill." position="top" size={15} />
           </div>
           <div />
         </div>
@@ -151,7 +152,7 @@ export default function AddSkillsModal({
                     }`}
                   />
                   {row.experience && Number(row.experience) > 50 && (
-                    <p className="text-[10px] text-right text-red-500">Invalid, max 50 years</p>
+                    <p className="text-[10px] text-right text-red-500">Max 50 years allowed</p>
                   )}
                 </div>
 

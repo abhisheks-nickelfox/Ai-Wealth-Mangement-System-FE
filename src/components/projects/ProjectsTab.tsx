@@ -24,6 +24,7 @@ import DeleteProjectModal from './DeleteProjectModal';
 import { queryKeys } from '../../lib/queryKeys';
 import { useDeadlineConflict } from '../../hooks/useDeadlineConflict';
 import type { Firm, Task, TaskAssignee, User, Project } from '../../lib/api';
+import { projectAttachmentsApi } from '../../lib/api';
 
 // ── Status group definitions ──────────────────────────────────────────────────
 
@@ -81,9 +82,6 @@ const WORKFLOW_TO_GROUP: Record<string, string> = {
   completed:   'completed',
 };
 
-const PRIORITY_MAP: Record<string, 'low' | 'normal' | 'high' | 'urgent'> = {
-  Low: 'low', Normal: 'normal', High: 'high', Urgent: 'urgent',
-};
 
 interface ProjectsTabProps {
   firm: Firm | null;
@@ -135,6 +133,7 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
       description:  data.description,
       priority:     data.priority,
       assignee_ids: data.assignee_ids,
+      start_date:   data.start_date || undefined,
       deadline:     data.deadline || undefined,
       project_id:   data.project_id,
     }});
@@ -170,9 +169,10 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
         description:     data.description || undefined,
         type:            'task',
         task_type_id:    data.task_type_id || undefined,
-        priority:        PRIORITY_MAP[data.priority] ?? 'normal',
+        priority:        data.priority,
         project_id:      data.projectId          || undefined,
         assignee_ids:    data.assigneeIds.length > 0 ? data.assigneeIds : undefined,
+        start_date:      data.startDate          || undefined,
         deadline:        data.endDate            || undefined,
         initial_status: resolveInitialStatus(
           data.initialStatus ? (GROUP_ID_TO_STATUS[data.initialStatus] ?? data.initialStatus) : undefined,
@@ -263,13 +263,13 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
     }
   };
 
-  const PROJ_PRIORITY_MAP: Record<string, 'high' | 'medium' | 'low'> = {
-    High: 'high', Medium: 'medium', Low: 'low',
+  const PROJ_PRIORITY_MAP: Record<string, 'urgent' | 'high' | 'normal' | 'low'> = {
+    Urgent: 'urgent', High: 'high', Normal: 'normal', Low: 'low',
   };
 
   const handleCreateProject = async (data: import('./AddProjectModal').ProjectFormData) => {
     if (!firm?.id) return;
-    await createProject.mutateAsync({
+    const newProject = await createProject.mutateAsync({
       firm_id:         firm.id,
       name:            data.name,
       description:     data.description || undefined,
@@ -277,8 +277,13 @@ export function ProjectsTab({ firm, tasks, users }: ProjectsTabProps) {
       workflow_status: data.workflowStatus as import('../../lib/api').Project['workflow_status'],
       start_date:      data.startDate || undefined,
       end_date:        data.endDate   || undefined,
-      priority:        PROJ_PRIORITY_MAP[data.priority] ?? 'medium',
+      priority:        PROJ_PRIORITY_MAP[data.priority] ?? 'normal',
     });
+    if (data.files && data.files.length > 0) {
+      await Promise.allSettled(
+        data.files.map((f) => projectAttachmentsApi.upload(newProject.id, f)),
+      );
+    }
   };
 
   // ── Filter state (committed = active filters; pending = inside panel) ──────

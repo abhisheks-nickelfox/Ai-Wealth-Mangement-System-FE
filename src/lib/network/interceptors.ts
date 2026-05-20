@@ -34,7 +34,7 @@ export function applyInterceptors(instance: AxiosInstance): void {
       if (error.response) {
         const msg =
           error.response.data?.error ??
-          `Request failed with status ${error.response.status}`;
+          `Something went wrong (${error.response.status}). Please try again.`;
 
         if (error.response.status === 401 && !window.location.pathname.startsWith('/login')) {
           deleteCookie('mw_token');
