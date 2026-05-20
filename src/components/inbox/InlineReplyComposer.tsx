@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { CornerDownLeft, XClose, FaceHappy, Send01 } from '@untitled-ui/icons-react';
-import type { Message } from '../../lib/api';
+import type { Message, MentionUser } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useMentionableUsers } from '../../hooks/useMentionableUsers';
 import { QUICK_EMOJIS } from '../../lib/constants';

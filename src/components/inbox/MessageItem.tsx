@@ -18,11 +18,11 @@ interface MessageItemProps {
 
 export default function MessageItem({
   msg,
-  notificationId,
+  notificationId: _notificationId,
   scope,
   scopeId,
   userId,
-  onMarkRead,
+  onMarkRead: _onMarkRead,
   onClearMessage,
   onReply,
 }: MessageItemProps) {
